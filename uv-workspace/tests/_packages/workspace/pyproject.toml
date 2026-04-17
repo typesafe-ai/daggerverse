@@ -10,3 +10,7 @@ members = [
     "my-lib",
     "my-core",
 ]
+
+[dependency-groups]
+docs = ["six"]
+qa = ["packaging"]
