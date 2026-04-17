@@ -2,61 +2,16 @@
 
 import posixpath
 import tomllib
-from collections import OrderedDict, deque
 from typing import Annotated
 
 import dagger
 from dagger import Doc, dag, field, function, object_type
 
-
-def _parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
-    """Return {package_name: local_path} for all local packages (editable or directory).
-
-    Results are sorted by package name for deterministic build order.
-    """
-    result = {}
-    for pkg in lock_data.get("package", []):
-        source = pkg.get("source", {})
-        if "editable" in source:
-            result[pkg["name"]] = source["editable"]
-        elif "directory" in source:
-            result[pkg["name"]] = source["directory"]
-    return OrderedDict(sorted(result.items()))
-
-
-def _find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str, str]:
-    """Find all local packages that `project` transitively depends on (including itself).
-
-    Results are sorted by package name for deterministic build order.
-    """
-    locals_ = _parse_local_packages(lock_data)
-
-    dep_graph: dict[str, list[str]] = {}
-    for pkg in lock_data.get("package", []):
-        name = pkg["name"]
-        deps = {d["name"] for d in pkg.get("dependencies", [])}
-        for group_deps in pkg.get("dev-dependencies", {}).values():
-            deps |= {d["name"] for d in group_deps}
-        dep_graph[name] = sorted(deps)
-
-    needed: dict[str, str] = {}
-    queue: deque[str] = deque()
-
-    if project in locals_:
-        needed[project] = locals_[project]
-        queue.append(project)
-
-    visited = {project}
-    while queue:
-        current = queue.popleft()
-        for dep in dep_graph.get(current, []):
-            if dep not in visited:
-                visited.add(dep)
-                if dep in locals_:
-                    needed[dep] = locals_[dep]
-                    queue.append(dep)
-
-    return OrderedDict(sorted(needed.items()))
+from uv_workspace._utils import (
+    build_uv_sync_args,
+    find_transitive_local_deps,
+    parse_local_packages,
+)
 
 
 @object_type
@@ -86,9 +41,33 @@ class UvWorkspace:
         package: Annotated[
             str | None,
             Doc(
-                "Package name; if set, only that package's transitive local deps are installed"
+                "Package name; if set, only that package's transitive local deps are installed. Maps to `uv sync --package`"
             ),
         ] = None,
+        extra: Annotated[
+            list[str] | None,
+            Doc("Extras to install; passed to `uv sync` as repeated `--extra`"),
+        ] = None,
+        group: Annotated[
+            list[str] | None,
+            Doc(
+                "Dependency groups to install; passed to `uv sync` as repeated `--group`"
+            ),
+        ] = None,
+        all_extras: Annotated[
+            bool,
+            Doc("Install every extra; maps to `uv sync --all-extras`"),
+        ] = False,
+        all_groups: Annotated[
+            bool,
+            Doc("Install every dependency group; maps to `uv sync --all-groups`"),
+        ] = False,
+        all_packages: Annotated[
+            bool,
+            Doc(
+                "Install every workspace member; maps to `uv sync --all-packages`. Only meaningful in workspaces"
+            ),
+        ] = False,
     ) -> dagger.Container:
         """Build a minimal container with deps installed for the given package.
 
@@ -105,9 +84,9 @@ class UvWorkspace:
         uv_lock = ws_dir.file("uv.lock")
 
         lock_data = tomllib.loads(await uv_lock.contents())
-        all_local = _parse_local_packages(lock_data)
+        all_local = parse_local_packages(lock_data)
         needed_local = (
-            _find_transitive_local_deps(lock_data, package) if package else all_local
+            find_transitive_local_deps(lock_data, package) if package else all_local
         )
 
         ctr = self.base_container
@@ -137,9 +116,14 @@ class UvWorkspace:
                 )
             )
 
-        uv_sync_base = ["uv", "sync", "--all-extras", "--dev"]
-        if package:
-            uv_sync_base += ["--package", package]
+        uv_sync_base = build_uv_sync_args(
+            package=package,
+            extras=extra or [],
+            groups=group or [],
+            all_extras=all_extras,
+            all_groups=all_groups,
+            all_packages=all_packages,
+        )
 
         ctr = ctr.with_exec([*uv_sync_base, "--no-install-local"])
 
