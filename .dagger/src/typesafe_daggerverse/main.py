@@ -38,6 +38,18 @@ class TypesafeDaggerverse:
 
     @check
     @function
+    async def uv_workspace_build_full_workspace(self) -> str:
+        """Build the full uv-workspace (no package filter) and verify every local package imports."""
+        ctr = await dag.uv_workspace(
+            source_dir=self.source.directory("uv-workspace/tests/_packages/workspace"),
+            base_container=_base(),
+        ).build()
+        return await ctr.with_exec(
+            ["python", "-c", "import my_app, my_lib, my_core"]
+        ).stdout()
+
+    @check
+    @function
     async def uv_workspace_build_standalone(self) -> str:
         """Build the uv-workspace standalone fixture and verify it imports."""
         ctr = await dag.uv_workspace(
