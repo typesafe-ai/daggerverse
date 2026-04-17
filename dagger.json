@@ -1,0 +1,14 @@
+{
+  "name": "typesafe-daggerverse",
+  "engineVersion": "v0.20.3",
+  "sdk": {
+    "source": "python"
+  },
+  "dependencies": [
+    {
+      "name": "uv-workspace",
+      "source": "uv-workspace"
+    }
+  ],
+  "source": ".dagger"
+}
