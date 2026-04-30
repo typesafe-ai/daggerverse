@@ -42,12 +42,19 @@ class UvWorkspace:
 
         No-op when there's no `dagger.json` at `codegen_path`.
 
-        We pass the package directory directly to `as_module_source()` —
-        no `dag.directory().with_*()` synthesis. Per Dagger's design,
-        `as_module_source()` expects the directory to look like a real
-        Python module (`dagger.json`, `pyproject.toml`, `uv.lock`,
-        `src/<pkg>/`), which is what's on disk for any project building
-        with this tool.
+        Codegen runs against a synthesized directory containing only
+        `dagger.json` (read as raw content and re-stamped via
+        `with_new_file`). That's the minimal shape the Dagger Python SDK
+        runtime needs — the codegen output (the SDK at `sdk/`) is
+        determined by `engineVersion` + `sdk.source` in `dagger.json`
+        and the engine schema, not by the user's source. Matches the
+        primitive demonstrated by Dagger maintainers:
+
+            directory | with-new-file dagger.json '...' |
+                as-module-source | generated-context-directory
+
+        Synthesizing keeps the codegen layer's cache stable across
+        edits to the user's actual module source (`src/`, tests, etc.).
         """
         dagger_json_path = (
             "dagger.json"
@@ -56,8 +63,13 @@ class UvWorkspace:
         )
         if not await ws_dir.glob(dagger_json_path):
             return ws_dir
-        pkg_dir = ws_dir if codegen_path == "." else ws_dir.directory(codegen_path)
-        generated = pkg_dir.as_module_source().generated_context_directory()
+        dagger_json_contents = await ws_dir.file(dagger_json_path).contents()
+        generated = (
+            dag.directory()
+            .with_new_file("dagger.json", dagger_json_contents)
+            .as_module_source()
+            .generated_context_directory()
+        )
         return ws_dir.with_directory(codegen_path, generated)
 
     @function
