@@ -35,6 +35,31 @@ class UvWorkspace:
         ),
     ] = field(default=".")
 
+    async def _dagger_codegen(
+        self, ws_dir: dagger.Directory, codegen_path: str
+    ) -> dagger.Directory:
+        """If `codegen_path` holds a Dagger module, run codegen and overlay.
+
+        No-op when there's no `dagger.json` at `codegen_path`.
+
+        We pass the package directory directly to `as_module_source()` —
+        no `dag.directory().with_*()` synthesis. Per Dagger's design,
+        `as_module_source()` expects the directory to look like a real
+        Python module (`dagger.json`, `pyproject.toml`, `uv.lock`,
+        `src/<pkg>/`), which is what's on disk for any project building
+        with this tool.
+        """
+        dagger_json_path = (
+            "dagger.json"
+            if codegen_path == "."
+            else posixpath.join(codegen_path, "dagger.json")
+        )
+        if not await ws_dir.glob(dagger_json_path):
+            return ws_dir
+        pkg_dir = ws_dir if codegen_path == "." else ws_dir.directory(codegen_path)
+        generated = pkg_dir.as_module_source().generated_context_directory()
+        return ws_dir.with_directory(codegen_path, generated)
+
     @function
     async def build(
         self,
@@ -68,6 +93,17 @@ class UvWorkspace:
                 "Install every workspace member; maps to `uv sync --all-packages`. Only meaningful in workspaces"
             ),
         ] = False,
+        dagger_codegen: Annotated[
+            bool,
+            Doc(
+                "If True (default), and the package being built has a "
+                "`dagger.json`, run Dagger codegen and overlay the generated "
+                "SDK before `uv sync`. This makes `[tool.uv.sources]` entries "
+                'pointing at the generated tree (e.g. `dagger-io = { path = "sdk" }`) '
+                "install correctly even though those paths are gitignored. "
+                "No-op for non-Dagger projects. Pass False to skip."
+            ),
+        ] = True,
     ) -> dagger.Container:
         """Build a minimal container with deps installed for the given package.
 
@@ -80,7 +116,6 @@ class UvWorkspace:
             if self.workspace_path == "."
             else self.source_dir.directory(self.workspace_path)
         )
-        pyproject_toml = ws_dir.file("pyproject.toml")
         uv_lock = ws_dir.file("uv.lock")
 
         lock_data = tomllib.loads(await uv_lock.contents())
@@ -88,6 +123,14 @@ class UvWorkspace:
         needed_local = (
             find_transitive_local_deps(lock_data, package) if package else all_local
         )
+
+        if dagger_codegen:
+            codegen_path = (
+                all_local[package] if package and package in all_local else "."
+            )
+            ws_dir = await self._dagger_codegen(ws_dir, codegen_path)
+
+        pyproject_toml = ws_dir.file("pyproject.toml")
 
         ctr = self.base_container
         workdir = await ctr.workdir()
