@@ -59,6 +59,18 @@ class TypesafeDaggerverse:
             base_container=_base(),
         )
 
+    def _self(self) -> "dagger.UvWorkspace":
+        """uv-workspace built against its own source.
+
+        uv-workspace is itself a Dagger module — `UvWorkspace.build()`
+        detects the `dagger.json` and runs codegen so `sdk/` is
+        materialized before `uv sync`.
+        """
+        return dag.uv_workspace(
+            source_dir=self.source.directory("uv-workspace"),
+            base_container=_base(),
+        )
+
     @check
     @function
     async def uv_workspace_build_workspace(self) -> str:
@@ -140,3 +152,26 @@ class TypesafeDaggerverse:
             absent=[],
         )
         return await ctr.with_exec(["python", "-c", script]).stdout()
+
+    @check
+    @function
+    async def uv_workspace_build_self(self) -> str:
+        """Build uv-workspace from its own source on a fresh tree."""
+        ctr = await self._self().build(package="uv-workspace")
+        return await ctr.with_exec(["python", "-c", "import uv_workspace"]).stdout()
+
+    @check
+    @function
+    async def uv_workspace_pytest_self(self) -> str:
+        """Run uv-workspace's own pytest suite inside a freshly-built container.
+
+        `UvWorkspace.build()` only copies `src/` for each package (to keep
+        layer granularity tight). `tests/` has to be mounted explicitly so
+        pytest can find them — without this, `pytest -q` collects nothing
+        and exits with code 5 (NO_TESTS_COLLECTED).
+        """
+        ctr = await self._self().build(package="uv-workspace", all_groups=True)
+        workdir = await ctr.workdir()
+        tests = self.source.directory("uv-workspace").directory("tests")
+        ctr = ctr.with_directory(f"{workdir}/tests", tests)
+        return await ctr.with_exec(["pytest", "-q"]).stdout()
