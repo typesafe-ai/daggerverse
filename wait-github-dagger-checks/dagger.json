@@ -1,0 +1,7 @@
+{
+  "name": "wait-github-dagger-checks",
+  "engineVersion": "v0.20.6",
+  "sdk": {
+    "source": "python"
+  }
+}
