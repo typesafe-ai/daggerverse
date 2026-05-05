@@ -25,6 +25,10 @@ class WaitGithubDaggerChecks:
         repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
         ref: Annotated[str, Doc("Commit SHA to poll")],
         token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
+        checks: Annotated[
+            list[str] | None,
+            Doc("An optional explicit list of check names to wait for."),
+        ] = None,
         poll_interval: Annotated[int, Doc("Seconds between GitHub polls")] = 3,
         progress_interval: Annotated[
             int,
@@ -46,17 +50,21 @@ class WaitGithubDaggerChecks:
             ),
         ] = False,
     ) -> str:
-        """Wait until every Dagger check in the current workspace has a successful
-        GitHub commit status on `ref`.
+        """Wait until every expected check has a successful GitHub commit status
+        on `ref`.
 
-        The expected check set is enumerated via
-        `dag.current_workspace().checks()`, so caller-side check lists or regexes
-        are not needed.
+        When `checks` is None, the expected set is enumerated via
+        `dag.current_workspace().checks()`. When `checks` is provided, those
+        names are used verbatim and auto-discovery is skipped. An empty
+        `checks` list returns immediately.
         """
         console = Console(force_terminal=True)
 
-        checks = await dag.current_workspace().checks().list_()
-        expected = sorted({await c.name() for c in checks})
+        if checks is None:
+            discovered = await dag.current_workspace().checks().list_()
+            expected = sorted({await c.name() for c in discovered})
+        else:
+            expected = sorted(set(checks))
         if not expected:
             render.empty(console)
             return "no checks to wait for"
