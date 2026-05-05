@@ -26,7 +26,7 @@ def header(console: Console, *, repo: str, ref: str, expected: list[str]) -> Non
 def transition(console: Console, *, name: str, state: str, trace_url: str) -> None:
     style = STATE_STYLE.get(state, "")
     icon = "✓" if state == "success" else "✗"
-    link = f" [link={trace_url}]trace ↗[/link]" if trace_url else ""
+    link = f" {trace_url}" if trace_url else ""
     console.print(f"[{style}]{icon} {state:<7}[/] {name}{link}")
 
 
