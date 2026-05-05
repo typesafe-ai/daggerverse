@@ -3,7 +3,6 @@ caller (typically a Watcher) controls where output goes — including a
 recording Console in tests."""
 
 from rich.console import Console
-from rich.table import Table
 
 from .types import MISSING
 
@@ -23,11 +22,10 @@ def header(console: Console, *, repo: str, ref: str, expected: list[str]) -> Non
     console.print(f"expected: {', '.join(expected)}")
 
 
-def transition(console: Console, *, name: str, state: str, trace_url: str) -> None:
+def transition(console: Console, *, name: str, state: str) -> None:
     style = STATE_STYLE.get(state, "")
     icon = "✓" if state == "success" else "✗"
-    link = f" {trace_url}" if trace_url else ""
-    console.print(f"[{style}]{icon} {state:<7}[/] {name}{link}")
+    console.print(f"[{style}]{icon} {state:<7}[/] {name}")
 
 
 def progress(
@@ -48,18 +46,14 @@ def final_table(
     *,
     expected: list[str],
     states: dict[str, str],
-    traces: dict[str, str],
 ) -> None:
-    table = Table(show_header=True, header_style="bold", title="final status")
-    table.add_column("check")
-    table.add_column("state")
-    table.add_column("trace")
+    console.rule("[bold]final status[/]")
     for ctx in expected:
         state = states[ctx]
-        url = traces.get(ctx, "")
-        trace_cell = f"[link={url}]{url}[/link]" if url else ""
-        table.add_row(ctx, f"[{STATE_STYLE.get(state, '')}]{state}[/]", trace_cell)
-    console.print(table)
+        style = STATE_STYLE.get(state, "")
+        glyph = "✓" if state == "success" else "✗"
+        console.print(f"[{style}]{glyph} {ctx}[/]")
+        console.rule(style="dim")
 
 
 def success(console: Console, *, count: int) -> None:

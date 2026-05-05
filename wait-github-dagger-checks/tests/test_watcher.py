@@ -45,9 +45,7 @@ def test_expected_is_deduplicated_and_sorted():
 
 def test_all_success_yields_succeeded_verdict():
     w, _ = make_watcher(["a", "b"])
-    transitions = w.observe(
-        {"a": Status("success", "url-a"), "b": Status("success", "url-b")}
-    )
+    transitions = w.observe({"a": Status("success"), "b": Status("success")})
     assert sorted(t.name for t in transitions) == ["a", "b"]
     assert w.verdict is Verdict.SUCCEEDED
     assert w.succeeded == ["a", "b"]
@@ -87,9 +85,9 @@ def test_extra_contexts_in_snapshot_are_ignored():
 
 def test_default_does_not_fail_until_all_terminal():
     w, _ = make_watcher(["a", "b"])
-    w.observe({"a": Status("failure", "url-a"), "b": Status("pending")})
+    w.observe({"a": Status("failure"), "b": Status("pending")})
     assert w.verdict is Verdict.WAITING
-    w.observe({"a": Status("failure", "url-a"), "b": Status("success", "url-b")})
+    w.observe({"a": Status("failure"), "b": Status("success")})
     assert w.verdict is Verdict.FAILED
     assert w.failed == ["a"]
     assert w.succeeded == ["b"]
@@ -123,16 +121,8 @@ def test_non_terminal_changes_do_not_emit():
 def test_pending_then_terminal_emits_once():
     w, _ = make_watcher(["a"])
     w.observe({"a": Status("pending")})
-    transitions = w.observe({"a": Status("success", "https://trace/1")})
+    transitions = w.observe({"a": Status("success")})
     assert [t.state for t in transitions] == ["success"]
-    assert transitions[0].trace_url == "https://trace/1"
-
-
-def test_trace_url_persists_when_subsequent_snapshot_lacks_one():
-    w, _ = make_watcher(["a"])
-    w.observe({"a": Status("success", "https://trace/1")})
-    w.observe({"a": Status("success", "")})
-    assert w.traces["a"] == "https://trace/1"
 
 
 def test_disappearing_status_reverts_to_missing():
@@ -189,7 +179,7 @@ def test_realistic_mixed_outcome_sequence_without_fail_fast():
 
 def test_partial_completion_prints_per_transition():
     w, c = make_watcher(["a", "b"])
-    w.observe({"a": Status("success", "https://trace/1"), "b": Status("pending")})
+    w.observe({"a": Status("success"), "b": Status("pending")})
     out = c.export_text()
     assert "a" in out
     assert "success" in out
@@ -244,15 +234,13 @@ def test_short_circuits_when_failed_with_fail_fast():
     assert w.verdict is Verdict.FAILED
 
 
-def test_print_final_includes_each_check():
+def test_print_final_emits_failure_summary_with_failed_checks():
     w, c = make_watcher(["a", "b"])
     w.observe({"a": Status("success"), "b": Status("failure")})
     w.print_final()
     out = c.export_text()
-    assert "a" in out
+    assert "checks failed" in out
     assert "b" in out
-    assert "success" in out
-    assert "failure" in out
 
 
 def test_print_header_mentions_repo_and_ref():
@@ -307,11 +295,10 @@ def test_step_returns_continue_while_pending():
     assert w.step({"a": Status("pending")}) is Step.CONTINUE
 
 
-def test_step_returns_succeeded_and_renders_final_table():
+def test_step_returns_succeeded_and_renders_final_summary():
     w, c, _ = make_step_watcher(["a"], timeout=100, discovery_timeout=100)
-    assert w.step({"a": Status("success", "https://t/1")}) is Step.SUCCEEDED
+    assert w.step({"a": Status("success")}) is Step.SUCCEEDED
     out = c.export_text(clear=False)
-    assert "final status" in out
     assert "succeeded" in out
 
 
