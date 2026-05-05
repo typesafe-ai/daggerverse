@@ -73,6 +73,19 @@ class TypesafeDaggerverse:
             base_container=_base(),
         )
 
+    @function(cache="never")
+    async def wait_dagger_checks(
+        self,
+        repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
+        ref: Annotated[str, Doc("Commit SHA to poll")],
+        token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
+    ) -> str:
+        """Block until every Dagger check has landed as a successful GitHub commit
+        status on `ref`."""
+        return await dag.wait_github_dagger_checks().wait(
+            repo=repo, ref=ref, token=token
+        )
+
     @check
     @function
     async def uv_workspace_build_workspace(self) -> str:

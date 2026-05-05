@@ -20,14 +20,19 @@ jobs:
     permissions:
       checks: read
     steps:
+      - uses: actions/checkout@v4
       - name: Wait for Dagger Cloud checks
-        uses: lewagon/wait-on-check-action@v1.6.1
+        uses: dagger/dagger-for-github@v8.4.1
         with:
+          version: ${{ env.DAGGER_VERSION }}
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          dagger-flags: --cloud
           # On pull_request events, github.sha is the synthesized merge commit;
           # external checks (Dagger Cloud) attach to the PR head commit instead.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          check-regexp: ^daggerverse:uv-workspace-
-          wait-interval: 5
-          allowed-conclusions: success
-          checks-discovery-timeout: 120
+          call: |
+            wait-dagger-checks
+              --repo=${{ github.repository }}
+              --ref=${{ github.event.pull_request.head.sha || github.sha }}
+              --token=env:GITHUB_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
