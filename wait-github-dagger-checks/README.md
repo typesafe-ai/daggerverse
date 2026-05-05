@@ -57,6 +57,8 @@ class MyModule:
 | `repo`              | —       | `owner/name`                                           |
 | `ref`               | —       | commit SHA to poll                                     |
 | `token`             | —       | GitHub token (passed as secret)                        |
-| `poll-interval`     | `10`    | seconds between polls                                  |
+| `poll-interval`     | `3`     | seconds between GitHub polls                           |
+| `progress-interval` | `30`    | seconds between routine progress lines                 |
 | `timeout`           | `1800`  | total wall-clock budget, in seconds                    |
 | `discovery-timeout` | `300`   | how long expected statuses may take to first appear    |
+| `fail-fast`         | `false` | whether to exit 1 on first check failure               |

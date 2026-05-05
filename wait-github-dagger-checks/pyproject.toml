@@ -10,3 +10,6 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 dagger-io = { path = "sdk", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8"]

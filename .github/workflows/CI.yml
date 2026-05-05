@@ -11,14 +11,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DAGGER_VERSION: "0.20.6"
+  DAGGER_VERSION: "0.20.7"
 
 jobs:
   check:
     name: check
     runs-on: ubuntu-latest
     permissions:
-      checks: read
+      contents: read
+      statuses: read
     steps:
       - uses: actions/checkout@v4
       - name: Wait for Dagger Cloud checks
