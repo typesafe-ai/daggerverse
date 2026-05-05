@@ -148,8 +148,7 @@ class UvWorkspace:
         workdir = await ctr.workdir()
 
         ctr = (
-            ctr.with_env_variable("UV_PROJECT_ENVIRONMENT", "/usr/local")
-            .with_mounted_cache("/root/.cache/uv", dag.cache_volume("uv-cache"))
+            ctr.with_mounted_cache("/root/.cache/uv", dag.cache_volume("uv-cache"))
             .with_env_variable("UV_LINK_MODE", "copy")
             .with_env_variable("UV_FROZEN", "1")
         )
