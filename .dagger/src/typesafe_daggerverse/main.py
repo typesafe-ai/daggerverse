@@ -73,17 +73,26 @@ class TypesafeDaggerverse:
             base_container=_base(),
         )
 
+    def _wait_checks(self) -> "dagger.UvWorkspace":
+        return dag.uv_workspace(
+            source_dir=self.source.directory("wait-github-dagger-checks"),
+            base_container=_base(),
+        )
+
     @function(cache="never")
     async def wait_dagger_checks(
         self,
         repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
         ref: Annotated[str, Doc("Commit SHA to poll")],
         token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
+        fail_fast: Annotated[
+            bool, Doc("Raise as soon as any check fails instead of waiting for all.")
+        ] = False,
     ) -> str:
         """Block until every Dagger check has landed as a successful GitHub commit
         status on `ref`."""
         return await dag.wait_github_dagger_checks().wait(
-            repo=repo, ref=ref, token=token
+            repo=repo, ref=ref, token=token, fail_fast=fail_fast
         )
 
     @check
@@ -174,6 +183,19 @@ class TypesafeDaggerverse:
         """Build uv-workspace from its own source on a fresh tree."""
         ctr = await self._self().build(package="uv-workspace")
         return await ctr.with_exec(["python", "-c", "import uv_workspace"]).stdout()
+
+    @check
+    @function
+    async def wait_github_dagger_checks_pytest(self) -> str:
+        """Run the wait-github-dagger-checks unit-test suite inside a freshly-
+        built container."""
+        ctr = await self._wait_checks().build(
+            package="wait-github-dagger-checks", all_groups=True
+        )
+        workdir = await ctr.workdir()
+        tests = self.source.directory("wait-github-dagger-checks").directory("tests")
+        ctr = ctr.with_directory(f"{workdir}/tests", tests)
+        return await ctr.with_exec(["pytest", "-q"]).stdout()
 
     @check
     @function
