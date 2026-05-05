@@ -1,9 +1,11 @@
 # wait-github-dagger-checks
 
-Block until every Dagger check defined by the consumer module (and its installed
-dependencies) has reported a successful GitHub commit status on a given ref.
+Block until every expected check has reported a successful GitHub commit status
+on a given ref.
 
-The expected check set is derived from `dag.current_workspace().checks().list_()`.
+By default, the expected check set is auto-discovered from
+`dag.current_workspace().checks().list_()`. You can also pass an explicit list
+of check names via the `checks` parameter to skip discovery.
 
 ## Wiring
 
@@ -57,8 +59,26 @@ class MyModule:
 | `repo`              | —       | `owner/name`                                           |
 | `ref`               | —       | commit SHA to poll                                     |
 | `token`             | —       | GitHub token (passed as secret)                        |
+| `checks`            | `null`  | explicit check names; `null` auto-discovers, `[]` returns immediately |
 | `poll-interval`     | `3`     | seconds between GitHub polls                           |
 | `progress-interval` | `30`    | seconds between routine progress lines                 |
 | `timeout`           | `1800`  | total wall-clock budget, in seconds                    |
 | `discovery-timeout` | `300`   | how long expected statuses may take to first appear    |
 | `fail-fast`         | `false` | whether to exit 1 on first check failure               |
+
+## Waiting for an explicit check list
+
+If you'd rather not rely on workspace auto-discovery, pass `checks` directly:
+
+```python
+return await dag.wait_github_dagger_checks().wait(
+    repo=repo,
+    ref=ref,
+    token=token,
+    checks=["build", "test", "lint"],
+)
+```
+
+When `checks` is provided, `dag.current_workspace().checks()` is not consulted,
+so this form also works when calling the module directly via
+`-m wait-github-dagger-checks`.
