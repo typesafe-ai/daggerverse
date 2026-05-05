@@ -14,7 +14,6 @@ class Status:
     """A single GitHub commit status snapshot for one context."""
 
     state: str
-    trace_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -23,7 +22,6 @@ class Transition:
 
     name: str
     state: str
-    trace_url: str
 
 
 class Verdict(Enum):

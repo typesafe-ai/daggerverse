@@ -63,7 +63,6 @@ class Watcher:
         self.progress_interval: float = progress_interval
         self.console: Console = console if console is not None else _default_console()
         self.states: dict[str, str] = {name: MISSING for name in self.expected}
-        self.traces: dict[str, str] = {}
 
         self._clock: Callable[[], float] = clock
         self._start: float | None = None
@@ -82,28 +81,15 @@ class Watcher:
         for name in self.expected:
             previous = self.states[name]
             status = snapshot.get(name)
-            if status is None:
-                next_state = MISSING
-                next_trace = self.traces.get(name, "")
-            else:
-                next_state = status.state
-                next_trace = status.trace_url or self.traces.get(name, "")
-            self.traces[name] = next_trace
+            next_state = MISSING if status is None else status.state
             if next_state != previous:
                 self.states[name] = next_state
                 if next_state in TERMINAL_STATES and previous not in TERMINAL_STATES:
-                    new_completions.append(
-                        Transition(name=name, state=next_state, trace_url=next_trace)
-                    )
+                    new_completions.append(Transition(name=name, state=next_state))
 
         if self.verdict is Verdict.WAITING:
             for t in new_completions:
-                render.transition(
-                    self.console,
-                    name=t.name,
-                    state=t.state,
-                    trace_url=t.trace_url,
-                )
+                render.transition(self.console, name=t.name, state=t.state)
         return new_completions
 
     @property
@@ -188,7 +174,6 @@ class Watcher:
         )
 
     def print_final(self) -> None:
-        self._print_table()
         if self.verdict is Verdict.SUCCEEDED:
             render.success(self.console, count=len(self.succeeded))
         elif self.failed:
@@ -209,5 +194,4 @@ class Watcher:
             self.console,
             expected=self.expected,
             states=self.states,
-            traces=self.traces,
         )

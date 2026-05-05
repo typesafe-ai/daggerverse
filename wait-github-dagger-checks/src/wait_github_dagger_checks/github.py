@@ -37,9 +37,7 @@ async def fetch_snapshot(client: httpx.AsyncClient, url: str) -> dict[str, Statu
         for s in items:
             ctx = s["context"]
             if ctx not in latest:
-                latest[ctx] = Status(
-                    state=s["state"], trace_url=s.get("target_url") or ""
-                )
+                latest[ctx] = Status(state=s["state"])
         if len(items) < 100:
             break
         page += 1
