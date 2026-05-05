@@ -15,6 +15,8 @@ def _base() -> dagger.Container:
         dag.container()
         .from_("ghcr.io/astral-sh/uv:python3.14-bookworm")
         .with_workdir("/workspace")
+        # caller picks the project env.
+        .with_env_variable("UV_PROJECT_ENVIRONMENT", "/usr/local")
     )
 
 
