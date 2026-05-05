@@ -189,4 +189,11 @@ class UvWorkspace:
 
         ctr = ctr.with_exec(uv_sync_base)
 
-        return ctr
+        # Strip build-time scaffolding: the returned container is the build
+        # result, not the build machinery. Callers can re-mount or re-set if
+        # they need to run more uv commands themselves.
+        return (
+            ctr.without_mount("/root/.cache/uv")
+            .without_env_variable("UV_LINK_MODE")
+            .without_env_variable("UV_FROZEN")
+        )

@@ -27,7 +27,7 @@ jobs:
           # external checks (Dagger Cloud) attach to the PR head commit instead.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          check-regexp: ^typesafe-daggerverse:uv-workspace-
+          check-regexp: ^daggerverse:uv-workspace-
           wait-interval: 5
           allowed-conclusions: success
           checks-discovery-timeout: 120
