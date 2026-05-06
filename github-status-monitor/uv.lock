@@ -188,6 +188,31 @@ wheels = [
 ]
 
 [[package]]
+name = "github-status-monitor"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "dagger-io" },
+    { name = "httpx" },
+    { name = "rich" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagger-io", editable = "sdk" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "rich", specifier = ">=13" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
+
+[[package]]
 name = "googleapis-common-protos"
 version = "1.74.0"
 source = { registry = "https://pypi.org/simple" }
@@ -688,31 +713,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6
 wheels = [
     { url = "https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl", hash = "sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4", size = 131584, upload-time = "2026-01-07T16:24:42.685Z" },
 ]
-
-[[package]]
-name = "wait-github-dagger-checks"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "dagger-io" },
-    { name = "httpx" },
-    { name = "rich" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "dagger-io", editable = "sdk" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "rich", specifier = ">=13" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "wrapt"

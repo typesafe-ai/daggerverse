@@ -6,8 +6,8 @@ from collections.abc import Iterable
 import pytest
 from rich.console import Console
 
-from wait_github_dagger_checks.types import MISSING, Status, Step, Verdict
-from wait_github_dagger_checks.watcher import Watcher
+from github_status_monitor.types import MISSING, Status, Step, Verdict
+from github_status_monitor.watcher import Watcher
 
 
 def make_console() -> Console:

@@ -8,11 +8,8 @@ import httpx
 from .types import Status
 
 
-GITHUB_API = "https://api.github.com"
-
-
-def statuses_url(repo: str, ref: str) -> str:
-    return f"{GITHUB_API}/repos/{repo}/commits/{ref}/statuses"
+def statuses_url(*, github_api: str, repo: str, ref: str) -> str:
+    return f"{github_api}/repos/{repo}/commits/{ref}/statuses"
 
 
 def auth_headers(token_plaintext: str) -> dict[str, str]:
