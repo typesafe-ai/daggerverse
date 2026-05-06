@@ -157,17 +157,30 @@ class UvWorkspace:
             posixpath.join(workdir, "pyproject.toml"), pyproject_toml
         ).with_file(posixpath.join(workdir, "uv.lock"), uv_lock)
 
+        # Check if the target package uses a flat layout (no [build-system]).
+        # Dependencies are always buildable libraries with src/ layout.
+        flat_package = False
+        if package and package in needed_local:
+            pkg_toml = tomllib.loads(
+                await ws_dir.file(
+                    posixpath.join(needed_local[package], "pyproject.toml")
+                ).contents()
+            )
+            flat_package = "build-system" not in pkg_toml
+
         for pkg_name, path in sorted(needed_local.items()):
+            ctr = ctr.with_file(
+                posixpath.join(workdir, path, "pyproject.toml"),
+                ws_dir.file(posixpath.join(path, "pyproject.toml")),
+            )
+            if pkg_name == package and flat_package:
+                continue
             src_name = pkg_name.replace("-", "_")
-            ctr = (
-                ctr.with_file(
-                    posixpath.join(workdir, path, "pyproject.toml"),
-                    ws_dir.file(posixpath.join(path, "pyproject.toml")),
-                )
-                .with_new_file(posixpath.join(workdir, path, "README.md"), "")
-                .with_new_file(
-                    posixpath.join(workdir, path, "src", src_name, "__init__.py"), ""
-                )
+            ctr = ctr.with_new_file(
+                posixpath.join(workdir, path, "README.md"), ""
+            ).with_new_file(
+                posixpath.join(workdir, path, "src", src_name, "__init__.py"),
+                "",
             )
 
         uv_sync_base = build_uv_sync_args(
@@ -181,7 +194,9 @@ class UvWorkspace:
 
         ctr = ctr.with_exec([*uv_sync_base, "--no-install-local"])
 
-        for path in sorted(needed_local.values()):
+        for pkg_name, path in sorted(needed_local.items()):
+            if pkg_name == package and flat_package:
+                continue
             ctr = ctr.with_directory(
                 posixpath.join(workdir, path, "src"),
                 ws_dir.directory(posixpath.join(path, "src")),

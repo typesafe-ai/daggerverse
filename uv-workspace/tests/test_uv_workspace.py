@@ -17,6 +17,14 @@ def _load_lock(path: Path) -> dict:
     return tomllib.loads((path / "uv.lock").read_text())
 
 
+def _is_flat_package(ws_root: Path, local_packages: dict[str, str], pkg: str) -> bool:
+    """Replicate the flat-package detection from UvWorkspace.build()."""
+    if pkg not in local_packages:
+        return False
+    toml = tomllib.loads((ws_root / local_packages[pkg] / "pyproject.toml").read_text())
+    return "build-system" not in toml
+
+
 class TestWorkspace:
     """Tests using a workspace with my-app -> my-lib -> my-core."""
 
@@ -91,6 +99,68 @@ class TestStandalone:
     def test_find_transitive_unknown_package(self):
         result = find_transitive_local_deps(self.lock_data, "nonexistent")
         assert result == {}
+
+
+class TestWorkspaceApp:
+    """Tests using a workspace where my-app is a flat app (no build-system)."""
+
+    ws_root = FIXTURES / "workspace-app"
+    lock_data = _load_lock(ws_root)
+
+    def test_parse_local_packages(self):
+        result = parse_local_packages(self.lock_data)
+        assert result == {
+            "my-app": "my-app",
+            "my-lib": "my-lib",
+            "my-core": "my-core",
+        }
+
+    def test_directory_source_detected(self):
+        """A package without build-system uses directory (not editable) source in uv.lock."""
+        app_pkg = next(p for p in self.lock_data["package"] if p["name"] == "my-app")
+        assert "directory" in app_pkg["source"]
+        assert "editable" not in app_pkg["source"]
+
+    def test_lib_still_editable(self):
+        lib_pkg = next(p for p in self.lock_data["package"] if p["name"] == "my-lib")
+        assert "editable" in lib_pkg["source"]
+
+    def test_find_transitive_from_app(self):
+        result = find_transitive_local_deps(self.lock_data, "my-app")
+        assert result == {
+            "my-app": "my-app",
+            "my-lib": "my-lib",
+            "my-core": "my-core",
+        }
+
+    def test_find_transitive_from_lib(self):
+        result = find_transitive_local_deps(self.lock_data, "my-lib")
+        assert result == {
+            "my-lib": "my-lib",
+            "my-core": "my-core",
+        }
+
+    def test_flat_package_detection_app(self):
+        """my-app has no [build-system] and should be detected as flat."""
+        local = parse_local_packages(self.lock_data)
+        assert _is_flat_package(self.ws_root, local, "my-app") is True
+
+    def test_flat_package_detection_lib(self):
+        """my-lib has a [build-system] and should NOT be detected as flat."""
+        local = parse_local_packages(self.lock_data)
+        assert _is_flat_package(self.ws_root, local, "my-lib") is False
+
+    def test_flat_package_detection_unknown(self):
+        local = parse_local_packages(self.lock_data)
+        assert _is_flat_package(self.ws_root, local, "nonexistent") is False
+
+    def test_original_workspace_not_flat(self):
+        """The original workspace fixture has build-system on all packages."""
+        ws = FIXTURES / "workspace"
+        lock = _load_lock(ws)
+        local = parse_local_packages(lock)
+        for pkg in local:
+            assert _is_flat_package(ws, local, pkg) is False
 
 
 class TestBuildUvSyncArgs:

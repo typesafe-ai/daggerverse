@@ -1,0 +1,45 @@
+version = 1
+revision = 3
+requires-python = ">=3.14"
+
+[manifest]
+members = [
+    "my-app",
+    "my-core",
+    "my-lib",
+    "test-ws-app",
+]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { directory = "my-app" }
+dependencies = [
+    { name = "my-lib" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "my-lib", directory = "my-lib" },
+]
+
+[[package]]
+name = "my-core"
+version = "0.1.0"
+source = { editable = "my-core" }
+
+[[package]]
+name = "my-lib"
+version = "0.1.0"
+source = { editable = "my-lib" }
+dependencies = [
+    { name = "my-core" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "my-core", editable = "my-core" }]
+
+[[package]]
+name = "test-ws-app"
+version = "0.1.0"
+source = { virtual = "." }
