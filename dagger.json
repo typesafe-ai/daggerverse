@@ -10,8 +10,8 @@
       "source": "uv-workspace"
     },
     {
-      "name": "wait-github-dagger-checks",
-      "source": "wait-github-dagger-checks"
+      "name": "github-status-monitor",
+      "source": "github-status-monitor"
     }
   ],
   "source": ".dagger"
