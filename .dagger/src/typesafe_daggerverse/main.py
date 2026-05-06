@@ -61,6 +61,14 @@ class TypesafeDaggerverse:
             base_container=_base(),
         )
 
+    def _workspace_app(self) -> "dagger.UvWorkspace":
+        return dag.uv_workspace(
+            source_dir=self.source.directory(
+                "uv-workspace/tests/_packages/workspace-app"
+            ),
+            base_container=_base(),
+        )
+
     def _self(self) -> "dagger.UvWorkspace":
         """uv-workspace built against its own source.
 
@@ -112,6 +120,13 @@ class TypesafeDaggerverse:
         return await ctr.with_exec(
             ["python", "-c", "import my_app, my_lib, my_core"]
         ).stdout()
+
+    @check
+    @function
+    async def uv_workspace_build_workspace_app(self) -> str:
+        """Build a workspace where the target package is a flat app (no build-system)."""
+        ctr = await self._workspace_app().build(package="my-app")
+        return await ctr.with_exec(["python", "-c", "import my_lib, my_core"]).stdout()
 
     @check
     @function

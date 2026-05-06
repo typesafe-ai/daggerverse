@@ -1,0 +1,14 @@
+[project]
+name = "my-app"
+version = "0.1.0"
+description = "A flat-layout app package (no build-system)"
+authors = [
+    { name = "danielgafni", email = "danielgafni16@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "my-lib",
+]
+
+[tool.uv.sources]
+my-lib = { workspace = true }
