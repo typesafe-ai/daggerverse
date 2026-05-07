@@ -30,7 +30,7 @@ class TestWorkspace:
 
     lock_data = _load_lock(FIXTURES / "workspace")
 
-    def testparse_local_packages(self):
+    def test_parse_local_packages(self):
         result = parse_local_packages(self.lock_data)
         assert result == {
             "my-app": "my-app",
@@ -88,7 +88,7 @@ class TestStandalone:
 
     lock_data = _load_lock(FIXTURES / "standalone-app")
 
-    def testparse_local_packages(self):
+    def test_parse_local_packages(self):
         result = parse_local_packages(self.lock_data)
         assert result == {"standalone-app": "."}
 
@@ -178,21 +178,45 @@ class TestBuildUvSyncArgs:
         return build_uv_sync_args(**{**defaults, **overrides})
 
     def test_bare_defaults(self):
-        assert self._args() == ["uv", "sync"]
+        assert self._args() == ["uv", "sync", "--frozen", "--link-mode", "copy"]
 
     def test_all_extras_flag(self):
-        assert self._args(all_extras=True) == ["uv", "sync", "--all-extras"]
+        assert self._args(all_extras=True) == [
+            "uv",
+            "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
+            "--all-extras",
+        ]
 
     def test_all_groups_flag(self):
-        assert self._args(all_groups=True) == ["uv", "sync", "--all-groups"]
+        assert self._args(all_groups=True) == [
+            "uv",
+            "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
+            "--all-groups",
+        ]
 
     def test_all_packages_flag(self):
-        assert self._args(all_packages=True) == ["uv", "sync", "--all-packages"]
+        assert self._args(all_packages=True) == [
+            "uv",
+            "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
+            "--all-packages",
+        ]
 
     def test_repeated_extras(self):
         assert self._args(extras=["gpu", "viz"]) == [
             "uv",
             "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
             "--extra",
             "gpu",
             "--extra",
@@ -203,6 +227,9 @@ class TestBuildUvSyncArgs:
         assert self._args(groups=["dev", "docs"]) == [
             "uv",
             "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
             "--group",
             "dev",
             "--group",
@@ -210,7 +237,15 @@ class TestBuildUvSyncArgs:
         ]
 
     def test_package(self):
-        assert self._args(package="my-app") == ["uv", "sync", "--package", "my-app"]
+        assert self._args(package="my-app") == [
+            "uv",
+            "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
+            "--package",
+            "my-app",
+        ]
 
     def test_all_together(self):
         args = self._args(
@@ -224,6 +259,9 @@ class TestBuildUvSyncArgs:
         assert args == [
             "uv",
             "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
             "--all-extras",
             "--extra",
             "gpu",
