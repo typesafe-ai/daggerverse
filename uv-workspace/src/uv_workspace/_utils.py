@@ -1,5 +1,3 @@
-"""Pure helpers for uv.lock parsing and `uv sync` argv construction."""
-
 from collections import OrderedDict, deque
 
 
@@ -63,7 +61,7 @@ def build_uv_sync_args(
     all_packages: bool,
 ) -> list[str]:
     """Build the `uv sync` base argv mirroring the `uv sync` CLI flags."""
-    args = ["uv", "sync"]
+    args = ["uv", "sync", "--frozen", "--link-mode", "copy"]
     if all_extras:
         args.append("--all-extras")
     for extra in extras:
