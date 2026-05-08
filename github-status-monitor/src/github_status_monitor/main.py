@@ -22,6 +22,16 @@ from github_status_monitor.github import (
     poll_snapshots,
     statuses_url,
 )
+from github_status_monitor.params import (
+    DiscoveryTimeout,
+    FailFast,
+    PollInterval,
+    ProgressInterval,
+    Ref,
+    Repo,
+    Timeout,
+    Token,
+)
 from github_status_monitor.types import Step
 from github_status_monitor.watcher import Watcher
 
@@ -36,9 +46,9 @@ class GithubStatusMonitor:
     @function(cache="never")
     async def wait_for_statuses(
         self,
-        repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
-        ref: Annotated[str, Doc("Commit SHA to poll")],
-        token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
+        repo: Repo,
+        ref: Ref,
+        token: Token,
         checks: Annotated[
             list[str],
             Doc(
@@ -46,26 +56,11 @@ class GithubStatusMonitor:
                 "they appear on the commit (no owner/repo prefix)."
             ),
         ],
-        poll_interval: Annotated[int, Doc("Seconds between GitHub polls")] = 3,
-        progress_interval: Annotated[
-            int,
-            Doc(
-                "Seconds between routine progress lines (terminal transitions "
-                "are still printed live)."
-            ),
-        ] = 30,
-        timeout: Annotated[int, Doc("Total wall-clock budget, seconds")] = 1800,
-        discovery_timeout: Annotated[
-            int, Doc("How long expected statuses may take to first appear, seconds")
-        ] = 300,
-        fail_fast: Annotated[
-            bool,
-            Doc(
-                "If True, raise as soon as any check fails. "
-                "If False (default), wait for every check to reach a terminal "
-                "state and then raise at the end if any failed."
-            ),
-        ] = False,
+        poll_interval: PollInterval = 3,
+        progress_interval: ProgressInterval = 30,
+        timeout: Timeout = 1800,
+        discovery_timeout: DiscoveryTimeout = 300,
+        fail_fast: FailFast = False,
     ) -> str:
         """Wait until every status context in `checks` succeeds on `ref`."""
         return await self._wait(
@@ -83,29 +78,14 @@ class GithubStatusMonitor:
     @function(cache="never")
     async def wait_for_dagger_checks(
         self,
-        repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
-        ref: Annotated[str, Doc("Commit SHA to poll")],
-        token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
-        poll_interval: Annotated[int, Doc("Seconds between GitHub polls")] = 3,
-        progress_interval: Annotated[
-            int,
-            Doc(
-                "Seconds between routine progress lines (terminal transitions "
-                "are still printed live)."
-            ),
-        ] = 30,
-        timeout: Annotated[int, Doc("Total wall-clock budget, seconds")] = 1800,
-        discovery_timeout: Annotated[
-            int, Doc("How long expected statuses may take to first appear, seconds")
-        ] = 300,
-        fail_fast: Annotated[
-            bool,
-            Doc(
-                "If True, raise as soon as any check fails. "
-                "If False (default), wait for every check to reach a terminal "
-                "state and then raise at the end if any failed."
-            ),
-        ] = False,
+        repo: Repo,
+        ref: Ref,
+        token: Token,
+        poll_interval: PollInterval = 3,
+        progress_interval: ProgressInterval = 30,
+        timeout: Timeout = 1800,
+        discovery_timeout: DiscoveryTimeout = 300,
+        fail_fast: FailFast = False,
     ) -> str:
         """Wait for every Dagger check in the current workspace to succeed.
 
