@@ -4,6 +4,15 @@ from typing import Annotated
 import dagger
 from dagger import Doc, dag, field, function, object_type
 
+from uv_workspace.params import (
+    AllExtras,
+    AllGroups,
+    AllPackages,
+    DaggerCodegen,
+    Extra,
+    Group,
+    Package,
+)
 from uv_workspace.remote_build import UvRemoteBuild
 from uv_workspace.sync_plan import UvSyncPlan
 
@@ -32,43 +41,13 @@ class UvWorkspace:
     @function
     async def with_remote_dependencies(
         self,
-        package: Annotated[
-            str | None,
-            Doc(
-                "Package name; if set, only that package's transitive local deps "
-                "are scaffolded. Maps to `uv sync --package`"
-            ),
-        ] = None,
-        extra: Annotated[
-            list[str] | None,
-            Doc("Extras to install; passed to `uv sync` as repeated `--extra`"),
-        ] = None,
-        group: Annotated[
-            list[str] | None,
-            Doc(
-                "Dependency groups to install; passed to `uv sync` as repeated `--group`"
-            ),
-        ] = None,
-        all_extras: Annotated[
-            bool,
-            Doc("Install every extra; maps to `uv sync --all-extras`"),
-        ] = False,
-        all_groups: Annotated[
-            bool,
-            Doc("Install every dependency group; maps to `uv sync --all-groups`"),
-        ] = False,
-        all_packages: Annotated[
-            bool,
-            Doc("Install every workspace member; maps to `uv sync --all-packages`"),
-        ] = False,
-        dagger_codegen: Annotated[
-            bool,
-            Doc(
-                "If True (default), and the package being built has a "
-                "`dagger.json`, run Dagger codegen and overlay the generated "
-                "SDK before `uv sync`. No-op for non-Dagger projects."
-            ),
-        ] = True,
+        package: Package | None = None,
+        extra: Extra | None = None,
+        group: Group | None = None,
+        all_extras: AllExtras = False,
+        all_groups: AllGroups = False,
+        all_packages: AllPackages = False,
+        dagger_codegen: DaggerCodegen = True,
     ) -> UvRemoteBuild:
         """Install remote (non-local) dependencies.
 
@@ -106,49 +85,13 @@ class UvWorkspace:
     @function
     async def build(
         self,
-        package: Annotated[
-            str | None,
-            Doc(
-                "Package name; if set, only that package's transitive local deps "
-                "are installed. Maps to `uv sync --package`"
-            ),
-        ] = None,
-        extra: Annotated[
-            list[str] | None,
-            Doc("Extras to install; passed to `uv sync` as repeated `--extra`"),
-        ] = None,
-        group: Annotated[
-            list[str] | None,
-            Doc(
-                "Dependency groups to install; passed to `uv sync` as repeated `--group`"
-            ),
-        ] = None,
-        all_extras: Annotated[
-            bool,
-            Doc("Install every extra; maps to `uv sync --all-extras`"),
-        ] = False,
-        all_groups: Annotated[
-            bool,
-            Doc("Install every dependency group; maps to `uv sync --all-groups`"),
-        ] = False,
-        all_packages: Annotated[
-            bool,
-            Doc(
-                "Install every workspace member; maps to `uv sync --all-packages`. "
-                "Only meaningful in workspaces"
-            ),
-        ] = False,
-        dagger_codegen: Annotated[
-            bool,
-            Doc(
-                "If True (default), and the package being built has a "
-                "`dagger.json`, run Dagger codegen and overlay the generated "
-                "SDK before `uv sync`. This makes `[tool.uv.sources]` entries "
-                'pointing at the generated tree (e.g. `dagger-io = { path = "sdk" }`) '
-                "install correctly even though those paths are gitignored. "
-                "No-op for non-Dagger projects. Pass False to skip."
-            ),
-        ] = True,
+        package: Package | None = None,
+        extra: Extra | None = None,
+        group: Group | None = None,
+        all_extras: AllExtras = False,
+        all_groups: AllGroups = False,
+        all_packages: AllPackages = False,
+        dagger_codegen: DaggerCodegen = True,
     ) -> dagger.Container:
         """Build a minimal container with deps installed for the given package.
 
