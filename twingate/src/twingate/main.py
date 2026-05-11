@@ -8,7 +8,7 @@ Port: TypeAlias = Annotated[int, Doc("Port the HTTP proxy listens on.")]
 _DEFAULT_PORT = 3170
 _DEFAULT_ALIAS = "twingate"
 _DEFAULT_IMAGE = "twingate/client"
-_DEFAULT_VERSION = "latest"
+_DEFAULT_VERSION = "2026.106"
 
 
 @object_type
@@ -56,7 +56,9 @@ class Twingate:
         _KEY_PATH = "/etc/twingate/service_key.json"
         return (
             self.ctr.with_mounted_secret(_KEY_PATH, self.service_key)
-            .with_exec([f"--http-proxy=0.0.0.0:{port}", "--tun=off"])
+            .with_exec(
+                ["/usr/sbin/twingated", f"--http-proxy=0.0.0.0:{port}", "--tun=off"]
+            )
             .with_exposed_port(port)
             .as_service()
         )
