@@ -214,6 +214,13 @@ class TypesafeDaggerverse:
 
     @check
     @function
+    async def twingate_build(self) -> str:
+        """Build the Twingate client container (no credentials needed)."""
+        tg = dag.twingate(service_key=dag.set_secret("dummy", "{}"))
+        return await tg.ctr().with_exec(["twingated", "--version"]).stdout()
+
+    @check
+    @function
     async def uv_workspace_pytest_self(self) -> str:
         """Run uv-workspace's own pytest suite inside a freshly-built container.
 

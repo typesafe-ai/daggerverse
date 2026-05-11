@@ -12,6 +12,10 @@
     {
       "name": "github-status-monitor",
       "source": "github-status-monitor"
+    },
+    {
+      "name": "twingate",
+      "source": "twingate"
     }
   ],
   "source": ".dagger"
