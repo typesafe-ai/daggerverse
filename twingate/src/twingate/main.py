@@ -57,7 +57,13 @@ class Twingate:
         return (
             self.ctr.with_mounted_secret(_KEY_PATH, self.service_key)
             .with_exec(
-                ["/usr/sbin/twingated", f"--http-proxy=0.0.0.0:{port}", "--tun=off"]
+                [
+                    "/usr/sbin/twingated",
+                    "--http-proxy",
+                    f"0.0.0.0:{port}",
+                    "--tun",
+                    "off",
+                ]
             )
             .with_exposed_port(port)
             .as_service()
