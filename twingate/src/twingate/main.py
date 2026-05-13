@@ -93,7 +93,7 @@ class Twingate:
 
         if set_proxy_env_vars:
             ctr = (
-                ctr.with_env_variable("HTTPS_PROXY", f"https://{alias}:{port}")
+                ctr.with_env_variable("HTTPS_PROXY", f"http://{alias}:{port}")
                 .with_env_variable("HTTP_PROXY", f"http://{alias}:{port}")
                 .with_env_variable("NO_PROXY", "localhost,127.0.0.1")
             )
