@@ -1,9 +1,9 @@
-"""Dagger module: wait for GitHub commit-status contexts to succeed on a ref.
+"""Dagger module: wait for GitHub commit statuses and/or check runs to succeed.
 
-Two entry points:
+Three entry points:
 
 * :meth:`GithubStatusMonitor.wait_for_statuses` — explicit list of status
-  contexts; general-purpose for any GitHub Status check.
+  contexts and/or check-run names; general-purpose for any GitHub check.
 * :meth:`GithubStatusMonitor.wait_for_dagger_checks` — auto-discovers expected
   contexts from ``dag.current_workspace().checks()``; specific to Dagger
   Cloud checks that publish their state as GitHub Statuses.
@@ -19,6 +19,7 @@ from rich.console import Console
 from github_status_monitor import render
 from github_status_monitor.github import (
     auth_headers,
+    check_runs_url,
     poll_snapshots,
     statuses_url,
 )
@@ -50,24 +51,27 @@ class GithubStatusMonitor:
         ref: Ref,
         token: Token,
         checks: Annotated[
-            list[str],
-            Doc(
-                "GitHub commit-status context names to wait for, exactly as "
-                "they appear on the commit (no owner/repo prefix)."
-            ),
-        ],
+            list[str] | None,
+            Doc("GitHub commit-status context names to wait for."),
+        ] = None,
+        check_runs: Annotated[
+            list[str] | None,
+            Doc("GitHub Actions check-run names to wait for (emitted by jobs)."),
+        ] = None,
         poll_interval: PollInterval = 3,
         progress_interval: ProgressInterval = 30,
         timeout: Timeout = 1800,
         discovery_timeout: DiscoveryTimeout = 300,
         fail_fast: FailFast = False,
     ) -> str:
-        """Wait until every status context in `checks` succeeds on `ref`."""
+        """Wait until every status context in `checks` and every check-run in
+        `check_runs` succeeds on `ref`."""
         return await self._wait(
             repo=repo,
             ref=ref,
             token=token,
-            expected=sorted(set(checks)),
+            status_names=sorted(set(checks or [])),
+            check_run_names=sorted(set(check_runs or [])),
             poll_interval=poll_interval,
             progress_interval=progress_interval,
             timeout=timeout,
@@ -99,7 +103,8 @@ class GithubStatusMonitor:
             repo=repo,
             ref=ref,
             token=token,
-            expected=expected,
+            status_names=expected,
+            check_run_names=[],
             poll_interval=poll_interval,
             progress_interval=progress_interval,
             timeout=timeout,
@@ -113,7 +118,8 @@ class GithubStatusMonitor:
         repo: str,
         ref: str,
         token: dagger.Secret,
-        expected: list[str],
+        status_names: list[str],
+        check_run_names: list[str],
         poll_interval: int,
         progress_interval: int,
         timeout: int,
@@ -122,6 +128,7 @@ class GithubStatusMonitor:
     ) -> str:
         console = Console(force_terminal=True)
 
+        expected = sorted(set(status_names + check_run_names))
         if not expected:
             render.empty(console)
             return "no checks to wait for"
@@ -139,12 +146,26 @@ class GithubStatusMonitor:
         )
 
         plaintext = await token.plaintext()
-        url = statuses_url(github_api=self.github_api, repo=repo, ref=ref)
+        s_url = (
+            statuses_url(github_api=self.github_api, repo=repo, ref=ref)
+            if status_names
+            else None
+        )
+        cr_url = (
+            check_runs_url(github_api=self.github_api, repo=repo, ref=ref)
+            if check_run_names
+            else None
+        )
 
         async with httpx.AsyncClient(
             headers=auth_headers(plaintext), timeout=15
         ) as client:
-            async for snapshot in poll_snapshots(client, url, poll_interval):
+            async for snapshot in poll_snapshots(
+                client,
+                statuses_url=s_url,
+                check_runs_url=cr_url,
+                interval=poll_interval,
+            ):
                 match watcher.step(snapshot):
                     case Step.SUCCEEDED:
                         return f"all {len(watcher.succeeded)} checks succeeded"
