@@ -80,8 +80,22 @@ class Twingate:
             Doc("Hostname alias for the proxy service binding."),
         ] = _DEFAULT_ALIAS,
         port: Port = _DEFAULT_PORT,
+        set_proxy_env_vars: bool = True,
     ) -> dagger.Container:
-        """Bind the Twingate proxy to a container and set HTTPS_PROXY."""
-        return ctr.with_service_binding(
-            alias, self.service(port=port)
-        ).with_env_variable("HTTPS_PROXY", f"http://{alias}:{port}")
+        """Bind the Twingate proxy to a container.
+
+        If `set_proxy_env_vars` is True, it also sets common env vars:
+            - HTTP_PROXY
+            - HTTPS_PROXY
+            - NO_PROXY=localhost,127.0.0.1
+        """
+        ctr = ctr.with_service_binding(alias, self.service(port=port))
+
+        if set_proxy_env_vars:
+            ctr = (
+                ctr.with_env_variable("HTTPS_PROXY", f"https://{alias}:{port}")
+                .with_env_variable("HTTP_PROXY", f"http://{alias}:{port}")
+                .with_env_variable("NO_PROXY", "localhost,127.0.01")
+            )
+
+        return
