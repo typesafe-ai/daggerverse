@@ -95,7 +95,7 @@ class Twingate:
             ctr = (
                 ctr.with_env_variable("HTTPS_PROXY", f"https://{alias}:{port}")
                 .with_env_variable("HTTP_PROXY", f"http://{alias}:{port}")
-                .with_env_variable("NO_PROXY", "localhost,127.0.01")
+                .with_env_variable("NO_PROXY", "localhost,127.0.0.1")
             )
 
-        return
+        return ctr
