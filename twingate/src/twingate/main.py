@@ -49,7 +49,7 @@ class Twingate:
 
         Returns a long-running service listening on the given port.
         Bind it to a container with `bind_proxy`, or manually via
-        `Container.with_service_binding` + `HTTPS_PROXY`
+        `Container.with_service_binding` + `https_proxy`
 
         Learn more [here](https://www.twingate.com/docs/linux-userspace-networking).
         """
@@ -84,18 +84,24 @@ class Twingate:
     ) -> dagger.Container:
         """Bind the Twingate proxy to a container.
 
-        If `set_proxy_env_vars` is True, it also sets common env vars:
-            - HTTP_PROXY
-            - HTTPS_PROXY
-            - NO_PROXY=localhost,127.0.0.1
+        If `set_proxy_env_vars` is True, it also sets common env vars
+        (both lowercase and uppercase for maximum compatibility):
+            - http_proxy / HTTP_PROXY
+            - https_proxy / HTTPS_PROXY
+            - no_proxy / NO_PROXY = localhost,127.0.0.1
         """
         ctr = ctr.with_service_binding(alias, self.service(port=port))
 
         if set_proxy_env_vars:
+            proxy_url = f"http://{alias}:{port}"
+            no_proxy = "localhost,127.0.0.1"
             ctr = (
-                ctr.with_env_variable("HTTPS_PROXY", f"http://{alias}:{port}")
-                .with_env_variable("HTTP_PROXY", f"http://{alias}:{port}")
-                .with_env_variable("NO_PROXY", "localhost,127.0.0.1")
+                ctr.with_env_variable("https_proxy", proxy_url)
+                .with_env_variable("HTTPS_PROXY", proxy_url)
+                .with_env_variable("http_proxy", proxy_url)
+                .with_env_variable("HTTP_PROXY", proxy_url)
+                .with_env_variable("no_proxy", no_proxy)
+                .with_env_variable("NO_PROXY", no_proxy)
             )
 
         return ctr
