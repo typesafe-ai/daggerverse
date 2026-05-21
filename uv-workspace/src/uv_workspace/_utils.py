@@ -1,4 +1,10 @@
+import re
 from collections import OrderedDict, deque
+
+
+def _normalize(name: str) -> str:
+    """PEP 503 name normalization: lowercase, collapse [-_.] runs to a single hyphen."""
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
@@ -20,8 +26,11 @@ def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str
     """Find all local packages that `project` transitively depends on (including itself).
 
     Results are sorted by package name for deterministic build order.
+    The *project* name is PEP 503-normalised so callers can pass the raw
+    ``[project].name`` from ``pyproject.toml`` (which may use underscores).
     """
     locals_ = parse_local_packages(lock_data)
+    project = _normalize(project)
 
     dep_graph: dict[str, list[str]] = {}
     for pkg in lock_data.get("package", []):

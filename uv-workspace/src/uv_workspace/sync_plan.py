@@ -7,6 +7,7 @@ from dagger import Doc, field, object_type
 
 from uv_workspace._codegen import dagger_codegen as _run_codegen
 from uv_workspace._utils import (
+    _normalize,
     build_uv_sync_args,
     find_transitive_local_deps,
     parse_local_packages,
@@ -74,6 +75,8 @@ class UvSyncPlan:
             if workspace_path == "."
             else source_dir.directory(workspace_path)
         )
+        if package:
+            package = _normalize(package)
         lock_data = tomllib.loads(await ws_dir.file("uv.lock").contents())
         all_local = parse_local_packages(lock_data)
         needed_local = (
