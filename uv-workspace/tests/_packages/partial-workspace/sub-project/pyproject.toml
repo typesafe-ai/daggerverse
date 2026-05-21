@@ -1,0 +1,19 @@
+[project]
+name = "sub-project"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "my-dep",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["six"]
+bench = ["ext-pkg"]
+
+[tool.uv.sources]
+my-dep = { path = "../my-dep", editable = true }
+ext-pkg = { path = "../../gone/ext-pkg", editable = true }

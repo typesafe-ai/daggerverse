@@ -1,0 +1,13 @@
+[project]
+name = "my-core"
+version = "0.1.0"
+description = "A flat-layout core library"
+authors = [
+    { name = "danielgafni", email = "danielgafni16@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

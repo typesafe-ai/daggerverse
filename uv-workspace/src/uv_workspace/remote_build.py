@@ -34,12 +34,17 @@ class UvRemoteBuild:
             )
             if pkg.name == self.plan.package and self.plan.flat_package:
                 continue
-            src_name = pkg.name.replace("-", "_")
-            ctr = ctr.with_new_file(
-                posixpath.join(workdir, pkg.path, "README.md"), ""
-            ).with_new_file(
-                posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"), ""
-            )
+            src_name = pkg.module
+            ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, "README.md"), "")
+            if pkg.flat:
+                ctr = ctr.with_new_file(
+                    posixpath.join(workdir, pkg.path, src_name, "__init__.py"), ""
+                )
+            else:
+                ctr = ctr.with_new_file(
+                    posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"),
+                    "",
+                )
 
         return UvRemoteBuild(container=ctr, plan=self.plan)
 
@@ -56,13 +61,17 @@ class UvRemoteBuild:
             )
             if pkg.name == self.plan.package and self.plan.flat_package:
                 continue
-            src_name = pkg.name.replace("-", "_")
-            ctr = ctr.with_new_file(
-                posixpath.join(workdir, pkg.path, "README.md"), ""
-            ).with_new_file(
-                posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"),
-                "",
-            )
+            src_name = pkg.module
+            ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, "README.md"), "")
+            if pkg.flat:
+                ctr = ctr.with_new_file(
+                    posixpath.join(workdir, pkg.path, src_name, "__init__.py"), ""
+                )
+            else:
+                ctr = ctr.with_new_file(
+                    posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"),
+                    "",
+                )
 
         return UvRemoteBuild(container=ctr, plan=self.plan)
 
@@ -86,10 +95,17 @@ class UvRemoteBuild:
         for pkg in self.plan.needed_local:
             if pkg.name == self.plan.package and self.plan.flat_package:
                 continue
-            ctr = ctr.with_directory(
-                posixpath.join(workdir, pkg.path, "src"),
-                self.plan.ws_dir.directory(posixpath.join(pkg.path, "src")),
-            )
+            if pkg.flat:
+                src_name = pkg.module
+                ctr = ctr.with_directory(
+                    posixpath.join(workdir, pkg.path, src_name),
+                    self.plan.ws_dir.directory(posixpath.join(pkg.path, src_name)),
+                )
+            else:
+                ctr = ctr.with_directory(
+                    posixpath.join(workdir, pkg.path, "src"),
+                    self.plan.ws_dir.directory(posixpath.join(pkg.path, "src")),
+                )
 
         ctr = ctr.with_exec(self.plan.uv_sync_args)
 
