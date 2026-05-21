@@ -5,6 +5,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from uv_workspace._utils import (
+    _normalize,
     build_uv_sync_args,
     find_transitive_local_deps,
     parse_local_packages,
@@ -274,3 +275,39 @@ class TestBuildUvSyncArgs:
             "--package",
             "my-app",
         ]
+
+
+class TestNameNormalization:
+    """PEP 503 name normalization: underscores, mixed case, dots all map to hyphens."""
+
+    def test_underscore_to_hyphen(self):
+        assert _normalize("frens_in_common") == "frens-in-common"
+
+    def test_already_normalized(self):
+        assert _normalize("my-app") == "my-app"
+
+    def test_mixed_separators(self):
+        assert _normalize("My_Package.Name") == "my-package-name"
+
+    def test_consecutive_separators(self):
+        assert _normalize("a__b--c..d") == "a-b-c-d"
+
+    def test_find_transitive_with_underscored_name(self):
+        """Passing an underscored project name should still resolve against
+        the hyphenated lockfile keys."""
+        lock_data = _load_lock(FIXTURES / "workspace")
+        result = find_transitive_local_deps(lock_data, "my_app")
+        assert result == {
+            "my-app": "my-app",
+            "my-lib": "my-lib",
+            "my-core": "my-core",
+        }
+
+    def test_find_transitive_with_uppercase_name(self):
+        lock_data = _load_lock(FIXTURES / "workspace")
+        result = find_transitive_local_deps(lock_data, "My-App")
+        assert result == {
+            "my-app": "my-app",
+            "my-lib": "my-lib",
+            "my-core": "my-core",
+        }
