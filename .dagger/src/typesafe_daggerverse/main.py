@@ -69,6 +69,24 @@ class TypesafeDaggerverse:
             base_container=_base(),
         )
 
+    def _workspace_flat(self) -> "dagger.UvWorkspace":
+        return dag.uv_workspace(
+            source_dir=self.source.directory(
+                "uv-workspace/tests/_packages/workspace-flat"
+            ),
+            base_container=_base(),
+        )
+
+    def _partial_workspace(self) -> "dagger.UvWorkspace":
+        """A workspace where one local dep in uv.lock doesn't exist in the source tree."""
+        return dag.uv_workspace(
+            source_dir=self.source.directory(
+                "uv-workspace/tests/_packages/partial-workspace"
+            ),
+            base_container=_base(),
+            workspace_path="sub-project",
+        )
+
     def _self(self) -> "dagger.UvWorkspace":
         """uv-workspace built against its own source.
 
@@ -127,6 +145,15 @@ class TypesafeDaggerverse:
         """Build a workspace where the target package is a flat app (no build-system)."""
         ctr = await self._workspace_app().build(package="my-app")
         return await ctr.with_exec(["python", "-c", "import my_lib, my_core"]).stdout()
+
+    @check
+    @function
+    async def uv_workspace_build_workspace_flat(self) -> str:
+        """Build a workspace where dependencies use flat layout (no src/ directory)."""
+        ctr = await self._workspace_flat().build(package="my-app")
+        return await ctr.with_exec(
+            ["python", "-c", "import my_app, my_lib, my_core"]
+        ).stdout()
 
     @check
     @function
@@ -234,3 +261,20 @@ class TypesafeDaggerverse:
         tests = self.source.directory("uv-workspace").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
         return await ctr.with_exec(["pytest", "-q"]).stdout()
+
+    @check
+    @function
+    async def uv_workspace_build_partial_workspace(self) -> str:
+        """Build a project whose uv.lock references local deps that don't exist in the source tree.
+
+        The missing dep (ext-pkg at ../../gone/ext-pkg) should be silently
+        skipped. The present dep (my-dep at ../my-dep) should be installed.
+        """
+        ctr = await self._partial_workspace().build(
+            package="sub-project", group=["dev"]
+        )
+        script = _assert_modules_script(
+            present=["my_dep"],
+            absent=["ext_pkg"],
+        )
+        return await ctr.with_exec(["python", "-c", script]).stdout()
