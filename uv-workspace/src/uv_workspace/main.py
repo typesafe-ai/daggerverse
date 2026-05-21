@@ -48,13 +48,22 @@ class UvWorkspace:
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
         dagger_codegen: DaggerCodegen = True,
+        install: Annotated[
+            bool,
+            Doc(
+                "Run `uv sync --no-install-local` to install remote deps. "
+                "Set to False when another tool (e.g. `pulumi install`) "
+                "handles dependency installation."
+            ),
+        ] = True,
     ) -> UvRemoteBuild:
-        """Install remote (non-local) dependencies.
+        """Prepare the build plan and (optionally) install remote dependencies.
 
-        Copies the root pyproject.toml and uv.lock into the container and
-        runs `uv sync --no-install-local`. Returns a `UvRemoteBuild`
-        for the next pipeline steps: `with_workspace_files()` to scaffold
-        local packages, then `with_local_dependencies()` to install them.
+        Copies the root pyproject.toml and uv.lock into the container and,
+        when `install` is True (the default), runs `uv sync --no-install-local`.
+        Returns a `UvRemoteBuild` for the next pipeline steps:
+        `with_workspace_files()` to scaffold local packages, then
+        `with_local_dependencies()` to install them.
         """
         plan = await UvSyncPlan.create(
             source_dir=self.source_dir,
@@ -78,7 +87,8 @@ class UvWorkspace:
             plan.ws_dir.file("pyproject.toml"),
         ).with_file(posixpath.join(workdir, "uv.lock"), plan.ws_dir.file("uv.lock"))
 
-        ctr = ctr.with_exec([*plan.uv_sync_args, "--no-install-local"])
+        if install:
+            ctr = ctr.with_exec([*plan.uv_sync_args, "--no-install-local"])
 
         return UvRemoteBuild(container=ctr, plan=plan)
 
