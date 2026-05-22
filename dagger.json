@@ -16,6 +16,10 @@
     {
       "name": "twingate",
       "source": "twingate"
+    },
+    {
+      "name": "pinact",
+      "source": "pinact"
     }
   ],
   "source": ".dagger"
