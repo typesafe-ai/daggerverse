@@ -259,6 +259,21 @@ class TypesafeDaggerverse:
 
     @check
     @function
+    async def zizmor(
+        self,
+        github_token: Annotated[
+            dagger.Secret | None,
+            Doc("GitHub token for online audits. Without it, zizmor runs offline."),
+        ] = None,
+    ) -> str:
+        """Static analysis of GitHub Actions for security issues."""
+        return await dag.zizmor().run(
+            source=self.source,
+            github_token=github_token,
+        )
+
+    @check
+    @function
     async def twingate_build(self) -> str:
         """Build the Twingate client container (no credentials needed)."""
         tg = dag.twingate(service_key=dag.set_secret("dummy", "{}"))

@@ -7,5 +7,7 @@
   packages = [
     inputs.dagger.packages.${pkgs.system}.dagger
     pkgs.pinact
+    pkgs.zizmor
+    pkgs.prek
   ];
 }

@@ -20,6 +20,10 @@
     {
       "name": "pinact",
       "source": "pinact"
+    },
+    {
+      "name": "zizmor",
+      "source": "zizmor"
     }
   ],
   "source": ".dagger"
