@@ -241,6 +241,24 @@ class TypesafeDaggerverse:
 
     @check
     @function
+    async def pinact(
+        self,
+        github_token: Annotated[
+            dagger.Secret | None,
+            Doc(
+                "GitHub token for SHA resolution. When absent, only syntactic checks run."
+            ),
+        ] = None,
+    ) -> str:
+        """Check that GitHub Actions are pinned to full-length commit SHAs."""
+        return await dag.pinact().run(
+            source=self.source,
+            github_token=github_token,
+            verify_comment=github_token is not None,
+        )
+
+    @check
+    @function
     async def twingate_build(self) -> str:
         """Build the Twingate client container (no credentials needed)."""
         tg = dag.twingate(service_key=dag.set_secret("dummy", "{}"))
