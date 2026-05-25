@@ -252,7 +252,7 @@ class TypesafeDaggerverse:
     ) -> str:
         """Check that GitHub Actions are pinned to full-length commit SHAs."""
         return await dag.pinact().run(
-            source=self.source,
+            source=self.source.directory(".github"),
             github_token=github_token,
             verify_comment=github_token is not None,
         )
@@ -267,8 +267,8 @@ class TypesafeDaggerverse:
         ] = None,
     ) -> str:
         """Static analysis of GitHub Actions for security issues."""
-        return await dag.zizmor().run(
-            source=self.source,
+        return await dag.zizmor().lint(
+            source=self.source.directory(".github"),
             github_token=github_token,
         )
 

@@ -1,7 +1,7 @@
 from typing import Annotated
 
 import dagger
-from dagger import Doc, dag, field, function, object_type
+from dagger import DefaultPath, Doc, check, dag, field, function, object_type
 
 _DEFAULT_VERSION = "1.25.2"
 _DEFAULT_IMAGE = "ghcr.io/zizmorcore/zizmor"
@@ -34,12 +34,14 @@ class Zizmor:
             ctr = dag.container().from_(f"{_DEFAULT_IMAGE}:{version}")
         return cls(ctr=ctr)
 
+    @check
     @function
-    async def run(
+    async def lint(
         self,
         source: Annotated[
             dagger.Directory,
-            Doc("Directory containing GitHub Actions workflows (parent to `.github`)."),
+            Doc("The `.github` directory containing Actions workflows."),
+            DefaultPath(".github"),
         ],
         github_token: Annotated[
             dagger.Secret | None,
@@ -72,7 +74,9 @@ class Zizmor:
 
         Exits non-zero if findings above the configured severity are found.
         """
-        ctr = self.ctr.with_workdir("/work").with_mounted_directory("/work", source)
+        ctr = self.ctr.with_workdir("/work").with_mounted_directory(
+            "/work/.github", source
+        )
 
         if github_token is not None:
             ctr = ctr.with_secret_variable("GH_TOKEN", github_token)

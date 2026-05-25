@@ -1,9 +1,9 @@
 from typing import Annotated
 
 import dagger
-from dagger import Doc, dag, field, function, object_type
+from dagger import DefaultPath, Doc, check, dag, field, function, object_type
 
-_DEFAULT_VERSION = "3.10.1"
+_DEFAULT_VERSION = "4.0.0"
 _RELEASES_URL = "https://github.com/suzuki-shunsuke/pinact/releases/download"
 
 
@@ -16,12 +16,14 @@ class Pinact:
         Doc("pinact version to use."),
     ] = field(default=_DEFAULT_VERSION)
 
+    @check
     @function
     async def run(
         self,
         source: Annotated[
             dagger.Directory,
-            Doc("Directory containing GitHub Actions workflows."),
+            Doc("The `.github` directory containing Actions workflows."),
+            DefaultPath(".github"),
         ],
         github_token: Annotated[
             dagger.Secret | None,
@@ -56,7 +58,7 @@ class Pinact:
                 ]
             )
             .with_workdir("/work")
-            .with_mounted_directory("/work", source)
+            .with_mounted_directory("/work/.github", source)
         )
 
         if github_token is not None:
@@ -65,7 +67,7 @@ class Pinact:
         args = ["pinact", "run", "--check"]
 
         if verify_comment:
-            args.append("--verify")
+            args.append("--verify-comment")
 
         if extra_args:
             args.extend(extra_args)
