@@ -16,9 +16,54 @@ class Pinact:
         Doc("pinact version to use."),
     ] = field(default=_DEFAULT_VERSION)
 
+    async def _container(
+        self,
+        source: dagger.Directory,
+        github_token: dagger.Secret | None = None,
+    ) -> dagger.Container:
+        platform = await dag.default_platform()
+        arch = "arm64" if "arm64" in str(platform) else "amd64"
+        archive_url = f"{_RELEASES_URL}/v{self.version}/pinact_linux_{arch}.tar.gz"
+
+        ctr = (
+            dag.container()
+            .from_("alpine:3.21")
+            .with_exec(["apk", "add", "--no-cache", "curl"])
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    f"curl -fsSL '{archive_url}' | tar xz -C /usr/local/bin pinact",
+                ]
+            )
+            .with_workdir("/work")
+            .with_mounted_directory("/work/.github", source)
+        )
+
+        if github_token is not None:
+            ctr = ctr.with_secret_variable("GITHUB_TOKEN", github_token)
+
+        return ctr
+
+    @staticmethod
+    def _args(
+        *,
+        fix: bool,
+        verify_comment: bool,
+        extra_args: list[str] | None,
+    ) -> list[str]:
+        args = ["pinact", "run"]
+        if not fix:
+            args.append("--check")
+        if verify_comment:
+            args.append("--verify-comment")
+        if extra_args:
+            args.extend(extra_args)
+        return args
+
     @check
     @function
-    async def run(
+    async def lint(
         self,
         source: Annotated[
             dagger.Directory,
@@ -42,34 +87,42 @@ class Pinact:
 
         Exits non-zero if unpinned actions are found.
         """
-        platform = await dag.default_platform()
-        arch = "arm64" if "arm64" in str(platform) else "amd64"
-        archive_url = f"{_RELEASES_URL}/v{self.version}/pinact_linux_{arch}.tar.gz"
-
-        ctr = (
-            dag.container()
-            .from_("alpine:3.21")
-            .with_exec(["apk", "add", "--no-cache", "curl"])
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    f"curl -fsSL '{archive_url}' | tar xz -C /usr/local/bin pinact",
-                ]
-            )
-            .with_workdir("/work")
-            .with_mounted_directory("/work/.github", source)
+        ctr = await self._container(source, github_token)
+        args = self._args(
+            fix=False, verify_comment=verify_comment, extra_args=extra_args
         )
-
-        if github_token is not None:
-            ctr = ctr.with_secret_variable("GITHUB_TOKEN", github_token)
-
-        args = ["pinact", "run", "--check"]
-
-        if verify_comment:
-            args.append("--verify-comment")
-
-        if extra_args:
-            args.extend(extra_args)
-
         return await ctr.with_exec(args).combined_output()
+
+    @function
+    async def fix(
+        self,
+        source: Annotated[
+            dagger.Directory,
+            Doc("The `.github` directory containing Actions workflows."),
+            DefaultPath(".github"),
+        ],
+        github_token: Annotated[
+            dagger.Secret,
+            Doc("GitHub token for resolving SHAs via the GitHub API."),
+        ],
+        verify_comment: Annotated[
+            bool,
+            Doc("Verify and fix version comments."),
+        ] = True,
+        extra_args: Annotated[
+            list[str] | None,
+            Doc("Additional arguments to pass to `pinact run`."),
+        ] = None,
+    ) -> dagger.Changeset:
+        """Pin unpinned GitHub Actions to full-length commit SHAs.
+
+        Returns a Changeset applied to the host.
+        """
+        ctr = await self._container(source, github_token)
+        args = self._args(
+            fix=True, verify_comment=verify_comment, extra_args=extra_args
+        )
+        fixed = ctr.with_exec(args).directory("/work/.github")
+        before = dag.directory().with_directory(".github", source)
+        after = dag.directory().with_directory(".github", fixed)
+        return after.changes(before)

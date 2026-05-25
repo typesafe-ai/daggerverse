@@ -251,7 +251,7 @@ class TypesafeDaggerverse:
         ] = None,
     ) -> str:
         """Check that GitHub Actions are pinned to full-length commit SHAs."""
-        return await dag.pinact().run(
+        return await dag.pinact().lint(
             source=self.source.directory(".github"),
             github_token=github_token,
             verify_comment=github_token is not None,
