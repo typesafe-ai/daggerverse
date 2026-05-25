@@ -21,5 +21,5 @@ dagger check pinact
 Fix unpinned actions and apply changes to the host:
 
 ```sh
-dagger check pinact fix --github-token=env:GITHUB_TOKEN
+dagger call pinact fix --github-token=env:GITHUB_TOKEN
 ```
