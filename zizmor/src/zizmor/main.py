@@ -56,9 +56,7 @@ class Zizmor:
         source: dagger.Directory,
         github_token: dagger.Secret | None = None,
     ) -> dagger.Container:
-        ctr = self.ctr.with_workdir("/work").with_mounted_directory(
-            "/work/.github", source
-        )
+        ctr = self.ctr.with_workdir("/work").with_directory("/work/.github", source)
 
         if github_token is not None:
             ctr = ctr.with_secret_variable("GH_TOKEN", github_token)
@@ -79,7 +77,7 @@ class Zizmor:
     ) -> list[str]:
         args = ["zizmor", f"--format={format}", f"--persona={persona}"]
         if fix is not None:
-            args.append(f"--fix={fix.value}")
+            args.extend([f"--fix={fix.value}", "--no-exit-codes"])
         if min_severity is not None:
             args.append(f"--min-severity={min_severity}")
         if min_confidence is not None:
@@ -188,7 +186,7 @@ class Zizmor:
             min_confidence=min_confidence,
             extra_args=extra_args,
         )
-        result = ctr.with_exec(args, expect=dagger.ReturnType.ANY)
+        result = ctr.with_exec(args)
         output = await result.combined_output()
         if output.strip():
             sys.stderr.write(output)
