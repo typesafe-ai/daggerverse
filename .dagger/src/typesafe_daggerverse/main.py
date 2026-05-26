@@ -241,39 +241,6 @@ class TypesafeDaggerverse:
 
     @check
     @function
-    async def pinact(
-        self,
-        github_token: Annotated[
-            dagger.Secret | None,
-            Doc(
-                "GitHub token for SHA resolution. When absent, only syntactic checks run."
-            ),
-        ] = None,
-    ) -> str:
-        """Check that GitHub Actions are pinned to full-length commit SHAs."""
-        return await dag.pinact().lint(
-            source=self.source.directory(".github"),
-            github_token=github_token,
-            verify_comment=github_token is not None,
-        )
-
-    @check
-    @function
-    async def zizmor(
-        self,
-        github_token: Annotated[
-            dagger.Secret | None,
-            Doc("GitHub token for online audits. Without it, zizmor runs offline."),
-        ] = None,
-    ) -> str:
-        """Static analysis of GitHub Actions for security issues."""
-        return await dag.zizmor().lint(
-            source=self.source.directory(".github"),
-            github_token=github_token,
-        )
-
-    @check
-    @function
     async def twingate_build(self) -> str:
         """Build the Twingate client container (no credentials needed)."""
         tg = dag.twingate(service_key=dag.set_secret("dummy", "{}"))

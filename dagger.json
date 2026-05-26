@@ -4,6 +4,16 @@
   "sdk": {
     "source": "python"
   },
+  "toolchains": [
+    {
+      "name": "pinact",
+      "source": "pinact"
+    },
+    {
+      "name": "zizmor",
+      "source": "zizmor"
+    }
+  ],
   "dependencies": [
     {
       "name": "uv-workspace",
@@ -16,14 +26,6 @@
     {
       "name": "twingate",
       "source": "twingate"
-    },
-    {
-      "name": "pinact",
-      "source": "pinact"
-    },
-    {
-      "name": "zizmor",
-      "source": "zizmor"
     }
   ],
   "source": ".dagger"

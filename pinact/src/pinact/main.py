@@ -2,10 +2,11 @@ import sys
 from typing import Annotated
 
 import dagger
-from dagger import DefaultPath, Doc, check, dag, field, function, object_type
+from dagger import DefaultPath, Doc, Ignore, check, dag, field, function, object_type
 
 _DEFAULT_VERSION = "4.0.0"
 _RELEASES_URL = "https://github.com/suzuki-shunsuke/pinact/releases/download"
+_CONFIG_FILE = ".pinact.yaml"
 
 
 @object_type
@@ -21,6 +22,7 @@ class Pinact:
         self,
         source: dagger.Directory,
         github_token: dagger.Secret | None = None,
+        config: dagger.File | None = None,
     ) -> dagger.Container:
         platform = await dag.default_platform()
         arch = "arm64" if "arm64" in str(platform) else "amd64"
@@ -38,11 +40,18 @@ class Pinact:
                 ]
             )
             .with_workdir("/work")
-            .with_mounted_directory("/work/.github", source)
+            .with_mounted_directory("/work/.github", source.directory(".github"))
         )
 
         if github_token is not None:
             ctr = ctr.with_secret_variable("GITHUB_TOKEN", github_token)
+
+        if config is not None:
+            ctr = ctr.with_mounted_file(f"/work/{_CONFIG_FILE}", config)
+        elif await source.glob(_CONFIG_FILE):
+            ctr = ctr.with_mounted_file(
+                f"/work/{_CONFIG_FILE}", source.file(_CONFIG_FILE)
+            )
 
         return ctr
 
@@ -68,9 +77,14 @@ class Pinact:
         self,
         source: Annotated[
             dagger.Directory,
-            Doc("The `.github` directory containing Actions workflows."),
-            DefaultPath(".github"),
+            Doc("Repository root containing `.github` and optionally `.pinact.yaml`."),
+            DefaultPath("."),
+            Ignore(["*", "!.github", "!.pinact.yaml"]),
         ],
+        config: Annotated[
+            dagger.File | None,
+            Doc("Non-default path to `.pinact.yaml` configuration file."),
+        ] = None,
         github_token: Annotated[
             dagger.Secret | None,
             Doc("GitHub token for resolving SHAs via the GitHub API."),
@@ -88,7 +102,7 @@ class Pinact:
 
         Exits non-zero if unpinned actions are found.
         """
-        ctr = await self._container(source, github_token)
+        ctr = await self._container(source, github_token, config)
         args = self._args(
             fix=False, verify_comment=verify_comment, extra_args=extra_args
         )
@@ -99,13 +113,18 @@ class Pinact:
         self,
         source: Annotated[
             dagger.Directory,
-            Doc("The `.github` directory containing Actions workflows."),
-            DefaultPath(".github"),
+            Doc("Repository root containing `.github` and optionally `.pinact.yaml`."),
+            DefaultPath("."),
+            Ignore(["*", "!.github", "!.pinact.yaml"]),
         ],
         github_token: Annotated[
             dagger.Secret,
             Doc("GitHub token for resolving SHAs via the GitHub API."),
         ],
+        config: Annotated[
+            dagger.File | None,
+            Doc("Non-default path to `.pinact.yaml` configuration file."),
+        ] = None,
         verify_comment: Annotated[
             bool,
             Doc("Verify and fix version comments."),
@@ -119,7 +138,7 @@ class Pinact:
 
         Returns a Changeset applied to the host.
         """
-        ctr = await self._container(source, github_token)
+        ctr = await self._container(source, github_token, config)
         args = self._args(
             fix=True, verify_comment=verify_comment, extra_args=extra_args
         )
@@ -128,6 +147,4 @@ class Pinact:
         if output.strip():
             sys.stderr.write(output)
         fixed = result.directory("/work/.github")
-        before = dag.directory().with_directory(".github", source)
-        after = dag.directory().with_directory(".github", fixed)
-        return after.changes(before)
+        return fixed.changes(source.directory(".github"))
