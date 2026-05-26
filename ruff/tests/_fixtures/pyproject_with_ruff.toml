@@ -1,0 +1,7 @@
+[project]
+name = "myproject"
+version = "0.1.0"
+
+[tool.ruff]
+required-version = ">=0.6.0"
+line-length = 120

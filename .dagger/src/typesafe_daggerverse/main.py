@@ -262,6 +262,73 @@ class TypesafeDaggerverse:
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
         return await ctr.with_exec(["pytest", "-q"]).stdout()
 
+    def _ruff_dirty_source(self) -> dagger.Directory:
+        """A directory with a deliberately messy Python file for ruff to fix."""
+        return dag.directory().with_new_file(
+            "dirty.py",
+            contents=(
+                "import os, sys, json\n"
+                "import os\n"
+                "x=  1\n"
+                "y = [1,2,3,]\n"
+                "if x == True:\n"
+                "    pass\n"
+            ),
+        )
+
+    async def _assert_changeset_only_modifies(
+        self, changeset: dagger.Changeset, expected: set[str]
+    ) -> str:
+        added = await changeset.added_paths()
+        modified = await changeset.modified_paths()
+        removed = await changeset.removed_paths()
+        if added:
+            msg = f"unexpected added paths: {added}"
+            raise AssertionError(msg)
+        if removed:
+            msg = f"unexpected removed paths: {removed}"
+            raise AssertionError(msg)
+        if set(modified) != expected:
+            msg = f"expected modified {expected}, got {set(modified)}"
+            raise AssertionError(msg)
+        return await changeset.as_patch().contents()
+
+    @check
+    @function
+    async def ruff_check_fix(self) -> str:
+        """Run ruff check --fix on a dirty file and verify only dirty.py is changed."""
+        ruff = dag.ruff()
+        changeset = ruff.check().fix(source=self._ruff_dirty_source())
+        return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
+
+    @check
+    @function
+    async def ruff_format_fix(self) -> str:
+        """Run ruff format on a dirty file and verify only dirty.py is changed."""
+        ruff = dag.ruff()
+        changeset = ruff.format().fix(source=self._ruff_dirty_source())
+        return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
+
+    @check
+    @function
+    async def ruff_check_lint_clean(self) -> str:
+        """Run ruff check on a clean file and verify it passes."""
+        clean = dag.directory().with_new_file(
+            "clean.py",
+            contents="x = 1\ny = [1, 2, 3]\n",
+        )
+        return await dag.ruff().check().lint(source=clean)
+
+    @check
+    @function
+    async def ruff_format_lint_clean(self) -> str:
+        """Run ruff format --check on a clean file and verify it passes."""
+        clean = dag.directory().with_new_file(
+            "clean.py",
+            contents="x = 1\ny = [1, 2, 3]\n",
+        )
+        return await dag.ruff().format().lint(source=clean)
+
     @check
     @function
     async def uv_workspace_build_partial_workspace(self) -> str:
