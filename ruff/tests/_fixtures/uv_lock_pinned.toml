@@ -1,0 +1,15 @@
+version = 1
+requires-python = ">=3.12"
+
+[[package]]
+name = "myproject"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "ruff" },
+]
+
+[[package]]
+name = "ruff"
+version = "0.4.8"
+source = { registry = "https://pypi.org/simple" }

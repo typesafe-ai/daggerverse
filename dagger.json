@@ -6,6 +6,10 @@
   },
   "toolchains": [
     {
+      "name": "ruff",
+      "source": "ruff"
+    },
+    {
       "name": "zizmor",
       "source": "zizmor"
     }
