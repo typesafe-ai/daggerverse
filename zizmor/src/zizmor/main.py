@@ -1,4 +1,5 @@
 import enum
+import sys
 from typing import Annotated
 
 import dagger
@@ -187,7 +188,11 @@ class Zizmor:
             min_confidence=min_confidence,
             extra_args=extra_args,
         )
-        fixed = ctr.with_exec(args).directory("/work/.github")
+        result = ctr.with_exec(args, expect=dagger.ReturnType.ANY)
+        output = await result.combined_output()
+        if output.strip():
+            sys.stderr.write(output)
+        fixed = result.directory("/work/.github")
         before = dag.directory().with_directory(".github", source)
         after = dag.directory().with_directory(".github", fixed)
         return after.changes(before)
