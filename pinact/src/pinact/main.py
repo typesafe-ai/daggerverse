@@ -147,4 +147,5 @@ class Pinact:
         if output.strip():
             sys.stderr.write(output)
         fixed = result.directory("/work/.github")
-        return fixed.changes(source.directory(".github"))
+        after = source.with_directory(".github", fixed)
+        return after.changes(source)
