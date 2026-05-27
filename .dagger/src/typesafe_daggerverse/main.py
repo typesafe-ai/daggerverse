@@ -1,5 +1,6 @@
 """Checks for typesafe-ai daggerverse modules."""
 
+import anyio
 from typing import Annotated, TYPE_CHECKING
 
 import dagger
@@ -123,92 +124,95 @@ class TypesafeDaggerverse:
 
     @check
     @function
-    async def uv_workspace_build_workspace(self) -> str:
+    async def all_uv(self):
+        """Run all uv-workspace checks in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.uv_workspace_build_workspace)
+            tg.start_soon(self.uv_workspace_build_full_workspace)
+            tg.start_soon(self.uv_workspace_build_workspace_app)
+            tg.start_soon(self.uv_workspace_build_workspace_flat)
+            tg.start_soon(self.uv_workspace_build_standalone)
+            tg.start_soon(self.uv_workspace_standalone_selective_extra)
+            tg.start_soon(self.uv_workspace_standalone_all_extras)
+            tg.start_soon(self.uv_workspace_standalone_selective_group)
+            tg.start_soon(self.uv_workspace_standalone_all_groups)
+            tg.start_soon(self.uv_workspace_full_workspace_all_extras_all_groups)
+            tg.start_soon(self.uv_workspace_build_self)
+            tg.start_soon(self.uv_workspace_pytest_self)
+            tg.start_soon(self.uv_workspace_build_partial_workspace)
+
+    @function
+    async def uv_workspace_build_workspace(self) -> None:
         """Build the uv-workspace multi-package fixture and verify every local package imports."""
         ctr = await self._workspace().build(package="my-app")
-        return await ctr.with_exec(
-            ["python", "-c", "import my_app, my_lib, my_core"]
-        ).stdout()
+        await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_build_full_workspace(self) -> str:
+    async def uv_workspace_build_full_workspace(self) -> None:
         """Build the full uv-workspace (no package filter) and verify every local package imports."""
         ctr = await self._workspace().build(all_packages=True)
-        return await ctr.with_exec(
-            ["python", "-c", "import my_app, my_lib, my_core"]
-        ).stdout()
+        await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_build_workspace_app(self) -> str:
+    async def uv_workspace_build_workspace_app(self) -> None:
         """Build a workspace where the target package is a flat app (no build-system)."""
         ctr = await self._workspace_app().build(package="my-app")
-        return await ctr.with_exec(["python", "-c", "import my_lib, my_core"]).stdout()
+        await ctr.with_exec(["python", "-c", "import my_lib, my_core"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_build_workspace_flat(self) -> str:
+    async def uv_workspace_build_workspace_flat(self) -> None:
         """Build a workspace where dependencies use flat layout (no src/ directory)."""
         ctr = await self._workspace_flat().build(package="my-app")
-        return await ctr.with_exec(
-            ["python", "-c", "import my_app, my_lib, my_core"]
-        ).stdout()
+        await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_build_standalone(self) -> str:
+    async def uv_workspace_build_standalone(self) -> None:
         """Build the uv-workspace standalone fixture and verify it imports."""
         ctr = await self._standalone().build(package="standalone-app")
-        return await ctr.with_exec(["python", "-c", "import standalone_app"]).stdout()
+        await ctr.with_exec(["python", "-c", "import standalone_app"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_standalone_selective_extra(self) -> str:
+    async def uv_workspace_standalone_selective_extra(self) -> None:
         """`extra=['viz']` installs only the viz extra's deps, not other extras or groups."""
         ctr = await self._standalone().build(package="standalone-app", extra=["viz"])
         script = _assert_modules_script(
             present=["tabulate"],
             absent=["idna", "six", "packaging"],
         )
-        return await ctr.with_exec(["python", "-c", script]).stdout()
+        await ctr.with_exec(["python", "-c", script]).stdout()
 
-    @check
     @function
-    async def uv_workspace_standalone_all_extras(self) -> str:
+    async def uv_workspace_standalone_all_extras(self) -> None:
         """`all_extras=True` installs every extra but no groups."""
         ctr = await self._standalone().build(package="standalone-app", all_extras=True)
         script = _assert_modules_script(
             present=["tabulate", "idna"],
             absent=["six", "packaging"],
         )
-        return await ctr.with_exec(["python", "-c", script]).stdout()
+        await ctr.with_exec(["python", "-c", script]).stdout()
 
-    @check
     @function
-    async def uv_workspace_standalone_selective_group(self) -> str:
+    async def uv_workspace_standalone_selective_group(self) -> None:
         """`group=['docs']` installs only the docs group's deps, not other groups or extras."""
         ctr = await self._standalone().build(package="standalone-app", group=["docs"])
         script = _assert_modules_script(
             present=["six"],
             absent=["packaging", "tabulate", "idna"],
         )
-        return await ctr.with_exec(["python", "-c", script]).stdout()
+        await ctr.with_exec(["python", "-c", script]).stdout()
 
-    @check
     @function
-    async def uv_workspace_standalone_all_groups(self) -> str:
+    async def uv_workspace_standalone_all_groups(self) -> None:
         """`all_groups=True` installs every group but no extras."""
         ctr = await self._standalone().build(package="standalone-app", all_groups=True)
         script = _assert_modules_script(
             present=["six", "packaging"],
             absent=["tabulate", "idna"],
         )
-        return await ctr.with_exec(["python", "-c", script]).stdout()
+        await ctr.with_exec(["python", "-c", script]).stdout()
 
-    @check
     @function
-    async def uv_workspace_full_workspace_all_extras_all_groups(self) -> str:
+    async def uv_workspace_full_workspace_all_extras_all_groups(self) -> None:
         """Full workspace build with all extras (from my-app) and all groups (from root) installed."""
         ctr = await self._workspace().build(
             all_packages=True, all_extras=True, all_groups=True
@@ -217,14 +221,13 @@ class TypesafeDaggerverse:
             present=["tabulate", "idna", "six", "packaging"],
             absent=[],
         )
-        return await ctr.with_exec(["python", "-c", script]).stdout()
+        await ctr.with_exec(["python", "-c", script]).stdout()
 
-    @check
     @function
-    async def uv_workspace_build_self(self) -> str:
+    async def uv_workspace_build_self(self) -> None:
         """Build uv-workspace from its own source on a fresh tree."""
         ctr = await self._self().build(package="uv-workspace")
-        return await ctr.with_exec(["python", "-c", "import uv_workspace"]).stdout()
+        await ctr.with_exec(["python", "-c", "import uv_workspace"]).stdout()
 
     @check
     @function
@@ -246,9 +249,8 @@ class TypesafeDaggerverse:
         tg = dag.twingate(service_key=dag.set_secret("dummy", "{}"))
         return await tg.ctr().with_exec(["twingated", "--version"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_pytest_self(self) -> str:
+    async def uv_workspace_pytest_self(self) -> None:
         """Run uv-workspace's own pytest suite inside a freshly-built container.
 
         `UvWorkspace.build()` only copies `src/` for each package (to keep
@@ -260,11 +262,10 @@ class TypesafeDaggerverse:
         workdir = await ctr.workdir()
         tests = self.source.directory("uv-workspace").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
-        return await ctr.with_exec(["pytest", "-q"]).stdout()
+        await ctr.with_exec(["pytest", "-q"]).stdout()
 
-    @check
     @function
-    async def uv_workspace_build_partial_workspace(self) -> str:
+    async def uv_workspace_build_partial_workspace(self) -> None:
         """Build a project whose uv.lock references local deps that don't exist in the source tree.
 
         The missing dep (ext-pkg at ../../gone/ext-pkg) should be silently
@@ -277,4 +278,4 @@ class TypesafeDaggerverse:
             present=["my_dep"],
             absent=["ext_pkg"],
         )
-        return await ctr.with_exec(["python", "-c", script]).stdout()
+        await ctr.with_exec(["python", "-c", script]).stdout()
