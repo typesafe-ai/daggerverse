@@ -11,6 +11,23 @@ if TYPE_CHECKING:
     import dagger.UvWorkspace
 
 
+_PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
+_PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
+
+
+def _pytest_otel_source() -> dagger.Directory:
+    return dag.module_source(_PYTEST_MODULE_REF, ref_pin=_PYTEST_MODULE_PIN).directory(
+        "pytest_otel"
+    )
+
+
+def _with_pytest_otel(ctr: dagger.Container) -> dagger.Container:
+    """Install pytest_otel into an existing container for OTel test spans."""
+    return ctr.with_directory("/opt/pytest_otel", _pytest_otel_source()).with_exec(
+        ["uv", "pip", "install", "/opt/pytest_otel"]
+    )
+
+
 def _base() -> dagger.Container:
     return (
         dag.container()
@@ -18,6 +35,8 @@ def _base() -> dagger.Container:
         .with_workdir("/workspace")
         # caller picks the project env.
         .with_env_variable("UV_PROJECT_ENVIRONMENT", "/usr/local")
+        .with_env_variable("UV_SYSTEM_PYTHON", "1")
+        .with_env_variable("UV_BREAK_SYSTEM_PACKAGES", "1")
     )
 
 
@@ -231,7 +250,7 @@ class TypesafeDaggerverse:
 
     @check
     @function
-    async def github_status_monitor_pytest(self) -> str:
+    async def github_status_monitor_pytest(self) -> None:
         """Run the github-status-monitor unit-test suite inside a freshly-
         built container."""
         ctr = await self._status_monitor().build(
@@ -240,7 +259,7 @@ class TypesafeDaggerverse:
         workdir = await ctr.workdir()
         tests = self.source.directory("github-status-monitor").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
-        return await ctr.with_exec(["pytest", "-q"]).stdout()
+        await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
 
     @check
     @function
@@ -262,7 +281,7 @@ class TypesafeDaggerverse:
         workdir = await ctr.workdir()
         tests = self.source.directory("uv-workspace").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
-        await ctr.with_exec(["pytest", "-q"]).stdout()
+        await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
 
     @function
     async def uv_workspace_build_partial_workspace(self) -> None:
