@@ -5,11 +5,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1778107833,
-        "narHash": "sha256-q5XQep2mpgTPiWwuYB1+L2dsFeACT6sHx8J939iM+HE=",
+        "lastModified": 1779814510,
+        "narHash": "sha256-zRvMTVJkYML17qfRPJE05QUYDmh6XK9PEXsTplNofPQ=",
         "owner": "dagger",
         "repo": "nix",
-        "rev": "873cc22ba46b73d4a6c1aa6c102ef3aabc736496",
+        "rev": "28d910a5ea3ef49a2e2bfceccaacbed98a90a4a7",
         "type": "github"
       },
       "original": {
