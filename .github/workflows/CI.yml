@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DAGGER_VERSION: "0.20.8"
+  DAGGER_VERSION: "0.21.0"
 
 jobs:
   check:
