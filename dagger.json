@@ -16,16 +16,21 @@
   ],
   "dependencies": [
     {
-      "name": "uv-workspace",
-      "source": "uv-workspace"
-    },
-    {
       "name": "github-status-monitor",
       "source": "github-status-monitor"
     },
     {
+      "name": "pytest",
+      "source": "github.com/dagger/pytest@main",
+      "pin": "dd183e94449051abdc3c7d745dd148fdc08396d4"
+    },
+    {
       "name": "twingate",
       "source": "twingate"
+    },
+    {
+      "name": "uv-workspace",
+      "source": "uv-workspace"
     }
   ],
   "source": ".dagger"
