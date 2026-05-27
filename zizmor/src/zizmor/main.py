@@ -122,7 +122,7 @@ class Zizmor:
             list[str] | None,
             Doc("Additional arguments to pass to zizmor."),
         ] = None,
-    ) -> str:
+    ) -> None:
         """Run zizmor on GitHub Actions workflow files.
 
         Exits non-zero if findings above the configured severity are found.
@@ -136,7 +136,7 @@ class Zizmor:
             min_confidence=min_confidence,
             extra_args=extra_args,
         )
-        return await ctr.with_exec(args).combined_output()
+        await ctr.with_exec(args)
 
     @function
     async def fix(
