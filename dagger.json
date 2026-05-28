@@ -6,10 +6,6 @@
   },
   "toolchains": [
     {
-      "name": "pinact",
-      "source": "pinact"
-    },
-    {
       "name": "zizmor",
       "source": "zizmor"
     }
