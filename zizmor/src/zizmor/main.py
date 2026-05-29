@@ -38,9 +38,7 @@ class Zizmor:
         cls,
         ctr: Annotated[
             dagger.Container | None,
-            Doc(
-                "Container with zizmor installed. Defaults to the official ghcr.io/zizmorcore/zizmor image."
-            ),
+            Doc("Container with zizmor installed. Defaults to the official ghcr.io/zizmorcore/zizmor image."),
         ] = None,
         version: Annotated[
             str,
@@ -98,9 +96,7 @@ class Zizmor:
         ],
         github_token: Annotated[
             dagger.Secret | None,
-            Doc(
-                "GitHub token for online audits. Without it, zizmor runs in offline mode."
-            ),
+            Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
         ] = None,
         format: Annotated[
             str,
@@ -152,9 +148,7 @@ class Zizmor:
         ] = FixMode.SAFE,
         github_token: Annotated[
             dagger.Secret | None,
-            Doc(
-                "GitHub token for online audits. Without it, zizmor runs in offline mode."
-            ),
+            Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
         ] = None,
         persona: Annotated[
             str,

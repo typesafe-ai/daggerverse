@@ -113,11 +113,7 @@ class UvSyncPlan:
         dagger_codegen: bool = True,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front."""
-        ws_dir = (
-            source_dir
-            if workspace_path == "."
-            else source_dir.directory(workspace_path)
-        )
+        ws_dir = source_dir if workspace_path == "." else source_dir.directory(workspace_path)
         if package:
             package = _normalize(package)
         lock_data = tomllib.loads(await ws_dir.file("uv.lock").contents())
@@ -127,18 +123,14 @@ class UvSyncPlan:
         # (where sdk/ is gitignored) silently drop dagger-io from the plan.
         if dagger_codegen:
             raw_local = parse_local_packages(lock_data)
-            codegen_path = (
-                raw_local[package] if package and package in raw_local else "."
-            )
+            codegen_path = raw_local[package] if package and package in raw_local else "."
             ws_dir = await _run_codegen(ws_dir, codegen_path)
             if workspace_path == ".":
                 source_dir = ws_dir
             else:
                 source_dir = source_dir.with_directory(workspace_path, ws_dir)
 
-        all_local = await _filter_reachable(
-            parse_local_packages(lock_data), workspace_path, source_dir
-        )
+        all_local = await _filter_reachable(parse_local_packages(lock_data), workspace_path, source_dir)
         needed_local = (
             await _filter_reachable(
                 find_transitive_local_deps(lock_data, package),
@@ -160,18 +152,12 @@ class UvSyncPlan:
         for name, path in all_local.items():
             module = _module_name(name)
             resolved_pkg = posixpath.normpath(posixpath.join(workspace_path, path))
-            expected = posixpath.normpath(
-                posixpath.join(resolved_pkg, "src", module, "__init__.py")
-            )
+            expected = posixpath.normpath(posixpath.join(resolved_pkg, "src", module, "__init__.py"))
             flat_flags[name] = expected not in src_init_paths
 
         flat_package_flag = False
         if package and package in all_local:
-            pkg_toml = tomllib.loads(
-                await ws_dir.file(
-                    posixpath.join(all_local[package], "pyproject.toml")
-                ).contents()
-            )
+            pkg_toml = tomllib.loads(await ws_dir.file(posixpath.join(all_local[package], "pyproject.toml")).contents())
             flat_package_flag = "build-system" not in pkg_toml
 
         sync_args = build_uv_sync_args(

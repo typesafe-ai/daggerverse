@@ -6,10 +6,7 @@ from dagger import Doc
 
 Package: TypeAlias = Annotated[
     str,
-    Doc(
-        "Package name; if set, only that package's transitive local deps "
-        "are installed. Maps to `uv sync --package`"
-    ),
+    Doc("Package name; if set, only that package's transitive local deps are installed. Maps to `uv sync --package`"),
 ]
 
 Extra: TypeAlias = Annotated[

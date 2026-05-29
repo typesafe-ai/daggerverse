@@ -33,9 +33,7 @@ class UvWorkspace:
 
     workspace_path: Annotated[
         str,
-        Doc(
-            "Path to workspace root (holding uv.lock and pyproject.toml) within source_dir"
-        ),
+        Doc("Path to workspace root (holding uv.lock and pyproject.toml) within source_dir"),
     ] = field(default=".")
 
     @function

@@ -58,10 +58,7 @@ class TestIsExcluded:
         assert is_excluded(".dagger", [".dagger"]) is True
 
     def test_globstar_match(self):
-        assert (
-            is_excluded("uv-workspace/tests/_packages/app", ["**/tests/_packages/**"])
-            is True
-        )
+        assert is_excluded("uv-workspace/tests/_packages/app", ["**/tests/_packages/**"]) is True
 
     def test_no_match(self):
         assert is_excluded("uv-workspace", ["**/tests/**"]) is False
@@ -102,16 +99,10 @@ class TestParseRequiredVersion:
         assert parse_required_version_from_pyproject(content) is None
 
     def test_uv_toml_top_level(self):
-        assert (
-            parse_required_version_from_uv_toml('required-version = "==0.5.0"\n')
-            == "==0.5.0"
-        )
+        assert parse_required_version_from_uv_toml('required-version = "==0.5.0"\n') == "==0.5.0"
 
     def test_uv_toml_missing(self):
-        assert (
-            parse_required_version_from_uv_toml('index-strategy = "first-index"\n')
-            is None
-        )
+        assert parse_required_version_from_uv_toml('index-strategy = "first-index"\n') is None
 
 
 class TestResolveFromPypiData:

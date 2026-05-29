@@ -146,20 +146,10 @@ class GithubStatusMonitor:
         )
 
         plaintext = await token.plaintext()
-        s_url = (
-            statuses_url(github_api=self.github_api, repo=repo, ref=ref)
-            if status_names
-            else None
-        )
-        cr_url = (
-            check_runs_url(github_api=self.github_api, repo=repo, ref=ref)
-            if check_run_names
-            else None
-        )
+        s_url = statuses_url(github_api=self.github_api, repo=repo, ref=ref) if status_names else None
+        cr_url = check_runs_url(github_api=self.github_api, repo=repo, ref=ref) if check_run_names else None
 
-        async with httpx.AsyncClient(
-            headers=auth_headers(plaintext), timeout=15
-        ) as client:
+        async with httpx.AsyncClient(headers=auth_headers(plaintext), timeout=15) as client:
             async for snapshot in poll_snapshots(
                 client,
                 statuses_url=s_url,
@@ -172,14 +162,9 @@ class GithubStatusMonitor:
                     case Step.FAILED:
                         raise RuntimeError(f"checks failed: {watcher.failed}")
                     case Step.DISCOVERY_TIMEOUT:
-                        raise TimeoutError(
-                            f"checks never appeared on {ref}: {watcher.missing}"
-                        )
+                        raise TimeoutError(f"checks never appeared on {ref}: {watcher.missing}")
                     case Step.WALLCLOCK_TIMEOUT:
-                        raise TimeoutError(
-                            f"timed out: pending={watcher.pending} "
-                            f"missing={watcher.missing}"
-                        )
+                        raise TimeoutError(f"timed out: pending={watcher.pending} missing={watcher.missing}")
                     case Step.CONTINUE:
                         continue
 

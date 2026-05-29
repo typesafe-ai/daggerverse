@@ -15,17 +15,12 @@ PollInterval: TypeAlias = Annotated[int, Doc("Seconds between GitHub polls")]
 
 ProgressInterval: TypeAlias = Annotated[
     int,
-    Doc(
-        "Seconds between routine progress lines (terminal transitions "
-        "are still printed live)."
-    ),
+    Doc("Seconds between routine progress lines (terminal transitions are still printed live)."),
 ]
 
 Timeout: TypeAlias = Annotated[int, Doc("Total wall-clock budget, seconds")]
 
-DiscoveryTimeout: TypeAlias = Annotated[
-    int, Doc("How long expected statuses may take to first appear, seconds")
-]
+DiscoveryTimeout: TypeAlias = Annotated[int, Doc("How long expected statuses may take to first appear, seconds")]
 
 FailFast: TypeAlias = Annotated[
     bool,

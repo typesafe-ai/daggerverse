@@ -149,10 +149,7 @@ class Watcher:
             return Step.WALLCLOCK_TIMEOUT
 
         now = self._clock()
-        if (
-            self._last_progress is None
-            or now - self._last_progress >= self.progress_interval
-        ):
+        if self._last_progress is None or now - self._last_progress >= self.progress_interval:
             self.print_progress()
             self._last_progress = now
         return Step.CONTINUE
@@ -160,9 +157,7 @@ class Watcher:
     # ---- rendering hooks ----
 
     def print_header(self) -> None:
-        render.header(
-            self.console, repo=self.repo, ref=self.ref, expected=self.expected
-        )
+        render.header(self.console, repo=self.repo, ref=self.ref, expected=self.expected)
 
     def print_progress(self) -> None:
         render.progress(
@@ -185,9 +180,7 @@ class Watcher:
 
     def print_wallclock_timeout(self) -> None:
         self._print_table()
-        render.wallclock_timeout(
-            self.console, pending=self.pending, missing=self.missing
-        )
+        render.wallclock_timeout(self.console, pending=self.pending, missing=self.missing)
 
     def _print_table(self) -> None:
         render.final_table(
