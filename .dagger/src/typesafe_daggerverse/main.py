@@ -141,6 +141,122 @@ class TypesafeDaggerverse:
             repo=repo, ref=ref, token=token, fail_fast=fail_fast
         )
 
+    # ---- uv (audit) module checks ----
+
+    def _uv_src(
+        self, pyproject: str, *, uv_toml: str | None = None
+    ) -> dagger.Directory:
+        """A single-workspace source tree for exercising the `uv` module.
+
+        `uv_version`/`workspaces` only read pyproject.toml / uv.toml, so an
+        empty uv.lock is enough for discovery.
+        """
+        d = (
+            dag.directory()
+            .with_new_file("uv.lock", "")
+            .with_new_file("pyproject.toml", pyproject)
+        )
+        if uv_toml is not None:
+            d = d.with_new_file("uv.toml", uv_toml)
+        return d
+
+    @check
+    @function
+    async def all_uv_audit(self) -> None:
+        """Run all checks for the `uv` (audit) module in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.uv_detect_version_pyproject)
+            tg.start_soon(self.uv_detect_version_uv_toml_precedence)
+            tg.start_soon(self.uv_detect_version_range)
+            tg.start_soon(self.uv_detect_version_default)
+            tg.start_soon(self.uv_discovers_workspaces)
+            tg.start_soon(self.uv_audit_clean)
+            tg.start_soon(self.uv_audit_detects_vulnerability)
+            tg.start_soon(self.uv_audit_exclude)
+
+    @function
+    async def uv_detect_version_pyproject(self) -> None:
+        """`uv_version` reads `[tool.uv].required-version` from pyproject.toml."""
+        src = self._uv_src(
+            '[project]\nname = "x"\nversion = "0"\n'
+            '[tool.uv]\nrequired-version = "==0.5.0"\n'
+        )
+        ws = (await dag.uv(source=src).workspaces())[0]
+        version = await ws.uv_version()
+        if version != "0.5.0":
+            raise AssertionError(f"expected 0.5.0, got {version}")
+
+    @function
+    async def uv_detect_version_uv_toml_precedence(self) -> None:
+        """uv.toml `required-version` takes precedence over pyproject.toml."""
+        src = self._uv_src(
+            '[project]\nname = "x"\nversion = "0"\n'
+            '[tool.uv]\nrequired-version = "==0.9.0"\n',
+            uv_toml='required-version = "==0.4.0"\n',
+        )
+        ws = (await dag.uv(source=src).workspaces())[0]
+        version = await ws.uv_version()
+        if version != "0.4.0":
+            raise AssertionError(f"expected 0.4.0 (uv.toml wins), got {version}")
+
+    @function
+    async def uv_detect_version_range(self) -> None:
+        """A range specifier resolves to the highest matching uv release on PyPI."""
+        src = self._uv_src(
+            '[project]\nname = "x"\nversion = "0"\n'
+            '[tool.uv]\nrequired-version = ">=0.5.0,<0.5.5"\n'
+        )
+        ws = (await dag.uv(source=src).workspaces())[0]
+        version = await ws.uv_version()
+        if version != "0.5.4":
+            raise AssertionError(f"expected 0.5.4, got {version}")
+
+    @function
+    async def uv_detect_version_default(self) -> None:
+        """With no required-version, `uv_version` falls back to the default tag."""
+        src = self._uv_src('[project]\nname = "x"\nversion = "0"\n')
+        ws = (await dag.uv(source=src).workspaces())[0]
+        version = await ws.uv_version()
+        if version != "latest":
+            raise AssertionError(f"expected latest, got {version}")
+
+    @function
+    async def uv_discovers_workspaces(self) -> None:
+        """`workspaces` finds one workspace per uv.lock in the source tree."""
+        pyproject = '[project]\nname = "x"\nversion = "0"\n'
+        src = (
+            dag.directory()
+            .with_new_file("a/uv.lock", "")
+            .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("b/c/uv.lock", "")
+            .with_new_file("b/c/pyproject.toml", pyproject)
+        )
+        workspaces = await dag.uv(source=src).workspaces()
+        if len(workspaces) != 2:
+            raise AssertionError(f"expected 2 workspaces, got {len(workspaces)}")
+
+    @function
+    async def uv_audit_clean(self) -> None:
+        """Auditing a workspace with no vulnerable deps passes."""
+        src = self.source.directory("uv/tests/_packages/clean")
+        await dag.uv(source=src).audit()
+
+    @function
+    async def uv_audit_detects_vulnerability(self) -> None:
+        """Auditing a workspace with a known-vulnerable dependency fails."""
+        src = self.source.directory("uv/tests/_packages/vulnerable")
+        try:
+            await dag.uv(source=src).audit()
+        except Exception:
+            return
+        raise AssertionError("expected uv audit to fail for the vulnerable fixture")
+
+    @function
+    async def uv_audit_exclude(self) -> None:
+        """`exclude` skips matching workspaces, so a vulnerable-but-excluded tree passes."""
+        src = self.source.directory("uv/tests/_packages")
+        await dag.uv(source=src).audit(exclude=["**/vulnerable"])
+
     @check
     @function
     async def all_uv(self):
