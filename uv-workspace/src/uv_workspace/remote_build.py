@@ -37,9 +37,7 @@ class UvRemoteBuild:
             src_name = pkg.module
             ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, "README.md"), "")
             if pkg.flat:
-                ctr = ctr.with_new_file(
-                    posixpath.join(workdir, pkg.path, src_name, "__init__.py"), ""
-                )
+                ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, src_name, "__init__.py"), "")
             else:
                 ctr = ctr.with_new_file(
                     posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"),
@@ -64,9 +62,7 @@ class UvRemoteBuild:
             src_name = pkg.module
             ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, "README.md"), "")
             if pkg.flat:
-                ctr = ctr.with_new_file(
-                    posixpath.join(workdir, pkg.path, src_name, "__init__.py"), ""
-                )
+                ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, src_name, "__init__.py"), "")
             else:
                 ctr = ctr.with_new_file(
                     posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"),

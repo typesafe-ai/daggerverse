@@ -16,9 +16,7 @@ _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
 
 
 def _pytest_otel_source() -> dagger.Directory:
-    return dag.module_source(_PYTEST_MODULE_REF, ref_pin=_PYTEST_MODULE_PIN).directory(
-        "pytest_otel"
-    )
+    return dag.module_source(_PYTEST_MODULE_REF, ref_pin=_PYTEST_MODULE_PIN).directory("pytest_otel")
 
 
 def _with_pytest_otel(ctr: dagger.Container) -> dagger.Container:
@@ -69,9 +67,7 @@ class TypesafeDaggerverse:
 
     def _standalone(self) -> "dagger.UvWorkspace":
         return dag.uv_workspace(
-            source_dir=self.source.directory(
-                "uv-workspace/tests/_packages/standalone-app"
-            ),
+            source_dir=self.source.directory("uv-workspace/tests/_packages/standalone-app"),
             base_container=_base(),
         )
 
@@ -83,26 +79,20 @@ class TypesafeDaggerverse:
 
     def _workspace_app(self) -> "dagger.UvWorkspace":
         return dag.uv_workspace(
-            source_dir=self.source.directory(
-                "uv-workspace/tests/_packages/workspace-app"
-            ),
+            source_dir=self.source.directory("uv-workspace/tests/_packages/workspace-app"),
             base_container=_base(),
         )
 
     def _workspace_flat(self) -> "dagger.UvWorkspace":
         return dag.uv_workspace(
-            source_dir=self.source.directory(
-                "uv-workspace/tests/_packages/workspace-flat"
-            ),
+            source_dir=self.source.directory("uv-workspace/tests/_packages/workspace-flat"),
             base_container=_base(),
         )
 
     def _partial_workspace(self) -> "dagger.UvWorkspace":
         """A workspace where one local dep in uv.lock doesn't exist in the source tree."""
         return dag.uv_workspace(
-            source_dir=self.source.directory(
-                "uv-workspace/tests/_packages/partial-workspace"
-            ),
+            source_dir=self.source.directory("uv-workspace/tests/_packages/partial-workspace"),
             base_container=_base(),
             workspace_path="sub-project",
         )
@@ -131,9 +121,7 @@ class TypesafeDaggerverse:
         repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
         ref: Annotated[str, Doc("Commit SHA to poll")],
         token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
-        fail_fast: Annotated[
-            bool, Doc("Raise as soon as any check fails instead of waiting for all.")
-        ] = False,
+        fail_fast: Annotated[bool, Doc("Raise as soon as any check fails instead of waiting for all.")] = False,
     ) -> str:
         """Block until every Dagger check has landed as a successful GitHub commit
         status on `ref`."""
@@ -143,19 +131,13 @@ class TypesafeDaggerverse:
 
     # ---- uv (audit) module checks ----
 
-    def _uv_src(
-        self, pyproject: str, *, uv_toml: str | None = None
-    ) -> dagger.Directory:
+    def _uv_src(self, pyproject: str, *, uv_toml: str | None = None) -> dagger.Directory:
         """A single-workspace source tree for exercising the `uv` module.
 
         `uv_version`/`workspaces` only read pyproject.toml / uv.toml, so an
         empty uv.lock is enough for discovery.
         """
-        d = (
-            dag.directory()
-            .with_new_file("uv.lock", "")
-            .with_new_file("pyproject.toml", pyproject)
-        )
+        d = dag.directory().with_new_file("uv.lock", "").with_new_file("pyproject.toml", pyproject)
         if uv_toml is not None:
             d = d.with_new_file("uv.toml", uv_toml)
         return d
@@ -177,10 +159,7 @@ class TypesafeDaggerverse:
     @function
     async def uv_detect_version_pyproject(self) -> None:
         """`uv_version` reads `[tool.uv].required-version` from pyproject.toml."""
-        src = self._uv_src(
-            '[project]\nname = "x"\nversion = "0"\n'
-            '[tool.uv]\nrequired-version = "==0.5.0"\n'
-        )
+        src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = "==0.5.0"\n')
         ws = (await dag.uv(source=src).workspaces())[0]
         version = await ws.uv_version()
         if version != "0.5.0":
@@ -190,8 +169,7 @@ class TypesafeDaggerverse:
     async def uv_detect_version_uv_toml_precedence(self) -> None:
         """uv.toml `required-version` takes precedence over pyproject.toml."""
         src = self._uv_src(
-            '[project]\nname = "x"\nversion = "0"\n'
-            '[tool.uv]\nrequired-version = "==0.9.0"\n',
+            '[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = "==0.9.0"\n',
             uv_toml='required-version = "==0.4.0"\n',
         )
         ws = (await dag.uv(source=src).workspaces())[0]
@@ -202,10 +180,7 @@ class TypesafeDaggerverse:
     @function
     async def uv_detect_version_range(self) -> None:
         """A range specifier resolves to the highest matching uv release on PyPI."""
-        src = self._uv_src(
-            '[project]\nname = "x"\nversion = "0"\n'
-            '[tool.uv]\nrequired-version = ">=0.5.0,<0.5.5"\n'
-        )
+        src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = ">=0.5.0,<0.5.5"\n')
         ws = (await dag.uv(source=src).workspaces())[0]
         version = await ws.uv_version()
         if version != "0.5.4":
@@ -349,9 +324,7 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_full_workspace_all_extras_all_groups(self) -> None:
         """Full workspace build with all extras (from my-app) and all groups (from root) installed."""
-        ctr = await self._workspace().build(
-            all_packages=True, all_extras=True, all_groups=True
-        )
+        ctr = await self._workspace().build(all_packages=True, all_extras=True, all_groups=True)
         script = _assert_modules_script(
             present=["tabulate", "idna", "six", "packaging"],
             absent=[],
@@ -369,9 +342,7 @@ class TypesafeDaggerverse:
     async def github_status_monitor_pytest(self) -> None:
         """Run the github-status-monitor unit-test suite inside a freshly-
         built container."""
-        ctr = await self._status_monitor().build(
-            package="github-status-monitor", all_groups=True
-        )
+        ctr = await self._status_monitor().build(package="github-status-monitor", all_groups=True)
         workdir = await ctr.workdir()
         tests = self.source.directory("github-status-monitor").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
@@ -403,19 +374,10 @@ class TypesafeDaggerverse:
         """A directory with a deliberately messy Python file for ruff to fix."""
         return dag.directory().with_new_file(
             "dirty.py",
-            contents=(
-                "import os, sys, json\n"
-                "import os\n"
-                "x=  1\n"
-                "y = [1,2,3,]\n"
-                "if x == True:\n"
-                "    pass\n"
-            ),
+            contents=("import os, sys, json\nimport os\nx=  1\ny = [1,2,3,]\nif x == True:\n    pass\n"),
         )
 
-    async def _assert_changeset_only_modifies(
-        self, changeset: dagger.Changeset, expected: set[str]
-    ) -> str:
+    async def _assert_changeset_only_modifies(self, changeset: dagger.Changeset, expected: set[str]) -> str:
         added = await changeset.added_paths()
         modified = await changeset.modified_paths()
         removed = await changeset.removed_paths()
@@ -473,9 +435,7 @@ class TypesafeDaggerverse:
         The missing dep (ext-pkg at ../../gone/ext-pkg) should be silently
         skipped. The present dep (my-dep at ../my-dep) should be installed.
         """
-        ctr = await self._partial_workspace().build(
-            package="sub-project", group=["dev"]
-        )
+        ctr = await self._partial_workspace().build(package="sub-project", group=["dev"])
         script = _assert_modules_script(
             present=["my_dep"],
             absent=["ext_pkg"],

@@ -47,9 +47,7 @@ def _check_run_state(run: dict) -> str:
     return _CHECK_RUN_STATUS_MAP.get(status, "pending")
 
 
-async def fetch_statuses_snapshot(
-    client: httpx.AsyncClient, url: str
-) -> dict[str, Status]:
+async def fetch_statuses_snapshot(client: httpx.AsyncClient, url: str) -> dict[str, Status]:
     """Page through ``/statuses`` and return ``{context: Status}`` keeping the
     newest entry per context. The API returns reverse-chronological."""
     latest: dict[str, Status] = {}
@@ -70,9 +68,7 @@ async def fetch_statuses_snapshot(
     return latest
 
 
-async def fetch_check_runs_snapshot(
-    client: httpx.AsyncClient, url: str
-) -> dict[str, Status]:
+async def fetch_check_runs_snapshot(client: httpx.AsyncClient, url: str) -> dict[str, Status]:
     """Page through ``/check-runs`` and return ``{name: Status}``."""
     latest: dict[str, Status] = {}
     page = 1

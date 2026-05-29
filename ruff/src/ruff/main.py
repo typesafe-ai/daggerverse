@@ -29,17 +29,11 @@ class Ruff:
         ] = None,
         ctr: Annotated[
             dagger.Container | None,
-            Doc(
-                "Container with ruff installed. "
-                "Defaults to the official ghcr.io/astral-sh/ruff image."
-            ),
+            Doc("Container with ruff installed. Defaults to the official ghcr.io/astral-sh/ruff image."),
         ] = None,
         version: Annotated[
             str | None,
-            Doc(
-                "Ruff image tag. Only used when ``ctr`` is not provided. "
-                "Overrides auto-detection from source."
-            ),
+            Doc("Ruff image tag. Only used when ``ctr`` is not provided. Overrides auto-detection from source."),
         ] = None,
     ) -> "Ruff":
         if ctr is None:

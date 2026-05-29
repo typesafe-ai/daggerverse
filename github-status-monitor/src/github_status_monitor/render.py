@@ -36,9 +36,7 @@ def progress(
     missing: int,
     total: int,
 ) -> None:
-    console.print(
-        f"[dim]success={succeeded}/{total} pending={pending} missing={missing}[/]"
-    )
+    console.print(f"[dim]success={succeeded}/{total} pending={pending} missing={missing}[/]")
 
 
 def final_table(
@@ -68,9 +66,7 @@ def discovery_timeout(console: Console, *, ref: str, missing: list[str]) -> None
     console.print(f"[bold red]✗ checks never appeared on {ref}: {missing}[/]")
 
 
-def wallclock_timeout(
-    console: Console, *, pending: list[str], missing: list[str]
-) -> None:
+def wallclock_timeout(console: Console, *, pending: list[str], missing: list[str]) -> None:
     console.print(f"[bold red]✗ timed out: pending={pending} missing={missing}[/]")
 
 

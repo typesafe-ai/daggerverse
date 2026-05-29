@@ -12,9 +12,7 @@ from github_status_monitor.watcher import Watcher
 
 def make_console() -> Console:
     """A Console suitable for test inspection: no ANSI, captures all output."""
-    return Console(
-        record=True, width=200, force_terminal=False, force_interactive=False
-    )
+    return Console(record=True, width=200, force_terminal=False, force_interactive=False)
 
 
 def make_watcher(expected: Iterable[str], **kwargs) -> tuple[Watcher, Console]:
@@ -281,9 +279,7 @@ class FakeClock:
         return self.t
 
 
-def make_step_watcher(
-    expected: Iterable[str], **kwargs
-) -> tuple[Watcher, Console, FakeClock]:
+def make_step_watcher(expected: Iterable[str], **kwargs) -> tuple[Watcher, Console, FakeClock]:
     c = make_console()
     clock = FakeClock()
     w = Watcher(expected, console=c, clock=clock, **kwargs)
@@ -303,9 +299,7 @@ def test_step_returns_succeeded_and_renders_final_summary():
 
 
 def test_step_returns_failed_when_terminal_with_failure():
-    w, _, _ = make_step_watcher(
-        ["a", "b"], timeout=100, discovery_timeout=100, fail_fast=True
-    )
+    w, _, _ = make_step_watcher(["a", "b"], timeout=100, discovery_timeout=100, fail_fast=True)
     assert w.step({"a": Status("failure"), "b": Status("pending")}) is Step.FAILED
 
 

@@ -58,9 +58,7 @@ class FakeClient:
     async def get(self, url, params=None):
         idx = self._call
         self._call += 1
-        return FakeResponse(
-            self._pages[idx] if idx < len(self._pages) else {"check_runs": []}
-        )
+        return FakeResponse(self._pages[idx] if idx < len(self._pages) else {"check_runs": []})
 
 
 def test_fetch_check_runs_snapshot_basic():
@@ -75,9 +73,7 @@ def test_fetch_check_runs_snapshot_basic():
         ],
     }
     client = FakeClient([page])
-    result = asyncio.run(
-        fetch_check_runs_snapshot(client, "https://api.github.com/test")
-    )
+    result = asyncio.run(fetch_check_runs_snapshot(client, "https://api.github.com/test"))
     assert result == {
         "pulumi / up (org:core)": Status(state="success"),
         "pulumi / up (k8s:dev)": Status(state="pending"),
@@ -92,7 +88,5 @@ def test_fetch_check_runs_snapshot_keeps_first_per_name():
         ],
     }
     client = FakeClient([page])
-    result = asyncio.run(
-        fetch_check_runs_snapshot(client, "https://api.github.com/test")
-    )
+    result = asyncio.run(fetch_check_runs_snapshot(client, "https://api.github.com/test"))
     assert result == {"a": Status(state="success")}

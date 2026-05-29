@@ -362,9 +362,7 @@ class TestMatchReachable:
         normpath('.') returns '.', so the root package was silently dropped.
         """
         packages = OrderedDict([("standalone-app", ".")])
-        result = _match_reachable(
-            packages, ".", ["pyproject.toml", "src/standalone_app/__init__.py"]
-        )
+        result = _match_reachable(packages, ".", ["pyproject.toml", "src/standalone_app/__init__.py"])
         assert result == packages
 
     def test_keeps_sibling_within_source(self):
@@ -387,9 +385,7 @@ class TestMatchReachable:
                 ("auto-quest", "../../TypeSafe/projects/AutoQuest"),
             ]
         )
-        result = _match_reachable(
-            packages, "Icebeam", ["Icebeam/pyproject.toml", "Encode/pyproject.toml"]
-        )
+        result = _match_reachable(packages, "Icebeam", ["Icebeam/pyproject.toml", "Encode/pyproject.toml"])
         assert result == OrderedDict([("encode", "../Encode")])
 
     def test_subproject_root_package(self):
@@ -404,9 +400,7 @@ class TestMatchReachable:
 
     def test_preserves_order(self):
         packages = OrderedDict([("a", "."), ("b", "../gone"), ("c", "sub")])
-        result = _match_reachable(
-            packages, "ws", ["ws/pyproject.toml", "ws/sub/pyproject.toml"]
-        )
+        result = _match_reachable(packages, "ws", ["ws/pyproject.toml", "ws/sub/pyproject.toml"])
         assert list(result.keys()) == ["a", "c"]
 
 

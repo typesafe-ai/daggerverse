@@ -31,9 +31,7 @@ class LocatedWorkspace:
     workspace: UvWorkspaceSource
 
 
-async def _resolve_image(
-    workspace: UvWorkspaceSource, uv_version: str | None, image: str | None
-) -> str:
+async def _resolve_image(workspace: UvWorkspaceSource, uv_version: str | None, image: str | None) -> str:
     """Pick the uv image: explicit `image` > `image_ref(uv_version)` > detected."""
     if image is not None:
         return image
@@ -56,9 +54,7 @@ class Uv:
     async def _source_workspaces(self) -> list[LocatedWorkspace]:
         """Discover every uv workspace in the source tree (one per uv.lock)."""
         lockfiles = sorted(await self.source.glob("**/uv.lock"))
-        uv_toml_dirs = {
-            posixpath.dirname(p) for p in await self.source.glob("**/uv.toml")
-        }
+        uv_toml_dirs = {posixpath.dirname(p) for p in await self.source.glob("**/uv.toml")}
         return [
             LocatedWorkspace(
                 path=workspace_path(lockfile),
@@ -97,9 +93,7 @@ class Uv:
         ] = None,
     ) -> None:
         """Run ``uv audit`` for a single workspace."""
-        workspace = UvWorkspaceSource(
-            uv_lock=uv_lock, pyproject=pyproject, uv_toml=uv_toml
-        )
+        workspace = UvWorkspaceSource(uv_lock=uv_lock, pyproject=pyproject, uv_toml=uv_toml)
         resolved = await _resolve_image(workspace, uv_version, image)
         await workspace.audit(resolved).run()
 
@@ -109,10 +103,7 @@ class Uv:
         self,
         exclude: Annotated[
             list[str] | None,
-            Doc(
-                "Glob patterns (source-relative) of workspace paths to skip, "
-                "e.g. `**/tests/_packages/**`."
-            ),
+            Doc("Glob patterns (source-relative) of workspace paths to skip, e.g. `**/tests/_packages/**`."),
         ] = None,
         uv_version: Annotated[
             str | None,
@@ -131,11 +122,7 @@ class Uv:
         Exits non-zero when any (non-excluded) workspace fails its audit.
         """
         patterns = exclude or []
-        workspaces = [
-            ws
-            for ws in await self._source_workspaces()
-            if not is_excluded(ws.path, patterns)
-        ]
+        workspaces = [ws for ws in await self._source_workspaces() if not is_excluded(ws.path, patterns)]
 
         tracer = get_tracer()
         failed: list[str] = []
@@ -167,8 +154,5 @@ class Uv:
                 tg.start_soon(_run, ws)
 
         if failed:
-            msg = (
-                f"uv audit failed for {len(failed)} of "
-                f"{len(workspaces)} workspace(s): {', '.join(sorted(failed))}"
-            )
+            msg = f"uv audit failed for {len(failed)} of {len(workspaces)} workspace(s): {', '.join(sorted(failed))}"
             raise RuntimeError(msg)
