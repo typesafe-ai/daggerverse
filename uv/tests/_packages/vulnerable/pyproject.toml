@@ -1,0 +1,5 @@
+[project]
+name = "vuln-app"
+version = "0.0.0"
+requires-python = ">=3.13"
+dependencies = ["urllib3==2.6.3"]
