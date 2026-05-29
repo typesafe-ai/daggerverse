@@ -6,6 +6,10 @@
   },
   "toolchains": [
     {
+      "name": "actionlint",
+      "source": "actionlint"
+    },
+    {
       "name": "ruff",
       "source": "ruff"
     },

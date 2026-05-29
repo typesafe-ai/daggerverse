@@ -481,3 +481,43 @@ class TypesafeDaggerverse:
             absent=["ext_pkg"],
         )
         await ctr.with_exec(["python", "-c", script]).stdout()
+
+    # ---- actionlint module checks ----
+
+    def _workflow_source(self, workflow: str) -> dagger.Directory:
+        """A `.github` directory containing a single workflow file."""
+        return dag.directory().with_new_file("workflows/ci.yml", workflow)
+
+    @check
+    @function
+    async def actionlint_lint_clean(self) -> None:
+        """actionlint passes on a clean workflow."""
+        clean = (
+            "name: ci\n"
+            "on: push\n"
+            "jobs:\n"
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            '      - run: echo "hello"\n'
+        )
+        await dag.actionlint().lint(source=self._workflow_source(clean))
+
+    @check
+    @function
+    async def actionlint_lint_dirty(self) -> None:
+        """actionlint (with shellcheck) fails on an unquoted-variable run step."""
+        dirty = (
+            "name: ci\n"
+            "on: push\n"
+            "jobs:\n"
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: echo $UNQUOTED\n"  # shellcheck SC2086
+        )
+        try:
+            await dag.actionlint().lint(source=self._workflow_source(dirty))
+        except Exception:
+            return
+        raise AssertionError("expected actionlint to fail on the dirty workflow")
