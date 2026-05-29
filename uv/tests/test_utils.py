@@ -1,18 +1,15 @@
 """Tests for the uv module's pure helpers (no Dagger runtime)."""
 
-import json
-
-import pytest
-
 from uv.utils import (
     image_ref,
     is_exact_version,
     is_excluded,
+    minimal_compatible_version,
     normalize_exact_version,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
     pyproject_path,
-    resolve_from_pypi_data,
+    resolve_specifier,
     uv_toml_path,
     workspace_path,
 )
@@ -80,6 +77,9 @@ class TestIsExactVersion:
     def test_range(self):
         assert is_exact_version(">=0.5.0,<0.6.0") is False
 
+    def test_equals_wildcard_is_not_exact(self):
+        assert is_exact_version("==0.5.*") is False
+
 
 class TestNormalizeExactVersion:
     def test_bare(self):
@@ -105,29 +105,35 @@ class TestParseRequiredVersion:
         assert parse_required_version_from_uv_toml('index-strategy = "first-index"\n') is None
 
 
-class TestResolveFromPypiData:
-    @pytest.fixture
-    def pypi_json(self):
-        return json.dumps(
-            {
-                "releases": {
-                    "0.4.0": [{"yanked": False}],
-                    "0.5.0": [{"yanked": False}],
-                    "0.5.1": [{"yanked": True}],
-                    "0.6.0": [{"yanked": False}],
-                }
-            }
-        )
+class TestMinimalCompatibleVersion:
+    def test_gte_lt_range_picks_lower_bound(self):
+        assert minimal_compatible_version(">=0.4.0,<0.6.0") == "0.4.0"
 
-    def test_range(self, pypi_json):
-        assert resolve_from_pypi_data(pypi_json, ">=0.4.0,<0.6.0") == "0.5.0"
+    def test_gte_only(self):
+        assert minimal_compatible_version(">=0.6.0") == "0.6.0"
 
-    def test_gte_picks_highest(self, pypi_json):
-        assert resolve_from_pypi_data(pypi_json, ">=0.4.0") == "0.6.0"
+    def test_tilde_pads_to_patch(self):
+        assert minimal_compatible_version("~=0.5") == "0.5.0"
 
-    def test_skips_yanked(self, pypi_json):
-        assert resolve_from_pypi_data(pypi_json, ">=0.5.0,<0.6.0") == "0.5.0"
+    def test_equals_wildcard_pads_to_patch(self):
+        assert minimal_compatible_version("==0.5.*") == "0.5.0"
 
-    def test_no_match_raises(self, pypi_json):
-        with pytest.raises(ValueError, match="No uv versions on PyPI match"):
-            resolve_from_pypi_data(pypi_json, ">=9.0.0")
+    def test_exclusive_gt_bumps_patch(self):
+        assert minimal_compatible_version(">0.5.0") == "0.5.1"
+
+    def test_upper_bound_only_has_no_lower_bound(self):
+        assert minimal_compatible_version("<1.0.0") is None
+
+
+class TestResolveSpecifier:
+    def test_bare_exact(self):
+        assert resolve_specifier("0.5.0") == "0.5.0"
+
+    def test_double_equals_exact(self):
+        assert resolve_specifier("==0.5.0") == "0.5.0"
+
+    def test_range_uses_minimal(self):
+        assert resolve_specifier(">=0.4.0,<0.6.0") == "0.4.0"
+
+    def test_no_lower_bound_falls_back_to_default(self):
+        assert resolve_specifier("<1.0.0") == "latest"

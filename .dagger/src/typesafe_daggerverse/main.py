@@ -179,12 +179,12 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_detect_version_range(self) -> None:
-        """A range specifier resolves to the highest matching uv release on PyPI."""
+        """A range specifier resolves to its minimal compatible version (no PyPI lookup)."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = ">=0.5.0,<0.5.5"\n')
         ws = (await dag.uv(source=src).workspaces())[0]
         version = await ws.uv_version()
-        if version != "0.5.4":
-            raise AssertionError(f"expected 0.5.4, got {version}")
+        if version != "0.5.0":
+            raise AssertionError(f"expected 0.5.0, got {version}")
 
     @function
     async def uv_detect_version_default(self) -> None:
