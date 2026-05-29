@@ -1,6 +1,5 @@
 """Pure helpers for the uv module (no Dagger runtime required)."""
 
-import json
 import posixpath
 import re
 import tomllib
@@ -11,7 +10,6 @@ from packaging.version import Version
 
 _DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
 _DEFAULT_VERSION = "latest"
-_PYPI_URL = "https://pypi.org/pypi/uv/json"
 
 _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
 
@@ -43,9 +41,10 @@ def is_excluded(path: str, patterns: list[str]) -> bool:
 
 
 def is_exact_version(value: str) -> bool:
-    if value.startswith("=="):
-        return True
-    return not _VERSION_SPECIFIER_RE.search(value)
+    stripped = value.strip()
+    if stripped.startswith("=="):
+        return "*" not in stripped
+    return not _VERSION_SPECIFIER_RE.search(stripped)
 
 
 def normalize_exact_version(value: str) -> str:
@@ -66,15 +65,49 @@ def parse_required_version_from_uv_toml(content: str) -> str | None:
     return data.get("required-version")
 
 
-def resolve_from_pypi_data(pypi_json: str, specifier: str) -> str:
-    data = json.loads(pypi_json)
+def _pad_release(version: Version) -> Version:
+    """Pad a bare ``X`` or ``X.Y`` release to a concrete ``X.Y.Z`` image tag.
+
+    Trailing zeros don't change PEP 440 ordering (``0.5`` == ``0.5.0``), so this
+    keeps specifier satisfaction intact while producing a tag that actually
+    exists in the registry (uv publishes three-component tags).
+    """
+    if version.epoch or version.pre or version.post or version.dev or version.local:
+        return version
+    release = version.release
+    if len(release) >= 3:
+        return version
+    padded = (*release, *([0] * (3 - len(release))))
+    return Version(".".join(str(n) for n in padded))
+
+
+def minimal_compatible_version(specifier: str) -> str | None:
+    """Lowest version satisfying a PEP 440 specifier, computed without PyPI.
+
+    Derives candidate lower bounds straight from the specifier's operands
+    (``>=``, ``>``, ``~=``, ``==``) and returns the smallest one the whole set
+    accepts. Returns ``None`` when the specifier has no lower bound (e.g. only
+    ``<``/``<=``/``!=`` constraints), leaving the caller to pick a default.
+    """
     spec = SpecifierSet(specifier)
-    matching = [
-        v
-        for v, files in data["releases"].items()
-        if Version(v) in spec and (not files or not files[0].get("yanked", False))
-    ]
-    if not matching:
-        msg = f"No uv versions on PyPI match {specifier}"
-        raise ValueError(msg)
-    return str(max(matching, key=Version))
+    candidates: list[Version] = []
+    for clause in spec:
+        if clause.operator in (">=", "~=", "=="):
+            base = clause.version[:-2] if clause.version.endswith(".*") else clause.version
+            candidates.append(_pad_release(Version(base)))
+        elif clause.operator == ">":
+            release = _pad_release(Version(clause.version)).release
+            candidates.append(Version(".".join(str(n) for n in (*release[:-1], release[-1] + 1))))
+    feasible = sorted(c for c in candidates if c in spec)
+    return str(feasible[0]) if feasible else None
+
+
+def resolve_specifier(value: str) -> str:
+    """Concrete image tag for a configured version value (exact pin or range).
+
+    Exact pins are used verbatim; ranges resolve to their minimal compatible
+    version. Falls back to the default tag when a range has no lower bound.
+    """
+    if is_exact_version(value):
+        return normalize_exact_version(value)
+    return minimal_compatible_version(value) or _DEFAULT_VERSION

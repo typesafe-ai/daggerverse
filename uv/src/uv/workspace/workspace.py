@@ -1,16 +1,13 @@
 from typing import Annotated
 
 import dagger
-from dagger import Doc, dag, field, function, object_type
+from dagger import Doc, field, function, object_type
 
 from uv.utils import (
     _DEFAULT_VERSION,
-    _PYPI_URL,
-    is_exact_version,
-    normalize_exact_version,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
-    resolve_from_pypi_data,
+    resolve_specifier,
 )
 from uv.workspace.audit import Audit
 
@@ -58,16 +55,14 @@ class UvWorkspaceSource:
         """The uv version this workspace requires, as a concrete image tag.
 
         Reads `required-version` (a PEP 440 specifier) from `uv.toml` or the
-        `[tool.uv]` table of `pyproject.toml`, resolving ranges against PyPI.
-        Falls back to the default version hardcoded in this module when unspecified.
+        `[tool.uv]` table of `pyproject.toml`. Exact pins are used as-is; ranges
+        resolve to their minimal compatible version (no PyPI lookup). Falls back
+        to the default `latest` tag when unspecified.
         """
         specifier = await self._required_version()
         if specifier is None:
             return _DEFAULT_VERSION
-        if is_exact_version(specifier):
-            return normalize_exact_version(specifier)
-        pypi_json = await dag.http(_PYPI_URL).contents()
-        return resolve_from_pypi_data(pypi_json, specifier)
+        return resolve_specifier(specifier)
 
     @function
     def audit(
