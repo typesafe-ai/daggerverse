@@ -3,6 +3,7 @@ from typing import Annotated
 
 import dagger
 from dagger import Doc, dag, field, function, object_type
+from dagger.telemetry import get_tracer
 
 from uv_workspace.params import (
     AllExtras,
@@ -86,7 +87,12 @@ class UvWorkspace:
         ).with_file(posixpath.join(workdir, "uv.lock"), plan.ws_dir.file("uv.lock"))
 
         if install:
-            ctr = ctr.with_exec([*plan.uv_sync_args, "--no-install-local"])
+            with get_tracer().start_as_current_span("install remote dependencies") as span:
+                args = [*plan.uv_sync_args, "--no-install-local"]
+                span.set_attribute("uv.sync_args", args)
+                # `with_exec` is lazy; sync() inside the span so it captures the
+                # actual install rather than just the query-graph construction.
+                ctr = await ctr.with_exec(args).sync()
 
         return UvRemoteBuild(container=ctr, plan=plan)
 
