@@ -218,7 +218,12 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_audit_detects_vulnerability(self) -> None:
-        """Auditing a workspace with a known-vulnerable dependency fails."""
+        """Auditing a workspace with a known-vulnerable dependency fails.
+
+        (The audit report itself is folded into each workspace's trace span by
+        `Uv.audit`; the message construction is covered by the `format_audit_failure`
+        unit tests, since a check can't introspect OTel spans.)
+        """
         src = self.source.directory("uv/tests/_packages/vulnerable")
         try:
             await dag.uv(source=src).audit()
