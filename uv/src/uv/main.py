@@ -10,6 +10,7 @@ from opentelemetry.trace import Status, StatusCode
 
 from uv.args import SourceDir
 from uv.utils import (
+    format_audit_failure,
     image_ref,
     is_excluded,
     pyproject_path,
@@ -134,7 +135,6 @@ class Uv:
             #
             # Capture failures per-workspace so one error can't cancel the
             # sibling audits — every workspace is always audited to completion.
-            # The failing uv audit exec surfaces its output in the Dagger UI.
             with tracer.start_as_current_span(f"audit({ws.path})") as span:
                 try:
                     await self.audit_workspace(
@@ -144,8 +144,23 @@ class Uv:
                         uv_version=uv_version,
                         image=image,
                     )
+                # We swallow the exception here (so a failure can't cancel the
+                # sibling audits), so the span's own record_exception /
+                # set_status_on_exception never fire — and even if they did they
+                # would use str(exc), which for an ExecError is just
+                # "exit code N". So set the status explicitly: uv writes its
+                # vulnerability report to stdout/stderr, and folding that (plus
+                # this workspace's path) into the span status is what makes the
+                # findings show up as this node's error in the trace rather than
+                # only in Dagger's stderr logs. The raised error below stays
+                # terse — the full report lives on each workspace's span.
+                except dagger.ExecError as exc:
+                    message = format_audit_failure(exc.exit_code, exc.stdout, exc.stderr, ws.path)
+                    span.set_status(Status(StatusCode.ERROR, message))
+                    span.record_exception(exc)
+                    failed.append(ws.path)
                 except Exception as exc:  # noqa: BLE001
-                    span.set_status(Status(StatusCode.ERROR))
+                    span.set_status(Status(StatusCode.ERROR, str(exc)))
                     span.record_exception(exc)
                     failed.append(ws.path)
 

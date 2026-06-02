@@ -102,6 +102,30 @@ def minimal_compatible_version(specifier: str) -> str | None:
     return str(feasible[0]) if feasible else None
 
 
+def format_audit_failure(exit_code: int, stdout: str, stderr: str, workspace: str | None = None) -> str:
+    """Human-readable message for a failed ``uv audit`` exec.
+
+    ``uv audit`` writes its vulnerability report to stdout/stderr, but the
+    :class:`dagger.ExecError` it raises stringifies to only a terse
+    "exit code N" message. Folding the captured output into the message keeps
+    the report in the trace/span error instead of leaving it solely in Dagger's
+    stderr logs. Both streams are included (deduplicated) since uv's findings
+    may land on either depending on version.
+
+    ``workspace`` (a source-relative path) is named in the summary when given,
+    so an aggregated/standalone error identifies which workspace failed.
+    """
+    seen: list[str] = []
+    for stream in (stdout, stderr):
+        text = (stream or "").strip()
+        if text and text not in seen:
+            seen.append(text)
+    target = f" for {workspace}" if workspace else ""
+    summary = f"uv audit failed{target} (exit code {exit_code})"
+    detail = "\n".join(seen)
+    return f"{summary}:\n\n{detail}" if detail else summary
+
+
 def resolve_specifier(value: str) -> str:
     """Concrete image tag for a configured version value (exact pin or range).
 

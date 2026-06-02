@@ -35,8 +35,9 @@ class Audit:
         Audits straight from the committed uv.lock without re-resolving against
         package indexes (``--frozen``); vulnerability data comes from the public
         OSV service, so no index credentials are required. A failing audit
-        (non-zero exit, e.g. vulnerabilities found) fails the exec itself, so
-        Dagger surfaces the output in the UI and does not cache the failure.
+        (non-zero exit, e.g. vulnerabilities found) raises ``dagger.ExecError``,
+        whose ``stdout``/``stderr`` carry uv's report; the runner folds that into
+        the trace error (see ``Uv.audit``).
         """
         ctr = (
             dag.container()

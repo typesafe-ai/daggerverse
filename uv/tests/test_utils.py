@@ -1,6 +1,7 @@
 """Tests for the uv module's pure helpers (no Dagger runtime)."""
 
 from uv.utils import (
+    format_audit_failure,
     image_ref,
     is_exact_version,
     is_excluded,
@@ -123,6 +124,43 @@ class TestMinimalCompatibleVersion:
 
     def test_upper_bound_only_has_no_lower_bound(self):
         assert minimal_compatible_version("<1.0.0") is None
+
+
+class TestFormatAuditFailure:
+    def test_includes_stderr_report(self):
+        msg = format_audit_failure(1, "", "found 1 vulnerability in urllib3")
+        assert "exit code 1" in msg
+        assert "found 1 vulnerability in urllib3" in msg
+
+    def test_includes_stdout_report(self):
+        msg = format_audit_failure(2, "vulnerable: urllib3 2.6.3", "")
+        assert "exit code 2" in msg
+        assert "vulnerable: urllib3 2.6.3" in msg
+
+    def test_combines_both_streams(self):
+        msg = format_audit_failure(1, "stdout report", "stderr report")
+        assert "stdout report" in msg
+        assert "stderr report" in msg
+
+    def test_deduplicates_identical_streams(self):
+        msg = format_audit_failure(1, "same report", "same report")
+        assert msg.count("same report") == 1
+
+    def test_strips_whitespace(self):
+        msg = format_audit_failure(1, "", "  report  \n")
+        assert msg.endswith("report")
+
+    def test_no_output_falls_back_to_summary(self):
+        assert format_audit_failure(1, "", "") == "uv audit failed (exit code 1)"
+        assert format_audit_failure(1, "   ", "\n") == "uv audit failed (exit code 1)"
+
+    def test_names_workspace_in_summary(self):
+        msg = format_audit_failure(1, "", "found 1 vulnerability", workspace="pkgs/app")
+        assert msg.startswith("uv audit failed for pkgs/app (exit code 1):")
+        assert "found 1 vulnerability" in msg
+
+    def test_names_workspace_without_output(self):
+        assert format_audit_failure(1, "", "", workspace="pkgs/app") == "uv audit failed for pkgs/app (exit code 1)"
 
 
 class TestResolveSpecifier:
