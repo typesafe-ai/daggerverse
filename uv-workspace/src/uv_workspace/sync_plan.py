@@ -5,6 +5,7 @@ from typing import Annotated, Self
 
 import dagger
 from dagger import Doc, field, object_type
+from dagger.telemetry import get_tracer
 
 from uv_workspace._codegen import dagger_codegen as _run_codegen
 from uv_workspace._utils import (
@@ -50,6 +51,52 @@ def _module_name(pkg_name: str) -> str:
 
     Currently exists only to handle dagger-io, but ideally it should do some real work in the future."""
     return _MODULE_NAME_OVERRIDES.get(pkg_name, pkg_name.replace("-", "_"))
+
+
+async def _discover_local_packages(
+    lock_data: dict,
+    package: str | None,
+    workspace_path: str,
+    source_dir: dagger.Directory,
+    ws_dir: dagger.Directory,
+) -> tuple[OrderedDict[str, str], OrderedDict[str, str], dict[str, bool]]:
+    """Find reachable local packages and detect each one's layout (flat vs src).
+
+    Runs in-process with many glob calls against the Dagger API, so it gets its
+    own span to surface the file-discovery phase as a node in the trace.
+    Returns ``(all_local, needed_local, flat_flags)``.
+    """
+    with get_tracer().start_as_current_span("discover local packages") as span:
+        all_local = await _filter_reachable(parse_local_packages(lock_data), workspace_path, source_dir)
+        needed_local = (
+            await _filter_reachable(
+                find_transitive_local_deps(lock_data, package),
+                workspace_path,
+                source_dir,
+            )
+            if package
+            else all_local
+        )
+
+        src_init_paths: set[str] = set()
+        for p in await source_dir.glob("**/src/*/__init__.py"):
+            src_init_paths.add(posixpath.normpath(p))
+        for p in await ws_dir.glob("**/src/*/__init__.py"):
+            resolved = p if workspace_path == "." else posixpath.join(workspace_path, p)
+            src_init_paths.add(posixpath.normpath(resolved))
+
+        flat_flags: dict[str, bool] = {}
+        for name, path in all_local.items():
+            module = _module_name(name)
+            resolved_pkg = posixpath.normpath(posixpath.join(workspace_path, path))
+            expected = posixpath.normpath(posixpath.join(resolved_pkg, "src", module, "__init__.py"))
+            flat_flags[name] = expected not in src_init_paths
+
+        span.set_attribute("packages.all", len(all_local))
+        span.set_attribute("packages.needed", len(needed_local))
+        span.set_attribute("packages.names", sorted(all_local))
+
+    return all_local, needed_local, flat_flags
 
 
 @object_type
@@ -130,30 +177,9 @@ class UvSyncPlan:
             else:
                 source_dir = source_dir.with_directory(workspace_path, ws_dir)
 
-        all_local = await _filter_reachable(parse_local_packages(lock_data), workspace_path, source_dir)
-        needed_local = (
-            await _filter_reachable(
-                find_transitive_local_deps(lock_data, package),
-                workspace_path,
-                source_dir,
-            )
-            if package
-            else all_local
+        all_local, needed_local, flat_flags = await _discover_local_packages(
+            lock_data, package, workspace_path, source_dir, ws_dir
         )
-
-        src_init_paths: set[str] = set()
-        for p in await source_dir.glob("**/src/*/__init__.py"):
-            src_init_paths.add(posixpath.normpath(p))
-        for p in await ws_dir.glob("**/src/*/__init__.py"):
-            resolved = p if workspace_path == "." else posixpath.join(workspace_path, p)
-            src_init_paths.add(posixpath.normpath(resolved))
-
-        flat_flags: dict[str, bool] = {}
-        for name, path in all_local.items():
-            module = _module_name(name)
-            resolved_pkg = posixpath.normpath(posixpath.join(workspace_path, path))
-            expected = posixpath.normpath(posixpath.join(resolved_pkg, "src", module, "__init__.py"))
-            flat_flags[name] = expected not in src_init_paths
 
         flat_package_flag = False
         if package and package in all_local:
