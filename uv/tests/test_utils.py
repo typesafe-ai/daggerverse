@@ -1,19 +1,38 @@
 """Tests for the uv module's pure helpers (no Dagger runtime)."""
 
+import pytest
+
 from uv.utils import (
+    debian_image_ref,
     format_audit_failure,
     image_ref,
     is_exact_version,
     is_excluded,
     minimal_compatible_version,
     normalize_exact_version,
+    parse_project_name,
+    parse_pyvenv_cfg,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
-    pyproject_path,
+    require_package_selection,
     resolve_specifier,
-    uv_toml_path,
     workspace_path,
 )
+
+
+class TestRequirePackageSelection:
+    def test_current_package_ok(self):
+        require_package_selection([], False, "my-app")  # current package -> no raise
+
+    def test_explicit_packages_ok(self):
+        require_package_selection(["my-app"], False, None)
+
+    def test_all_packages_ok(self):
+        require_package_selection([], True, None)
+
+    def test_pure_root_no_selection_raises(self):
+        with pytest.raises(ValueError, match="pure workspace root"):
+            require_package_selection([], False, None)
 
 
 class TestImageRef:
@@ -24,28 +43,41 @@ class TestImageRef:
         assert image_ref("latest") == "ghcr.io/astral-sh/uv:latest"
 
 
+class TestDebianImageRef:
+    def test_latest_resolves_to_pinned_version(self):
+        # `latest` must not float — it maps to a concrete pinned version.
+        assert debian_image_ref("latest") == "ghcr.io/astral-sh/uv:0.11.18-debian"
+
+    def test_version_pinned(self):
+        assert debian_image_ref("0.9.6") == "ghcr.io/astral-sh/uv:0.9.6-debian"
+
+
+class TestParsePyvenvCfg:
+    def test_parses_keys(self):
+        cfg = "home = /root/.local/share/uv/python/cpython-3.13.7-linux-aarch64-gnu/bin\nrelocatable = true\nversion = 3.13.7\n"
+        parsed = parse_pyvenv_cfg(cfg)
+        assert parsed["home"] == "/root/.local/share/uv/python/cpython-3.13.7-linux-aarch64-gnu/bin"
+        assert parsed["relocatable"] == "true"
+        assert parsed["version"] == "3.13.7"
+
+    def test_ignores_blank_and_non_kv_lines(self):
+        assert parse_pyvenv_cfg("\n# comment without equals\nkey = value\n") == {"key": "value"}
+
+
+class TestParseProjectName:
+    def test_reads_project_name(self):
+        assert parse_project_name('[project]\nname = "my-app"\nversion = "0"\n') == "my-app"
+
+    def test_missing_project(self):
+        assert parse_project_name("[tool.uv.workspace]\nmembers = []\n") is None
+
+
 class TestWorkspacePath:
     def test_root(self):
         assert workspace_path("uv.lock") == "."
 
     def test_nested(self):
         assert workspace_path("pkgs/app/uv.lock") == "pkgs/app"
-
-
-class TestPyprojectPath:
-    def test_root(self):
-        assert pyproject_path("uv.lock") == "pyproject.toml"
-
-    def test_nested(self):
-        assert pyproject_path("pkgs/app/uv.lock") == "pkgs/app/pyproject.toml"
-
-
-class TestUvTomlPath:
-    def test_root(self):
-        assert uv_toml_path("uv.lock") == "uv.toml"
-
-    def test_nested(self):
-        assert uv_toml_path("pkgs/app/uv.lock") == "pkgs/app/uv.toml"
 
 
 class TestIsExcluded:
