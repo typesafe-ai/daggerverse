@@ -19,10 +19,18 @@ that survives being moved, create it with `uv venv --relocatable` *before* insta
 so the subsequent `uv sync` populates that relocatable environment:
 
 ```python
-b = dag.uv(source=src).workspace().build(package=["my-app"])
-b = b.with_venv(relocatable=True)     # uv venv --relocatable
-b = b.with_remote_dependencies()      # sync installs into the relocatable venv
+b = (
+    dag.uv(source=src)
+    .workspace()
+    .build(package=["my-app"], no_editable=True)
+    .with_venv(relocatable=True)  # uv venv --relocatable
+    .with_remote_dependencies()   # sync installs into the relocatable venv
+)
 ```
+
+`no_editable=True` (`uv sync --no-editable`) bakes your local/workspace packages'
+source into `site-packages` instead of linking back to the source tree. It's what
+makes the venv truly self-contained — see the note below before exporting.
 
 ## Exporting and copying it
 
@@ -33,7 +41,7 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger -m uv call --source . workspace build --package my-app \
+    $ dagger -m uv call --source . workspace build --package my-app --no-editable \
         with-venv --relocatable \
         with-remote-dependencies \
         copy-venv --container alpine --set-env-vars
@@ -45,12 +53,18 @@ paths the venv expects:
     runner = (
         dag.uv(source=src)
         .workspace()
-        .build(package=["my-app"])
+        .build(package=["my-app"], no_editable=True)
         .with_venv(relocatable=True)
         .with_remote_dependencies()
         .copy_venv(dag.container().from_("debian:bookworm-slim"), set_env_vars=True)
     )
     ```
+
+!!! warning "Use `no_editable=True` when the venv carries workspace packages"
+
+    By default `uv` installs your workspace's own packages **editable**: their
+    `.pth` entries point back at the source tree, which does not exist at the target container.
+    Use `build(..., no_editable=True)` to bake the local sources into `site-packages` instead.
 
 `copy_venv` mounts the venv at `.venv` (relative to the target's working directory by
 default) and, with `set_env_vars`, exports `VIRTUAL_ENV` and prepends the venv's `bin/`

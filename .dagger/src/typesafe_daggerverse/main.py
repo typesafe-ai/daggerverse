@@ -157,6 +157,7 @@ class TypesafeDaggerverse:
             tg.start_soon(self.uv_audit_exclude)
             tg.start_soon(self.uv_install_venv)
             tg.start_soon(self.uv_relocatable_venv_runs_in_fresh_container)
+            tg.start_soon(self.uv_no_editable_bakes_local_source)
 
     @function
     async def uv_detect_version_pyproject(self) -> None:
@@ -293,6 +294,40 @@ class TypesafeDaggerverse:
         )
         if "FRESH_VENV_OK" not in out:
             raise AssertionError(f"expected the copied venv to run without a base Python, got: {out!r}")
+
+    @function
+    async def uv_no_editable_bakes_local_source(self) -> None:
+        """`no_editable=True` bakes real local-package *source* into site-packages.
+
+        Regression test for the editable-only copy-last optimization in
+        `with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from
+        whatever source is on disk at sync time, so real source must be copied in
+        *before* the sync — otherwise the empty scaffold stubs get baked into
+        site-packages. We export the venv into a fresh Python-less container (so
+        leftover workspace source can't mask the install) and assert each local
+        package's `hello()` returns its real string. Asserting the *return value*,
+        not just importability, is the point: an empty stub still imports fine.
+        """
+        src = self.source.directory("uv-workspace/tests/_packages/workspace")
+        base = dag.container().from_("debian:bookworm-slim").with_workdir("/srv/app")
+        script = (
+            "import my_app, my_core, my_lib\n"
+            "got = (my_app.hello(), my_core.hello(), my_lib.hello())\n"
+            "want = ('Hello from my-app!', 'Hello from my-core!', 'Hello from my-lib!')\n"
+            "assert got == want, f'baked source mismatch: {got!r}'\n"
+            "print('NO_EDITABLE_OK')\n"
+        )
+        # Object-returning module functions chain lazily; await only the terminal scalar.
+        out = await (
+            dag.uv(source=src)
+            .workspace()
+            .venv(package=["my-app"], no_editable=True)
+            .into(base, set_env_vars=True)
+            .with_exec(["python", "-c", script])
+            .stdout()
+        )
+        if "NO_EDITABLE_OK" not in out:
+            raise AssertionError(f"expected non-editable venv to bake real local source, got: {out!r}")
 
     @function
     async def repro_directory_symlink_roundtrip(self) -> str:

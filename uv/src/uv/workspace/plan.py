@@ -149,6 +149,11 @@ class UvSyncPlan:
         Doc("Precomputed uv sync argv"),
     ] = field()
 
+    no_editable: Annotated[
+        bool,
+        Doc("Local packages installed non-editable (source baked into site-packages, not path-linked)"),
+    ] = field(default=False)
+
     @classmethod
     async def create(
         cls,
@@ -228,4 +233,5 @@ class UvSyncPlan:
             needed_local=to_pkgs(needed_local),
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
+            no_editable=no_editable,
         )
