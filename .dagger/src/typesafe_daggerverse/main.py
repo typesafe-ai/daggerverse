@@ -488,13 +488,21 @@ class TypesafeDaggerverse:
 
     @check
     @function
+    async def all_ruff(self) -> None:
+        """Run all checks for the `ruff` module in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.ruff_check_fix)
+            tg.start_soon(self.ruff_format_fix)
+            tg.start_soon(self.ruff_check_lint_clean)
+            tg.start_soon(self.ruff_format_lint_clean)
+
+    @function
     async def ruff_check_fix(self) -> str:
         """Run ruff check --fix on a dirty file and verify only dirty.py is changed."""
         ruff = dag.ruff()
         changeset = ruff.check().fix(source=self._ruff_dirty_source())
         return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
 
-    @check
     @function
     async def ruff_format_fix(self) -> str:
         """Run ruff format on a dirty file and verify only dirty.py is changed."""
@@ -502,7 +510,6 @@ class TypesafeDaggerverse:
         changeset = ruff.format().fix(source=self._ruff_dirty_source())
         return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
 
-    @check
     @function
     async def ruff_check_lint_clean(self) -> str:
         """Run ruff check on a clean file and verify it passes."""
@@ -512,7 +519,6 @@ class TypesafeDaggerverse:
         )
         return await dag.ruff().check().lint(source=clean)
 
-    @check
     @function
     async def ruff_format_lint_clean(self) -> str:
         """Run ruff format --check on a clean file and verify it passes."""
