@@ -144,8 +144,8 @@ class TypesafeDaggerverse:
 
     @check
     @function
-    async def all_uv_audit(self) -> None:
-        """Run all checks for the `uv` (audit) module in parallel."""
+    async def all_uv(self) -> None:
+        """Run all checks for the `uv` module in parallel."""
         async with anyio.create_task_group() as tg:
             tg.start_soon(self.uv_detect_version_pyproject)
             tg.start_soon(self.uv_detect_version_uv_toml_precedence)
@@ -155,12 +155,14 @@ class TypesafeDaggerverse:
             tg.start_soon(self.uv_audit_clean)
             tg.start_soon(self.uv_audit_detects_vulnerability)
             tg.start_soon(self.uv_audit_exclude)
+            tg.start_soon(self.uv_install_venv)
+            tg.start_soon(self.uv_relocatable_venv_runs_in_fresh_container)
 
     @function
     async def uv_detect_version_pyproject(self) -> None:
         """`uv_version` reads `[tool.uv].required-version` from pyproject.toml."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = "==0.5.0"\n')
-        ws = (await dag.uv(source=src).workspaces())[0]
+        ws = (await dag.uv(source=src).get_workspaces())[0]
         version = await ws.uv_version()
         if version != "0.5.0":
             raise AssertionError(f"expected 0.5.0, got {version}")
@@ -172,7 +174,7 @@ class TypesafeDaggerverse:
             '[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = "==0.9.0"\n',
             uv_toml='required-version = "==0.4.0"\n',
         )
-        ws = (await dag.uv(source=src).workspaces())[0]
+        ws = (await dag.uv(source=src).get_workspaces())[0]
         version = await ws.uv_version()
         if version != "0.4.0":
             raise AssertionError(f"expected 0.4.0 (uv.toml wins), got {version}")
@@ -181,7 +183,7 @@ class TypesafeDaggerverse:
     async def uv_detect_version_range(self) -> None:
         """A range specifier resolves to its minimal compatible version (no PyPI lookup)."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = ">=0.5.0,<0.5.5"\n')
-        ws = (await dag.uv(source=src).workspaces())[0]
+        ws = (await dag.uv(source=src).get_workspaces())[0]
         version = await ws.uv_version()
         if version != "0.5.0":
             raise AssertionError(f"expected 0.5.0, got {version}")
@@ -190,7 +192,7 @@ class TypesafeDaggerverse:
     async def uv_detect_version_default(self) -> None:
         """With no required-version, `uv_version` falls back to the default tag."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n')
-        ws = (await dag.uv(source=src).workspaces())[0]
+        ws = (await dag.uv(source=src).get_workspaces())[0]
         version = await ws.uv_version()
         if version != "latest":
             raise AssertionError(f"expected latest, got {version}")
@@ -206,7 +208,7 @@ class TypesafeDaggerverse:
             .with_new_file("b/c/uv.lock", "")
             .with_new_file("b/c/pyproject.toml", pyproject)
         )
-        workspaces = await dag.uv(source=src).workspaces()
+        workspaces = await dag.uv(source=src).get_workspaces()
         if len(workspaces) != 2:
             raise AssertionError(f"expected 2 workspaces, got {len(workspaces)}")
 
@@ -237,9 +239,96 @@ class TypesafeDaggerverse:
         src = self.source.directory("uv/tests/_packages")
         await dag.uv(source=src).audit(exclude=["**/vulnerable"])
 
+    @function
+    async def uv_install_venv(self) -> None:
+        """`install` with `venv=True` creates a relocatable venv via `uv venv`, then syncs into it.
+
+        Exercises the bare-image default (uv provisions Python), the `with_venv`
+        step, and local-package scaffolding; then confirms deps import from the venv.
+        """
+        src = self.source.directory("uv-workspace/tests/_packages/workspace")
+        # Object-returning module functions chain lazily; await only the terminal scalar.
+        out = await (
+            dag.uv(source=src)
+            .workspace()
+            .install(package=["my-app"], venv=True, venv_relocatable=True)
+            .with_exec(["uv", "run", "python", "-c", "import my_app, my_core; print('VENV_OK')"])
+            .stdout()
+        )
+        if "VENV_OK" not in out:
+            raise AssertionError(f"expected venv install to import workspace packages, got: {out!r}")
+
+    @function
+    async def uv_relocatable_venv_runs_in_fresh_container(self) -> None:
+        """`copy_venv` yields a runnable env in a container that has no Python at all.
+
+        Builds standalone-app's `viz` extra into a relocatable venv, then uses
+        `copy_venv` (default `.venv` resolved against the workdir, `set_env_vars`)
+        to drop the venv **and the uv-managed standalone Python it bundles** into a
+        plain `debian:bookworm-slim` image — no Python, no uv, no project. We first
+        assert the base really has no Python, then run plain `python` (resolved via
+        the venv's `PATH`) and import the installed dep (`tabulate`).
+
+        The bundled Python matches the build base's libc — here the default Debian
+        (glibc) base, so the target is glibc (debian-slim). Building on an Alpine uv
+        base would instead produce a musl venv for alpine targets.
+        """
+        src = self.source.directory("uv-workspace/tests/_packages/standalone-app")
+        base = dag.container().from_("debian:bookworm-slim").with_workdir("/srv/app")
+        # Sanity-check the premise: the base ships no Python of its own.
+        probe = await base.with_exec(["sh", "-c", "command -v python3 || command -v python || echo NO_PYTHON"]).stdout()
+        if "NO_PYTHON" not in probe:
+            raise AssertionError(f"expected the base image to have no Python, but found: {probe!r}")
+
+        # Object-returning module functions chain lazily; await only the terminal scalar.
+        out = await (
+            dag.uv(source=src)
+            .workspace()
+            .build(extra=["viz"])
+            .with_venv(relocatable=True)
+            .with_remote_dependencies()
+            .copy_venv(base, set_env_vars=True)
+            .with_exec(["python", "-c", "import tabulate; print('FRESH_VENV_OK')"])
+            .stdout()
+        )
+        if "FRESH_VENV_OK" not in out:
+            raise AssertionError(f"expected the copied venv to run without a base Python, got: {out!r}")
+
+    @function
+    async def repro_directory_symlink_roundtrip(self) -> str:
+        """Minimal repro of the Dagger v0.21.4 behavior that broke `copy_venv`.
+
+        Mirrors what `copy_venv` did: extract `Container.directory(<symlinked dir path>)`,
+        then mount it back into a fresh container at that same path and read it.
+        `/store/link -> /store/real` stands in for uv's `cpython-<minor> -> cpython-<patch>`.
+
+        Observed on v0.21.4: the destination gets the bare symlink (`link -> /store/real`,
+        now dangling) and `marker.txt` is MISSING — the round-trip drops the real contents.
+        (v0.21.0 materialized the followed contents.) That dangling symlink is why the
+        copied venv's `bin/python` couldn't resolve. Workaround: export the *parent* dir so
+        the symlink and its target travel together (see `UvVenv.create`).
+        """
+        built = (
+            dag.container()
+            .from_("debian:bookworm-slim")
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "mkdir -p /store/real && echo hi > /store/real/marker.txt && ln -s /store/real /store/link",
+                ]
+            )
+        )
+        fresh = (
+            dag.container().from_("debian:bookworm-slim").with_directory("/store/link", built.directory("/store/link"))
+        )
+        return await fresh.with_exec(
+            ["sh", "-c", "ls -la /store; echo ---; cat /store/link/marker.txt 2>&1 || echo MISSING"]
+        ).stdout()
+
     @check
     @function
-    async def all_uv(self):
+    async def all_uv_workspace(self):
         """Run all uv-workspace checks in parallel."""
         async with anyio.create_task_group() as tg:
             tg.start_soon(self.uv_workspace_build_workspace)

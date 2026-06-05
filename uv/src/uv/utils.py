@@ -3,6 +3,7 @@
 import posixpath
 import re
 import tomllib
+from collections import OrderedDict, deque
 from pathlib import PurePosixPath
 
 from packaging.specifiers import SpecifierSet
@@ -10,28 +11,43 @@ from packaging.version import Version
 
 _DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
 _DEFAULT_VERSION = "latest"
+# Pinned uv version for the default Debian build base, so a workspace that
+# doesn't declare `required-version` builds on a fixed image instead of silently
+# floating to the latest uv release. Bump deliberately.
+_DEFAULT_BASE_UV_VERSION = "0.11.18"
 
 _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
 
 
 def image_ref(version: str) -> str:
-    """The uv image reference for a given tag/version."""
+    """The (distroless) uv image reference for a given tag/version.
+
+    `FROM scratch` — just the uv binary. Enough to run `uv audit`, but not
+    `uv sync`: with no libc/OS layer, uv can't provision a managed Python.
+    """
     return f"{_DEFAULT_IMAGE}:{version}"
+
+
+def debian_image_ref(version: str) -> str:
+    """A Debian-based uv image reference for a given tag/version.
+
+    Unlike the distroless `image_ref`, this variant ships a libc/OS layer and
+    ca-certificates, so `uv` can download a managed Python at sync time. Used as
+    the default build base.
+
+    Maps to the `:<version>-debian` tag — `astral-sh/uv` publishes `-debian` for
+    both old and current uv releases (the `-bookworm` variant was dropped for
+    recent versions). `latest` resolves to a pinned default version rather than a
+    floating tag.
+    """
+    if version == _DEFAULT_VERSION:
+        version = _DEFAULT_BASE_UV_VERSION
+    return f"{_DEFAULT_IMAGE}:{version}-debian"
 
 
 def workspace_path(lockfile: str) -> str:
     """Source-relative directory holding the given ``uv.lock``."""
     return posixpath.dirname(lockfile) or "."
-
-
-def pyproject_path(lockfile: str) -> str:
-    """Path to the ``pyproject.toml`` sibling of the given ``uv.lock``."""
-    return posixpath.join(posixpath.dirname(lockfile), "pyproject.toml")
-
-
-def uv_toml_path(lockfile: str) -> str:
-    """Path to the ``uv.toml`` sibling of the given ``uv.lock``."""
-    return posixpath.join(posixpath.dirname(lockfile), "uv.toml")
 
 
 def is_excluded(path: str, patterns: list[str]) -> bool:
@@ -51,6 +67,30 @@ def normalize_exact_version(value: str) -> str:
     if value.startswith("=="):
         return value[2:].strip()
     return value.strip()
+
+
+def parse_pyvenv_cfg(content: str) -> dict[str, str]:
+    """Parse a venv's ``pyvenv.cfg`` (simple ``key = value`` lines) into a dict.
+
+    Used by ``UvVenv.create`` to read the base interpreter (``home``) and the
+    ``relocatable`` flag straight from the venv uv created.
+    """
+    result: dict[str, str] = {}
+    for line in content.splitlines():
+        key, sep, value = line.partition("=")
+        if sep:
+            result[key.strip()] = value.strip()
+    return result
+
+
+def parse_project_name(content: str) -> str | None:
+    """The ``[project].name`` declared in pyproject.toml, if any.
+
+    Used to mimic ``uv sync``'s default of operating on the current package when
+    no explicit package is requested.
+    """
+    data = tomllib.loads(content)
+    return data.get("project", {}).get("name")
 
 
 def parse_required_version_from_pyproject(content: str) -> str | None:
@@ -135,3 +175,117 @@ def resolve_specifier(value: str) -> str:
     if is_exact_version(value):
         return normalize_exact_version(value)
     return minimal_compatible_version(value) or _DEFAULT_VERSION
+
+
+def normalize_package_name(name: str) -> str:
+    """PEP 503 name normalization: lowercase, collapse [-_.] runs to a single hyphen."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def require_package_selection(packages: list[str], all_packages: bool, default_package: str | None) -> None:
+    """Ensure there is a package to install, else raise.
+
+    `uv sync` defaults to the current package; we mirror that via
+    ``default_package`` (the workspace root's ``[project].name``). A pure
+    workspace root has no ``[project].name``, so with no explicit selection
+    there is nothing to install — surface that as an error rather than silently
+    installing every member.
+    """
+    if packages or all_packages or default_package:
+        return
+    msg = (
+        "No package to install: this workspace's pyproject.toml declares no "
+        "[project].name (a pure workspace root), so there is no current package "
+        "to default to. Pass `package` to select one or more members, or set "
+        "`all_packages` to install every workspace member."
+    )
+    raise ValueError(msg)
+
+
+def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
+    """Return {package_name: local_path} for all local packages (editable or directory).
+
+    Results are sorted by package name for deterministic build order.
+    """
+    result = {}
+    for pkg in lock_data.get("package", []):
+        source = pkg.get("source", {})
+        if "editable" in source:
+            result[pkg["name"]] = source["editable"]
+        elif "directory" in source:
+            result[pkg["name"]] = source["directory"]
+    return OrderedDict(sorted(result.items()))
+
+
+def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str, str]:
+    """Find all local packages that `project` transitively depends on (including itself).
+
+    Results are sorted by package name for deterministic build order.
+    The *project* name is PEP 503-normalised so callers can pass the raw
+    ``[project].name`` from ``pyproject.toml`` (which may use underscores).
+
+    ``project`` need not itself be a local package: a virtual workspace root
+    (``source = { virtual = ... }`` in the lock) isn't editable/directory, but it
+    still declares dependencies on workspace members. We traverse its dependency
+    graph regardless, collecting the *local* packages reached.
+    """
+    locals_ = parse_local_packages(lock_data)
+    project = normalize_package_name(project)
+
+    dep_graph: dict[str, list[str]] = {}
+    for pkg in lock_data.get("package", []):
+        name = pkg["name"]
+        deps = {d["name"] for d in pkg.get("dependencies", [])}
+        for group_deps in pkg.get("dev-dependencies", {}).values():
+            deps |= {d["name"] for d in group_deps}
+        dep_graph[name] = sorted(deps)
+
+    needed: dict[str, str] = {}
+    # Seed traversal from `project` even when it isn't local (e.g. a virtual
+    # workspace root) so we still walk its dependencies; only local packages are
+    # recorded in `needed`, and traversal continues only through local packages
+    # (a third-party dep's transitive deps are remote, not workspace-local).
+    visited = {project}
+    queue: deque[str] = deque([project])
+    if project in locals_:
+        needed[project] = locals_[project]
+
+    while queue:
+        current = queue.popleft()
+        for dep in dep_graph.get(current, []):
+            if dep not in visited:
+                visited.add(dep)
+                if dep in locals_:
+                    needed[dep] = locals_[dep]
+                    queue.append(dep)
+
+    return OrderedDict(sorted(needed.items()))
+
+
+def build_uv_sync_args(
+    *,
+    packages: list[str],
+    extras: list[str],
+    groups: list[str],
+    all_extras: bool,
+    all_groups: bool,
+    all_packages: bool,
+    no_editable: bool = False,
+) -> list[str]:
+    """Build the `uv sync` base argv mirroring the `uv sync` CLI flags."""
+    args = ["uv", "sync", "--frozen", "--link-mode", "copy"]
+    if no_editable:
+        args.append("--no-editable")
+    if all_extras:
+        args.append("--all-extras")
+    for extra in extras:
+        args += ["--extra", extra]
+    if all_groups:
+        args.append("--all-groups")
+    for group in groups:
+        args += ["--group", group]
+    if all_packages:
+        args.append("--all-packages")
+    for package in packages:
+        args += ["--package", package]
+    return args
