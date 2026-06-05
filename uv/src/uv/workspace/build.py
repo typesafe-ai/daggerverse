@@ -235,21 +235,33 @@ class UvWorkspaceBuild:
                 ctr = self._copy_package(ctr, workdir, pkg)
             return await ctr.sync()
 
-    @function
-    async def with_local_dependencies(self) -> dagger.Container:
-        """Editable-install the scaffolded local packages, then copy their real source in last.
-
-        Runs `uv sync` against the package stubs from `with_workspace_files` to
-        editable-install the local members, then copies their real source over the
-        stubs. Editable installs are path links, so the source goes live without a
-        re-sync — meaning source-only changes don't invalidate the cached install layer.
-        """
-        workdir = await self.container.workdir()
+    async def _sync_local(self, ctr: dagger.Container) -> dagger.Container:
+        """Run the plan's `uv sync` to install the local members, under a span."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
             # `with_exec` is lazy; sync() inside the span so it captures the actual
             # install rather than just the query-graph construction.
-            ctr = await self.container.with_exec(self.plan.uv_sync_args).sync()
+            return await ctr.with_exec(self.plan.uv_sync_args).sync()
+
+    @function
+    async def with_local_dependencies(self) -> dagger.Container:
+        """Install the scaffolded local packages, copying their real source at the right time.
+
+        For **editable** installs (the default), run `uv sync` against the package
+        stubs from `with_workspace_files`, then copy real source over the stubs last.
+        Editable installs are path links, so the source goes live without a re-sync —
+        meaning source-only changes don't invalidate the cached install layer.
+
+        For **non-editable** installs (`no_editable=True`), `uv sync` builds a wheel
+        from whatever source is present and bakes it into `site-packages`, so the real
+        source must be copied in *before* the sync — there are no path links for a
+        copy-last to make live, and syncing against the stubs would bake empty modules.
+        """
+        workdir = await self.container.workdir()
+        if self.plan.no_editable:
+            ctr = await self._copy_sources(self.container, workdir)
+            return await self._sync_local(ctr)
+        ctr = await self._sync_local(self.container)
         # Copy real source last: the editable installs above already point at these
         # paths, so the code goes live with no re-sync — keeping the install layer
         # cached across source-only changes.
