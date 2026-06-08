@@ -1,6 +1,7 @@
 [project]
 site_name = "uv — Dagger module"
 site_description = "A Dagger module for uv-managed Python projects and workspaces: audit, build, and package."
+site_url = "https://typesafe-ai.github.io/daggerverse/uv/"
 
 nav = [
   { "Overview" = "index.md" },

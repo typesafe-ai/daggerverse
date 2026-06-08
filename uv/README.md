@@ -2,6 +2,8 @@
 
 A Dagger module for [uv](https://github.com/astral-sh/uv)-managed Python projects and workspaces.
 
+📖 **Documentation:** https://typesafe-ai.github.io/daggerverse/uv/
+
 ## Features
 
 - **Audit** — run `uv audit --frozen` across every workspace in the source tree (one per `uv.lock`), in parallel. Usable as a Dagger check; each workspace's vulnerability report shows up as its own trace span.
