@@ -2,6 +2,11 @@
 site_name = "uv — Dagger module"
 site_description = "A Dagger module for uv-managed Python projects and workspaces: audit, build, and package."
 site_url = "https://typesafe-ai.github.io/daggerverse/uv/"
+site_author = "Typesafe AI"
+repo_url = "https://github.com/typesafe-ai/daggerverse"
+repo_name = "typesafe-ai/daggerverse"
+edit_uri = "edit/main/uv/docs/"
+copyright = "Copyright &copy; 2026 Typesafe AI"
 
 nav = [
   { "Overview" = "index.md" },
@@ -14,6 +19,7 @@ nav = [
 
 [project.theme]
 features = [
+  "content.action.edit",
   "content.code.copy",
   "content.code.annotate",
   "content.tabs.link",
