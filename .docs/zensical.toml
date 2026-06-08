@@ -1,6 +1,12 @@
 [project]
 site_name = "Typesafe Daggerverse"
 site_description = "Shared Dagger modules published from the typesafe-ai daggerverse."
+site_url = "https://typesafe-ai.github.io/daggerverse/"
+site_author = "Typesafe AI"
+repo_url = "https://github.com/typesafe-ai/daggerverse"
+repo_name = "typesafe-ai/daggerverse"
+edit_uri = "edit/main/.docs/docs/"
+copyright = "Copyright &copy; 2026 Typesafe AI"
 
 nav = [
   { "Home" = "index.md" },
@@ -8,6 +14,7 @@ nav = [
 
 [project.theme]
 features = [
+  "content.action.edit",
   "navigation.footer",
   "navigation.top",
 ]
