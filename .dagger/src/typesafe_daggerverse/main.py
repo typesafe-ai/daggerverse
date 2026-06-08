@@ -1,6 +1,7 @@
 """Checks for typesafe-ai daggerverse modules."""
 
 import anyio
+from collections.abc import Awaitable
 from typing import Annotated, TYPE_CHECKING
 
 import dagger
@@ -13,6 +14,13 @@ if TYPE_CHECKING:
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
+
+# Top-level modules that ship a docs site are discovered by globbing for a
+# `zensical.toml` (see `TypesafeDaggerverse.docs`).
+_ZENSICAL_GLOB = "*/zensical.toml"
+
+# Self-contained project holding the docs landing page (served at `/`).
+_LANDING_PROJECT = ".docs"
 
 
 def _pytest_otel_source() -> dagger.Directory:
@@ -127,6 +135,101 @@ class TypesafeDaggerverse:
         status on `ref`."""
         return await dag.github_status_monitor().wait_for_dagger_checks(
             repo=repo, ref=ref, token=token, fail_fast=fail_fast
+        )
+
+    # ---- docs sites ----
+
+    async def _zensical_site(self, ctr: dagger.Container, source: dagger.Directory) -> dagger.Directory:
+        """Render a zensical site inside `ctr` (which must have zensical installed).
+
+        `source` supplies `docs/` + `zensical.toml`; zensical writes the built
+        site next to the config, which we return.
+        """
+        workdir = await ctr.workdir()
+        return (
+            ctr.with_directory(f"{workdir}/docs", source.directory("docs"))
+            .with_file(f"{workdir}/zensical.toml", source.file("zensical.toml"))
+            .with_exec(["zensical", "build", "-f", "zensical.toml", "--clean"])
+            .directory(f"{workdir}/site")
+        )
+
+    @function
+    async def docs_site(
+        self,
+        module: Annotated[str, Doc("Module directory whose docs to build (e.g. 'uv')")],
+    ) -> dagger.Directory:
+        """Build a module's static docs site and return the generated `site/` dir.
+
+        Built on the same base as the tests, with the module installed and its
+        `docs` uv group (which ships zensical) synced — so docs that introspect
+        the codebase can import it. `build` only copies each package's `src/`, so
+        the docs sources are supplied separately by `_zensical_site`.
+        """
+        src = self.source.directory(module)
+        ctr = await dag.uv_workspace(source_dir=src, base_container=_base()).build(package=module, group=["docs"])
+        return await self._zensical_site(ctr, src)
+
+    async def _landing(self) -> dagger.Directory:
+        """Build the landing site (served at `/`) from the `.docs` project.
+
+        `.docs` is a self-contained, non-packaged uv project whose `docs` group
+        (zensical, pinned in `.docs/uv.lock`) is synced with no package — same
+        build path as the modules, just nothing to import.
+        """
+        src = self.source.directory(_LANDING_PROJECT)
+        ctr = await dag.uv_workspace(source_dir=src, base_container=_base()).build(group=["docs"], dagger_codegen=False)
+        return await self._zensical_site(ctr, src)
+
+    @function
+    async def docs_build(self) -> dagger.Directory:
+        """Build the combined docs site for GitHub Pages.
+
+        Discovers every top-level module with a `zensical.toml`, builds each site
+        in parallel, and lays them out under their module path (e.g. `uv` -> `/uv`).
+        Each site's links/assets are relative, so they resolve under their subpath.
+        The `.docs` project's zensical site is the landing page (served at `/`).
+        """
+        # Dot-dirs (`.docs`, `.dagger`, ...) are tooling, not published modules.
+        modules = sorted(
+            module
+            for module in (path.rsplit("/", 1)[0] for path in await self.source.glob(_ZENSICAL_GLOB))
+            if not module.startswith(".")
+        )
+
+        # Built sites keyed by mount path; "" is the root landing page.
+        built: dict[str, dagger.Directory] = {}
+
+        async def _build(path: str, site: Awaitable[dagger.Directory]) -> None:
+            built[path] = await site
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(_build, "", self._landing())
+            for module in modules:
+                tg.start_soon(_build, module, self.docs_site(module))
+
+        combined = built.pop("")
+        for module in sorted(built):
+            combined = combined.with_directory(module, built[module])
+        return combined
+
+    @function
+    async def docs_serve(
+        self,
+        port: Annotated[int, Doc("Port to listen on")] = 8080,
+    ) -> dagger.Service:
+        """Serve the combined docs site over HTTP as a Dagger service.
+
+        Uses Python's stdlib `http.server` (already in the uv base image), which
+        serves `index.html` for directory URLs — what zensical's relative links
+        expect. Run with `dagger call serve-docs up` and browse the printed URL.
+        """
+        site = await self.docs_build()
+        return (
+            _base()
+            .with_directory("/srv/docs", site)
+            .with_workdir("/srv/docs")
+            .with_exposed_port(port)
+            .as_service(args=["python", "-m", "http.server", str(port)])
         )
 
     # ---- uv (audit) module checks ----
