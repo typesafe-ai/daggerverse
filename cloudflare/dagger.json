@@ -1,0 +1,7 @@
+{
+  "name": "cloudflare",
+  "engineVersion": "v0.21.3",
+  "sdk": {
+    "source": "python"
+  }
+}
