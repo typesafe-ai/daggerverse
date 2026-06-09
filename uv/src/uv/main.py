@@ -22,7 +22,9 @@ class Uv:
     """Entrypoint for the `uv` module.
 
     Hands out `UvWorkspaceSource` objects — one per workspace — which expose additional functionality.
-    Use `workspace` to grab a single workspace by path or `get_workspaces` to list them all."""
+    Use `workspace` to grab a single workspace by path or `get_workspaces` to list them all.
+
+    Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""
 
     source: SourceDir = field()
 
