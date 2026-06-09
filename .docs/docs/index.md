@@ -14,7 +14,7 @@
 
     ---
 
-    [:octicons-book-16: Docs](./uv/) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/uv)
+    [:octicons-book-16: Docs](./uv/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/uv)
 
 -   ![ruff](assets/logos/ruff.svg){ .lg .middle style="width: 40px; height: 40px" } __ruff__
 

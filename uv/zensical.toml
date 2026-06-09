@@ -40,6 +40,11 @@ scheme = "default"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
+[[project.extra.social]]
+icon = "lucide/blocks"
+link = "https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv"
+name = "Daggerverse (SDK reference)"
+
 [project.markdown_extensions.admonition]
 [project.markdown_extensions.attr_list]
 [project.markdown_extensions.toc]

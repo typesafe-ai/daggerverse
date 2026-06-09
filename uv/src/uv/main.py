@@ -1,5 +1,3 @@
-"""Build, audit, and package uv-managed Python projects and workspaces."""
-
 from typing import Annotated
 
 import anyio
