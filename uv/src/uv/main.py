@@ -1,3 +1,5 @@
+"""Build, audit, and package uv-managed Python projects and workspaces."""
+
 from typing import Annotated
 
 import anyio
@@ -17,13 +19,10 @@ from uv.workspace import UvWorkspaceSource
 
 @object_type
 class Uv:
-    """Container-free entrypoint for uv-managed Python projects.
+    """Entrypoint for the `uv` module.
 
-    Holds only the user-provided source tree and hands out
-    :class:`UvWorkspaceSource` objects — one per workspace — which own the
-    actual work (audit, build). Use `workspace` to grab a single workspace by
-    path, `get_workspaces` to list them all, or `audit` to audit every one.
-    """
+    Hands out `UvWorkspaceSource` objects — one per workspace — which expose additional functionality.
+    Use `workspace` to grab a single workspace by path or `get_workspaces` to list them all."""
 
     source: SourceDir = field()
 
