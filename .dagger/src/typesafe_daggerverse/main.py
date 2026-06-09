@@ -146,11 +146,17 @@ class TypesafeDaggerverse:
 
         `source` supplies `docs/` + `zensical.toml`; zensical writes the built
         site next to the config, which we return.
+
+        Overrides are resolved from the repo-level `.docs/overrides` directory
+        rather than following per-module symlinks (which don't survive Dagger's
+        directory context).
         """
         workdir = await ctr.workdir()
+        overrides = self.source.directory(f"{_LANDING_PROJECT}/overrides")
         return (
             ctr.with_directory(f"{workdir}/docs", source.directory("docs"))
             .with_file(f"{workdir}/zensical.toml", source.file("zensical.toml"))
+            .with_directory(f"{workdir}/overrides", overrides)
             .with_exec(["zensical", "build", "-f", "zensical.toml", "--clean"])
             .directory(f"{workdir}/site")
         )

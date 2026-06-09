@@ -18,6 +18,7 @@ nav = [
 ]
 
 [project.theme]
+custom_dir = "overrides"
 features = [
   "content.action.edit",
   "content.code.copy",
