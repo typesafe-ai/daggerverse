@@ -232,6 +232,12 @@ class TypesafeDaggerverse:
             .as_service(args=["python", "-m", "http.server", str(port)])
         )
 
+    @check
+    @function
+    async def docs(self) -> None:
+        """Build every zensical docs site in parallel."""
+        await (await self.docs_build()).sync()
+
     # ---- uv (audit) module checks ----
 
     def _uv_src(self, pyproject: str, *, uv_toml: str | None = None) -> dagger.Directory:
