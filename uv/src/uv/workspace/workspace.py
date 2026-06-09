@@ -44,9 +44,8 @@ class UvWorkspaceSource:
     carried so builds can reach sibling path-dependencies that live *outside*
     the workspace root (e.g. `../my-dep` in a nested workspace).
 
-    Named `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with the
-    sibling `uv-workspace` module's main `UvWorkspace` object when both are
-    composed in a parent module.
+    Named `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with
+    the top-level `Uv` constructor when composed in a parent module.
     """
 
     source: Annotated[

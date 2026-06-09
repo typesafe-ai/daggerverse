@@ -1,7 +1,0 @@
-{
-  "name": "uv-workspace",
-  "engineVersion": "v0.20.8",
-  "sdk": {
-    "source": "python"
-  }
-}
