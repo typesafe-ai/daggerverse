@@ -46,7 +46,7 @@ def debian_image_ref(version: str) -> str:
 
 
 def workspace_path(lockfile: str) -> str:
-    """Source-relative directory holding the given ``uv.lock``."""
+    """Source-relative directory holding the given `uv.lock`."""
     return posixpath.dirname(lockfile) or "."
 
 
@@ -70,10 +70,10 @@ def normalize_exact_version(value: str) -> str:
 
 
 def parse_pyvenv_cfg(content: str) -> dict[str, str]:
-    """Parse a venv's ``pyvenv.cfg`` (simple ``key = value`` lines) into a dict.
+    """Parse a venv's `pyvenv.cfg` (simple `key = value` lines) into a dict.
 
-    Used by ``UvVenv.create`` to read the base interpreter (``home``) and the
-    ``relocatable`` flag straight from the venv uv created.
+    Used by `UvVenv.create` to read the base interpreter (`home`) and the
+    `relocatable` flag straight from the venv uv created.
     """
     result: dict[str, str] = {}
     for line in content.splitlines():
@@ -84,10 +84,10 @@ def parse_pyvenv_cfg(content: str) -> dict[str, str]:
 
 
 def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict[str, str | None]]:
-    """Extract ``[[tool.uv.index]]`` (or ``[[index]]`` in uv.toml) entries.
+    """Extract `[[tool.uv.index]]` (or `[[index]]` in uv.toml) entries.
 
-    Returns dicts with ``name``, ``url``, and optional ``publish_url`` for each
-    index that declares at least a ``name`` and ``url``.
+    Returns dicts with `name`, `url`, and optional `publish_url` for each
+    index that declares at least a `name` and `url`.
     """
     data = tomllib.loads(content)
     raw = data.get("index", []) if uv_toml else data.get("tool", {}).get("uv", {}).get("index", [])
@@ -102,9 +102,9 @@ def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict[str, str 
 
 
 def parse_project_name(content: str) -> str | None:
-    """The ``[project].name`` declared in pyproject.toml, if any.
+    """The `[project].name` declared in pyproject.toml, if any.
 
-    Used to mimic ``uv sync``'s default of operating on the current package when
+    Used to mimic `uv sync`'s default of operating on the current package when
     no explicit package is requested.
     """
     data = tomllib.loads(content)
@@ -112,21 +112,21 @@ def parse_project_name(content: str) -> str | None:
 
 
 def parse_required_version_from_pyproject(content: str) -> str | None:
-    """``[tool.uv].required-version`` from pyproject.toml contents, if present."""
+    """`[tool.uv].required-version` from pyproject.toml contents, if present."""
     data = tomllib.loads(content)
     return data.get("tool", {}).get("uv", {}).get("required-version")
 
 
 def parse_required_version_from_uv_toml(content: str) -> str | None:
-    """Top-level ``required-version`` from uv.toml contents, if present."""
+    """Top-level `required-version` from uv.toml contents, if present."""
     data = tomllib.loads(content)
     return data.get("required-version")
 
 
 def _pad_release(version: Version) -> Version:
-    """Pad a bare ``X`` or ``X.Y`` release to a concrete ``X.Y.Z`` image tag.
+    """Pad a bare `X` or `X.Y` release to a concrete `X.Y.Z` image tag.
 
-    Trailing zeros don't change PEP 440 ordering (``0.5`` == ``0.5.0``), so this
+    Trailing zeros don't change PEP 440 ordering (`0.5` == `0.5.0`), so this
     keeps specifier satisfaction intact while producing a tag that actually
     exists in the registry (uv publishes three-component tags).
     """
@@ -143,9 +143,9 @@ def minimal_compatible_version(specifier: str) -> str | None:
     """Lowest version satisfying a PEP 440 specifier, computed without PyPI.
 
     Derives candidate lower bounds straight from the specifier's operands
-    (``>=``, ``>``, ``~=``, ``==``) and returns the smallest one the whole set
-    accepts. Returns ``None`` when the specifier has no lower bound (e.g. only
-    ``<``/``<=``/``!=`` constraints), leaving the caller to pick a default.
+    (`>=`, `>`, `~=`, `==`) and returns the smallest one the whole set
+    accepts. Returns `None` when the specifier has no lower bound (e.g. only
+    `<`/`<=`/`!=` constraints), leaving the caller to pick a default.
     """
     spec = SpecifierSet(specifier)
     candidates: list[Version] = []
@@ -161,16 +161,16 @@ def minimal_compatible_version(specifier: str) -> str | None:
 
 
 def format_audit_failure(exit_code: int, stdout: str, stderr: str, workspace: str | None = None) -> str:
-    """Human-readable message for a failed ``uv audit`` exec.
+    """Human-readable message for a failed `uv audit` exec.
 
-    ``uv audit`` writes its vulnerability report to stdout/stderr, but the
+    `uv audit` writes its vulnerability report to stdout/stderr, but the
     :class:`dagger.ExecError` it raises stringifies to only a terse
     "exit code N" message. Folding the captured output into the message keeps
     the report in the trace/span error instead of leaving it solely in Dagger's
     stderr logs. Both streams are included (deduplicated) since uv's findings
     may land on either depending on version.
 
-    ``workspace`` (a source-relative path) is named in the summary when given,
+    `workspace` (a source-relative path) is named in the summary when given,
     so an aggregated/standalone error identifies which workspace failed.
     """
     seen: list[str] = []
@@ -204,8 +204,8 @@ def require_package_selection(packages: list[str], all_packages: bool, default_p
     """Ensure there is a package to install, else raise.
 
     `uv sync` defaults to the current package; we mirror that via
-    ``default_package`` (the workspace root's ``[project].name``). A pure
-    workspace root has no ``[project].name``, so with no explicit selection
+    `default_package` (the workspace root's `[project].name`). A pure
+    workspace root has no `[project].name`, so with no explicit selection
     there is nothing to install — surface that as an error rather than silently
     installing every member.
     """
@@ -240,10 +240,10 @@ def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str
 
     Results are sorted by package name for deterministic build order.
     The *project* name is PEP 503-normalised so callers can pass the raw
-    ``[project].name`` from ``pyproject.toml`` (which may use underscores).
+    `[project].name` from `pyproject.toml` (which may use underscores).
 
-    ``project`` need not itself be a local package: a virtual workspace root
-    (``source = { virtual = ... }`` in the lock) isn't editable/directory, but it
+    `project` need not itself be a local package: a virtual workspace root
+    (`source = { virtual = ... }` in the lock) isn't editable/directory, but it
     still declares dependencies on workspace members. We traverse its dependency
     graph regardless, collecting the *local* packages reached.
     """

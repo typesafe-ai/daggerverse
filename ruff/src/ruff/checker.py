@@ -9,7 +9,7 @@ from ruff.args import SourceDir
 
 @object_type
 class RuffChecker:
-    """Ruff linter (``ruff check``)."""
+    """Ruff linter (`ruff check`)."""
 
     ctr: Annotated[
         dagger.Container,
@@ -26,10 +26,10 @@ class RuffChecker:
         source: SourceDir,
         extra_args: Annotated[
             list[str] | None,
-            Doc("Additional arguments to pass to ``ruff check``."),
+            Doc("Additional arguments to pass to `ruff check`."),
         ] = None,
     ) -> str:
-        """Run ``ruff check`` and report violations.
+        """Run `ruff check` and report violations.
 
         Exits non-zero when violations are found.
         """
@@ -45,7 +45,7 @@ class RuffChecker:
         source: SourceDir,
         extra_args: Annotated[
             list[str] | None,
-            Doc("Additional arguments to pass to ``ruff check --fix``."),
+            Doc("Additional arguments to pass to `ruff check --fix`."),
         ] = None,
     ) -> dagger.Changeset:
         """Auto-fix lint violations and return a Changeset."""

@@ -66,12 +66,12 @@ async def _discover_local_packages(
 
     Runs in-process with many glob calls against the Dagger API, so it gets its
     own span to surface the file-discovery phase as a node in the trace.
-    Returns ``(all_local, needed_local, flat_flags)``.
+    Returns `(all_local, needed_local, flat_flags)`.
 
-    ``needed_local`` mirrors ``uv sync``'s selection: every member when
-    ``all_packages`` is set, the union of the explicit ``packages``' transitive
+    `needed_local` mirrors `uv sync`'s selection: every member when
+    `all_packages` is set, the union of the explicit `packages`' transitive
     local deps when given, otherwise the transitive local deps of
-    ``default_package`` (the current package, à la a bare ``uv sync``).
+    `default_package` (the current package, à la a bare `uv sync`).
     """
     with get_tracer().start_as_current_span("discover local packages") as span:
         # Glob the source tree's pyproject.toml paths once and reuse them for both

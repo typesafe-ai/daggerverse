@@ -61,7 +61,7 @@ class Uv:
             Doc("Full uv image reference to run with. Overrides `uv_version`."),
         ] = None,
     ) -> None:
-        """Run ``uv audit`` for every workspace in parallel.
+        """Run `uv audit` for every workspace in parallel.
 
         Exits non-zero when any (non-excluded) workspace fails its audit.
         """

@@ -27,7 +27,7 @@ def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str
 
     Results are sorted by package name for deterministic build order.
     The *project* name is PEP 503-normalised so callers can pass the raw
-    ``[project].name`` from ``pyproject.toml`` (which may use underscores).
+    `[project].name` from `pyproject.toml` (which may use underscores).
     """
     locals_ = parse_local_packages(lock_data)
     project = _normalize(project)

@@ -11,19 +11,19 @@ from uv.utils import parse_pyvenv_cfg
 class UvVenv:
     """A relocatable uv virtual environment bundled with the uv-managed Python it needs.
 
-    A venv never contains the standard library — ``.venv/bin/python`` resolves to
-    a base interpreter whose ``lib/`` provides it. This pairs the venv with that
+    A venv never contains the standard library — `.venv/bin/python` resolves to
+    a base interpreter whose `lib/` provides it. This pairs the venv with that
     interpreter so the two can be dropped into a fresh container (one without any
     Python of its own) and run without uv.
 
-    Only valid for a venv created with ``with_venv(relocatable=True)`` against a
+    Only valid for a venv created with `with_venv(relocatable=True)` against a
     *uv-managed* (standalone) Python: uv's standalone Pythons are themselves
     relocatable, and a relocatable venv keeps working when its directory is moved.
     The venv may be mounted at any path, but the Python must be remounted at
-    ``python_path`` (the absolute location its ``pyvenv.cfg`` records).
+    `python_path` (the absolute location its `pyvenv.cfg` records).
 
     The bundled Python is the python-build-standalone variant uv selected for the
-    base image's platform/libc (set by ``base_container`` at build time), so the
+    base image's platform/libc (set by `base_container` at build time), so the
     target container must match it: a Debian (glibc) base exports to glibc targets,
     an Alpine (musl) base to musl/alpine targets.
     """
@@ -46,7 +46,7 @@ class UvVenv:
     ) -> Self:
         """Build a `UvVenv` from a container holding a populated venv at `venv_path`.
 
-        Reads the venv's ``pyvenv.cfg`` to locate uv's managed-Python store and
+        Reads the venv's `pyvenv.cfg` to locate uv's managed-Python store and
         exports the whole store alongside the venv. Raises unless the venv is
         relocatable and its Python is uv-managed (the only combination this can
         faithfully export).
