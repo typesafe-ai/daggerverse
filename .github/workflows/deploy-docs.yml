@@ -14,11 +14,16 @@ env:
   DAGGER_VERSION: "0.21.4"
 
 jobs:
-  build:
-    name: build
+  deploy:
+    name: deploy
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -30,7 +35,6 @@ jobs:
           version: ${{ env.DAGGER_VERSION }}
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           dagger-flags: --cloud
-          # Builds every module's zensical site, combined under per-module paths.
           call: docs-build export --path=./public
 
       - name: Upload Pages artifact
@@ -38,17 +42,6 @@ jobs:
         with:
           path: ./public
 
-  deploy:
-    name: deploy
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write # deploy to GitHub Pages
-      id-token: write # verify the deployment originates from this workflow
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
