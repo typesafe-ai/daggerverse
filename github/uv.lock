@@ -188,7 +188,7 @@ wheels = [
 ]
 
 [[package]]
-name = "github-status-monitor"
+name = "github"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

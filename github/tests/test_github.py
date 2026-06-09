@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from github_status_monitor.github import _check_run_state, fetch_check_runs_snapshot
-from github_status_monitor.types import Status
+from github.status_monitor.api import _check_run_state, fetch_check_runs_snapshot
+from github.status_monitor.types import Status
 
 
 # ---- _check_run_state mapping ----

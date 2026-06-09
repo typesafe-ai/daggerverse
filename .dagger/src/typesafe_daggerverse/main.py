@@ -117,9 +117,9 @@ class TypesafeDaggerverse:
             base_container=_base(),
         )
 
-    def _status_monitor(self) -> "dagger.UvWorkspace":
+    def _github(self) -> "dagger.UvWorkspace":
         return dag.uv_workspace(
-            source_dir=self.source.directory("github-status-monitor"),
+            source_dir=self.source.directory("github"),
             base_container=_base(),
         )
 
@@ -133,8 +133,10 @@ class TypesafeDaggerverse:
     ) -> str:
         """Block until every Dagger check has landed as a successful GitHub commit
         status on `ref`."""
-        return await dag.github_status_monitor().wait_for_dagger_checks(
-            repo=repo, ref=ref, token=token, fail_fast=fail_fast
+        return (
+            await dag.github()
+            .status_monitor()
+            .wait_for_dagger_checks(repo=repo, ref=ref, token=token, fail_fast=fail_fast)
         )
 
     # ---- docs sites ----
@@ -577,12 +579,12 @@ class TypesafeDaggerverse:
 
     @check
     @function
-    async def github_status_monitor_pytest(self) -> None:
-        """Run the github-status-monitor unit-test suite inside a freshly-
-        built container."""
-        ctr = await self._status_monitor().build(package="github-status-monitor", all_groups=True)
+    async def github_pytest(self) -> None:
+        """Run the github module's unit-test suite inside a freshly-built
+        container."""
+        ctr = await self._github().build(package="github", all_groups=True)
         workdir = await ctr.workdir()
-        tests = self.source.directory("github-status-monitor").directory("tests")
+        tests = self.source.directory("github").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
         await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
 

@@ -29,8 +29,8 @@
   ],
   "dependencies": [
     {
-      "name": "github-status-monitor",
-      "source": "github-status-monitor"
+      "name": "github",
+      "source": "github"
     },
     {
       "name": "pytest",

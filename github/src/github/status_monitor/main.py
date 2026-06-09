@@ -1,6 +1,6 @@
-"""Dagger module: wait for GitHub commit statuses and/or check runs to succeed.
+"""Wait for GitHub commit statuses and/or check runs to succeed.
 
-Three entry points:
+Two entry points:
 
 * :meth:`GithubStatusMonitor.wait_for_statuses` — explicit list of status
   contexts and/or check-run names; general-purpose for any GitHub check.
@@ -16,14 +16,14 @@ import httpx
 from dagger import Doc, dag, field, function, object_type
 from rich.console import Console
 
-from github_status_monitor import render
-from github_status_monitor.github import (
+from github.status_monitor import render
+from github.status_monitor.api import (
     auth_headers,
     check_runs_url,
     poll_snapshots,
     statuses_url,
 )
-from github_status_monitor.params import (
+from github.status_monitor.params import (
     DiscoveryTimeout,
     FailFast,
     PollInterval,
@@ -33,8 +33,8 @@ from github_status_monitor.params import (
     Timeout,
     Token,
 )
-from github_status_monitor.types import Step
-from github_status_monitor.watcher import Watcher
+from github.status_monitor.types import Step
+from github.status_monitor.watcher import Watcher
 
 
 @object_type
