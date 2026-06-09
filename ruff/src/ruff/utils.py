@@ -43,9 +43,9 @@ def parse_version_from_pyproject(content: str) -> str | None:
 
 
 def _pad_release(version: Version) -> Version:
-    """Pad a bare ``X`` or ``X.Y`` release to a concrete ``X.Y.Z`` image tag.
+    """Pad a bare `X` or `X.Y` release to a concrete `X.Y.Z` image tag.
 
-    Trailing zeros don't change PEP 440 ordering (``0.5`` == ``0.5.0``), so this
+    Trailing zeros don't change PEP 440 ordering (`0.5` == `0.5.0`), so this
     keeps specifier satisfaction intact while producing a tag that actually
     exists in the registry (ruff publishes three-component tags).
     """
@@ -62,9 +62,9 @@ def minimal_compatible_version(specifier: str) -> str | None:
     """Lowest version satisfying a PEP 440 specifier, computed without PyPI.
 
     Derives candidate lower bounds straight from the specifier's operands
-    (``>=``, ``>``, ``~=``, ``==``) and returns the smallest one the whole set
-    accepts. Returns ``None`` when the specifier has no lower bound (e.g. only
-    ``<``/``<=``/``!=`` constraints), leaving the caller to pick a default.
+    (`>=`, `>`, `~=`, `==`) and returns the smallest one the whole set
+    accepts. Returns `None` when the specifier has no lower bound (e.g. only
+    `<`/`<=`/`!=` constraints), leaving the caller to pick a default.
     """
     spec = SpecifierSet(specifier)
     candidates: list[Version] = []

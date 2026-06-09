@@ -36,7 +36,7 @@ class Watcher:
     """Tracks check states, deadlines, and rendering across snapshots.
 
     Tests typically use :meth:`observe` directly and inspect verdict-shape
-    properties. End-to-end tests of timeout behavior pass a fake ``clock``.
+    properties. End-to-end tests of timeout behavior pass a fake `clock`.
     """
 
     def __init__(
@@ -121,7 +121,7 @@ class Watcher:
     # ---- orchestration ----
 
     def step(self, snapshot: Mapping[str, Status]) -> Step:
-        """Apply ``snapshot``, advance deadlines, and emit progress output.
+        """Apply `snapshot`, advance deadlines, and emit progress output.
 
         Returns the :class:`Step` outcome — :data:`Step.CONTINUE` means the
         caller should keep polling.

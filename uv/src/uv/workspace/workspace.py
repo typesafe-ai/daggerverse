@@ -33,19 +33,19 @@ from uv.workspace.venv import UvVenv
 
 @object_type
 class UvWorkspaceSource:
-    """A self-contained uv workspace: the source files rooted at a ``uv.lock``.
+    """A self-contained uv workspace: the source files rooted at a `uv.lock`.
 
-    Carries the source tree and the workspace's path within it (``"."`` for a
-    root workspace). From those it derives everything it needs to ``audit`` the
-    locked dependencies or ``build`` a minimal container for a package — keeping
-    the parent ``Uv`` a thin, container-free entrypoint.
+    Carries the source tree and the workspace's path within it (`"."` for a
+    root workspace). From those it derives everything it needs to `audit` the
+    locked dependencies or `build` a minimal container for a package — keeping
+    the parent `Uv` a thin, container-free entrypoint.
 
-    The full ``source`` (rather than just the sliced workspace directory) is
+    The full `source` (rather than just the sliced workspace directory) is
     carried so builds can reach sibling path-dependencies that live *outside*
-    the workspace root (e.g. ``../my-dep`` in a nested workspace).
+    the workspace root (e.g. `../my-dep` in a nested workspace).
 
-    Named ``UvWorkspaceSource`` (not ``UvWorkspace``) to avoid colliding with the
-    sibling ``uv-workspace`` module's main ``UvWorkspace`` object when both are
+    Named `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with the
+    sibling `uv-workspace` module's main `UvWorkspace` object when both are
     composed in a parent module.
     """
 
@@ -60,11 +60,11 @@ class UvWorkspaceSource:
     ] = field(default=".")
 
     def _ws_dir(self) -> dagger.Directory:
-        """The workspace directory (``uv.lock``/``pyproject.toml`` live here)."""
+        """The workspace directory (`uv.lock`/`pyproject.toml` live here)."""
         return self.source if self.path == "." else self.source.directory(self.path)
 
     async def _uv_toml(self) -> dagger.File | None:
-        """The workspace's ``uv.toml``, if one sits alongside its ``uv.lock``."""
+        """The workspace's `uv.toml`, if one sits alongside its `uv.lock`."""
         ws = self._ws_dir()
         if "uv.toml" in await ws.entries():
             return ws.file("uv.toml")

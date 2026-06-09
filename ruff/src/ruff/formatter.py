@@ -9,7 +9,7 @@ from ruff.args import SourceDir
 
 @object_type
 class RuffFormatter:
-    """Ruff formatter (``ruff format``)."""
+    """Ruff formatter (`ruff format`)."""
 
     ctr: Annotated[
         dagger.Container,
@@ -26,10 +26,10 @@ class RuffFormatter:
         source: SourceDir,
         extra_args: Annotated[
             list[str] | None,
-            Doc("Additional arguments to pass to ``ruff format --check``."),
+            Doc("Additional arguments to pass to `ruff format --check`."),
         ] = None,
     ) -> str:
-        """Run ``ruff format --check`` and report unformatted files.
+        """Run `ruff format --check` and report unformatted files.
 
         Exits non-zero when files would be reformatted.
         """
@@ -45,7 +45,7 @@ class RuffFormatter:
         source: SourceDir,
         extra_args: Annotated[
             list[str] | None,
-            Doc("Additional arguments to pass to ``ruff format``."),
+            Doc("Additional arguments to pass to `ruff format`."),
         ] = None,
     ) -> dagger.Changeset:
         """Auto-format source files and return a Changeset."""

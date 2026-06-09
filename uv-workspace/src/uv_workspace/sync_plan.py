@@ -64,7 +64,7 @@ async def _discover_local_packages(
 
     Runs in-process with many glob calls against the Dagger API, so it gets its
     own span to surface the file-discovery phase as a node in the trace.
-    Returns ``(all_local, needed_local, flat_flags)``.
+    Returns `(all_local, needed_local, flat_flags)`.
     """
     with get_tracer().start_as_current_span("discover local packages") as span:
         all_local = await _filter_reachable(parse_local_packages(lock_data), workspace_path, source_dir)

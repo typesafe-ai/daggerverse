@@ -33,7 +33,7 @@ class Ruff:
         ] = None,
         version: Annotated[
             str | None,
-            Doc("Ruff image tag. Only used when ``ctr`` is not provided. Overrides auto-detection from source."),
+            Doc("Ruff image tag. Only used when `ctr` is not provided. Overrides auto-detection from source."),
         ] = None,
     ) -> "Ruff":
         if ctr is None:
@@ -52,10 +52,10 @@ class Ruff:
 
     @function
     def check(self) -> RuffChecker:
-        """Return the ruff linter (``ruff check``)."""
+        """Return the ruff linter (`ruff check`)."""
         return RuffChecker(ctr=self.ctr)
 
     @function
     def format(self) -> RuffFormatter:
-        """Return the ruff formatter (``ruff format``)."""
+        """Return the ruff formatter (`ruff format`)."""
         return RuffFormatter(ctr=self.ctr)

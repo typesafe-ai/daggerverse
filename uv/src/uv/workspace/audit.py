@@ -6,7 +6,7 @@ from dagger import Doc, dag, field, function, object_type
 
 @object_type
 class Audit:
-    """Runs ``uv audit`` for a single workspace in a given uv image."""
+    """Runs `uv audit` for a single workspace in a given uv image."""
 
     uv_lock: Annotated[
         dagger.File,
@@ -30,14 +30,14 @@ class Audit:
 
     @function
     async def run(self) -> None:
-        """Run ``uv audit --frozen`` for this workspace.
+        """Run `uv audit --frozen` for this workspace.
 
         Audits straight from the committed uv.lock without re-resolving against
-        package indexes (``--frozen``); vulnerability data comes from the public
+        package indexes (`--frozen`); vulnerability data comes from the public
         OSV service, so no index credentials are required. A failing audit
-        (non-zero exit, e.g. vulnerabilities found) raises ``dagger.ExecError``,
-        whose ``stdout``/``stderr`` carry uv's report; the runner folds that into
-        the trace error (see ``Uv.audit``).
+        (non-zero exit, e.g. vulnerabilities found) raises `dagger.ExecError`,
+        whose `stdout`/`stderr` carry uv's report; the runner folds that into
+        the trace error (see `Uv.audit`).
         """
         ctr = (
             dag.container()
