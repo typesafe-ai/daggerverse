@@ -10,6 +10,7 @@ from uv.utils import (
     is_excluded,
     minimal_compatible_version,
     normalize_exact_version,
+    parse_indices,
     parse_project_name,
     parse_pyvenv_cfg,
     parse_required_version_from_pyproject,
@@ -193,6 +194,42 @@ class TestFormatAuditFailure:
 
     def test_names_workspace_without_output(self):
         assert format_audit_failure(1, "", "", workspace="pkgs/app") == "uv audit failed for pkgs/app (exit code 1)"
+
+
+class TestParseIndices:
+    def test_pyproject_toml(self):
+        content = '[[tool.uv.index]]\nname = "pytorch"\nurl = "https://download.pytorch.org/whl/cpu"\n'
+        result = parse_indices(content)
+        assert result == [{"name": "pytorch", "url": "https://download.pytorch.org/whl/cpu", "publish_url": None}]
+
+    def test_uv_toml(self):
+        content = '[[index]]\nname = "internal"\nurl = "https://pypi.internal.dev/simple"\n'
+        result = parse_indices(content, uv_toml=True)
+        assert result == [{"name": "internal", "url": "https://pypi.internal.dev/simple", "publish_url": None}]
+
+    def test_publish_url(self):
+        content = '[[tool.uv.index]]\nname = "corp"\nurl = "https://corp.dev/simple"\npublish-url = "https://corp.dev/upload"\n'
+        result = parse_indices(content)
+        assert result == [{"name": "corp", "url": "https://corp.dev/simple", "publish_url": "https://corp.dev/upload"}]
+
+    def test_multiple_indices_sorted_by_name(self):
+        content = (
+            '[[tool.uv.index]]\nname = "zeta"\nurl = "https://z.dev"\n\n'
+            '[[tool.uv.index]]\nname = "alpha"\nurl = "https://a.dev"\n'
+        )
+        result = parse_indices(content)
+        assert [e["name"] for e in result] == ["alpha", "zeta"]
+
+    def test_skips_entries_without_name(self):
+        content = '[[tool.uv.index]]\nurl = "https://unnamed.dev"\n'
+        assert parse_indices(content) == []
+
+    def test_skips_entries_without_url(self):
+        content = '[[tool.uv.index]]\nname = "no-url"\n'
+        assert parse_indices(content) == []
+
+    def test_empty(self):
+        assert parse_indices('[project]\nname = "x"\n') == []
 
 
 class TestResolveSpecifier:

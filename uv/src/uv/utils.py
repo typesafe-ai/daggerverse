@@ -83,6 +83,24 @@ def parse_pyvenv_cfg(content: str) -> dict[str, str]:
     return result
 
 
+def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict[str, str | None]]:
+    """Extract ``[[tool.uv.index]]`` (or ``[[index]]`` in uv.toml) entries.
+
+    Returns dicts with ``name``, ``url``, and optional ``publish_url`` for each
+    index that declares at least a ``name`` and ``url``.
+    """
+    data = tomllib.loads(content)
+    raw = data.get("index", []) if uv_toml else data.get("tool", {}).get("uv", {}).get("index", [])
+    results: list[dict[str, str | None]] = []
+    for idx in raw:
+        name = idx.get("name")
+        url = idx.get("url")
+        if name and url:
+            results.append({"name": name, "url": url, "publish_url": idx.get("publish-url")})
+    results.sort(key=lambda e: e["name"] or "")
+    return results
+
+
 def parse_project_name(content: str) -> str | None:
     """The ``[project].name`` declared in pyproject.toml, if any.
 

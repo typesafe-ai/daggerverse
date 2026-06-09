@@ -19,12 +19,14 @@ from uv.utils import (
     _DEFAULT_VERSION,
     debian_image_ref,
     image_ref,
+    parse_indices,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
     resolve_specifier,
 )
 from uv.workspace.audit import Audit
 from uv.workspace.build import UvWorkspaceBuild
+from uv.workspace.index import UvIndex
 from uv.workspace.plan import UvSyncPlan
 from uv.workspace.venv import UvVenv
 
@@ -107,6 +109,21 @@ class UvWorkspaceSource:
         if ".python-version" not in await ws.entries():
             return None
         return (await ws.file(".python-version").contents()).strip()
+
+    @function
+    async def indices(self) -> list[UvIndex]:
+        """The package indices configured for this workspace.
+
+        Reads `[[index]]` from `uv.toml` when present, otherwise falls back
+        to `[[tool.uv.index]]` in `pyproject.toml` — matching uv's own
+        precedence (`uv.toml` overrides the entire `[tool.uv]` section).
+        """
+        uv_toml = await self._uv_toml()
+        if uv_toml is not None:
+            raw = parse_indices(await uv_toml.contents(), uv_toml=True)
+        else:
+            raw = parse_indices(await self._ws_dir().file("pyproject.toml").contents())
+        return [UvIndex(name=entry["name"], url=entry["url"], publish_url=entry["publish_url"]) for entry in raw]
 
     @function
     async def audit(
