@@ -12,6 +12,8 @@
 
     Build minimal containers, relocatable virtual environments, and run audit checks for [uv](https://docs.astral.sh/uv/)-managed Python projects. Monorepo-friendly.
 
+    ---
+
     [:octicons-book-16: Docs](./uv/) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/uv)
 
 -   ![ruff](assets/logos/ruff.svg){ .lg .middle style="width: 40px; height: 40px" } __ruff__
@@ -20,13 +22,17 @@
 
     Lint and format Python code with [Ruff](https://docs.astral.sh/ruff/).
 
-    [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/ruff)
+    ---
+
+    [:octicons-book-16: Docs](./ruff/) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/ruff)
 
 -   ![zizmor](assets/logos/zizmor.svg){ .lg .middle style="width: 40px; height: 40px" } __zizmor__
 
     ---
 
     Run the [zizmor](https://docs.zizmor.sh/) GitHub Actions security auditor with configurable fix modes.
+
+    ---
 
     [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/zizmor)
 
@@ -36,6 +42,8 @@
 
     Expose a [Twingate](https://www.twingate.com/) zero-trust network proxy as a Dagger service.
 
+    ---
+
     [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/twingate)
 
 -   :octicons-broadcast-16:{ .lg .middle } __github__
@@ -43,6 +51,8 @@
     ---
 
     GitHub utilities for Dagger pipelines. Includes a status monitor that polls commit statuses and check runs until a final verdict is reached.
+
+    ---
 
     [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/github)
 
