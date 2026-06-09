@@ -40,7 +40,7 @@ them:
 === "CLI"
 
     ```console
-    $ dagger call audit --exclude '**/tests/_packages/**'
+    $ dagger call uv audit --exclude '**/tests/_packages/**'
     ```
 
 === "Python SDK"
@@ -56,7 +56,7 @@ To audit a specific workspace, specify it by path:
 === "CLI"
 
     ```console
-    $ dagger call workspace --path services/api audit run
+    $ dagger call uv workspace --path services/api audit run
     ```
 
 === "Python SDK"

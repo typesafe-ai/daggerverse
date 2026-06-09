@@ -46,12 +46,6 @@ directly:
 $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
 ```
 
-Or try it out without the installation step:
-
-```console
-$ dagger -m github.com/typesafe-ai/daggerverse/uv call --source . audit
-```
-
 ## Quickstart
 
 === "CLI"
@@ -59,7 +53,7 @@ $ dagger -m github.com/typesafe-ai/daggerverse/uv call --source . audit
     Build a minimal container with a package and its local dependencies installed:
 
     ```console
-    $ dagger -m uv call --source . workspace install --package my-app
+    $ dagger call uv workspace install --package my-app
     ```
 
     Audit every workspace in the current directory:
@@ -79,13 +73,6 @@ $ dagger -m github.com/typesafe-ai/daggerverse/uv call --source . audit
     # Audit every workspace's locked dependencies.
     await dag.uv(source=src).audit()
     ```
-
-!!! tip "Passing `--source`"
-
-    When you call this module from another repository with `-m`, pass `--source .`
-    explicitly. Dagger resolves a default contextual directory relative to the
-    *module's* own location, not your working directory — so without `--source` you'd
-    be operating on the module's source instead of yours.
 
 ??? abstract "The mental model"
 

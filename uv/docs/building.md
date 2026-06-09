@@ -51,17 +51,30 @@ context yourself.
 === "CLI"
 
     ```console
-    $ dagger -m uv call --source . workspace install --package my-app
+    $ dagger call uv workspace install
     ```
 
 === "Python SDK"
 
     ```python
-    ctr = dag.uv(source=src).workspace().install(package=["my-app"])
+    ctr = dag.uv(source=src).workspace().install()
     ```
 
-What happens under the hood — each step is its own layer, ordered most-stable to
-most-volatile so the expensive work is cached across builds:
+Under the hood this is equivalent to:
+
+```python
+ctr = (
+    dag.uv(source=src)
+    .workspace()
+    .build()
+    .with_remote_dependencies()   # uv sync --no-install-local
+    .with_workspace_files()       # scaffold local package stubs
+    .with_local_dependencies()    # editable-install from stubs, then copy real source
+)
+```
+
+What happens at each step — each is its own layer, ordered most-stable to most-volatile
+so the expensive work is cached across builds:
 
 1. The workspace's `uv.lock` is parsed to find the **local** packages your target
    transitively depends on.
