@@ -41,7 +41,7 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger -m uv call --source . workspace build --package my-app --no-editable \
+    $ dagger call uv workspace build --package my-app --no-editable \
         with-venv --relocatable \
         with-remote-dependencies \
         copy-venv --container alpine --set-env-vars
