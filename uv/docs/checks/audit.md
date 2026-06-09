@@ -40,7 +40,7 @@ them:
 === "CLI"
 
     ```console
-    $ dagger -m uv call --source . audit --exclude '**/tests/_packages/**'
+    $ dagger call audit --exclude '**/tests/_packages/**'
     ```
 
 === "Python SDK"
@@ -51,13 +51,12 @@ them:
 
 ## Auditing a single workspace
 
-To audit just one workspace, select it by path first. The workspace figures out which
-`uv` version to run from its own `required-version`, so you normally don't pass anything:
+To audit a specific workspace, specify it by path:
 
 === "CLI"
 
     ```console
-    $ dagger -m uv call --source . workspace --path services/api audit run
+    $ dagger call workspace --path services/api audit run
     ```
 
 === "Python SDK"
