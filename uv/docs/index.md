@@ -9,12 +9,16 @@ description: A Dagger module for uv-managed Python monorepos — build a package
 A [Dagger](https://dagger.io) module for [`uv`](https://github.com/astral-sh/uv)-managed
 Python projects and workspaces.
 
-Its main job is **building a package out of a `uv` monorepo**. In a workspace, building
-one package means assembling the right context first: its local sibling dependencies
-have to be present and installed in the right order. This module reads your `uv.lock`,
-works out exactly which local workspace members the target needs, and prepares that
-build context for you — so a single call turns a package buried in a monorepo into a
-minimal, ready-to-run container.
+!!! note "API reference"
+
+    This site is a tutorial. The exact functions, arguments, and types are published
+    as generated reference documentation on the
+    [Daggerverse](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv).
+
+The main job of this module is **packaging selected packages from a `uv` workspace**.
+In a workspace, building one package means assembling the right context first: its local sibling dependencies have to be present and installed in the right order.
+
+This module reads your `uv.lock`, works out exactly which local workspace members the target needs, and prepares that build context for you — so a single call turns a package buried in a monorepo into a minimal, ready-to-run container.
 
 On top of that it can:
 
@@ -105,8 +109,4 @@ $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
 - [Building containers](building.md) — assemble a monorepo package's build context and install it.
 - [Virtual environments](virtual-environments.md) — export a portable, relocatable venv.
 - [Auditing dependencies](checks/audit.md) — scan locked dependencies for known vulnerabilities.
-
-!!! note "API reference"
-
-    This site is a tutorial. The exact functions, arguments, and types are published
-    as generated reference documentation on the Daggerverse.
+- [SDK reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv)
