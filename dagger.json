@@ -40,10 +40,6 @@
     {
       "name": "twingate",
       "source": "twingate"
-    },
-    {
-      "name": "uv-workspace",
-      "source": "uv-workspace"
     }
   ],
   "source": ".dagger"
