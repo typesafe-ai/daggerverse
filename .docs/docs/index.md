@@ -38,12 +38,12 @@
 
     [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/twingate)
 
--   :octicons-broadcast-16:{ .lg .middle } __github-status-monitor__
+-   :octicons-broadcast-16:{ .lg .middle } __github__
 
     ---
 
-    Poll GitHub commit statuses and check runs until a final verdict is reached.
+    GitHub utilities for Dagger pipelines. Includes a status monitor that polls commit statuses and check runs until a final verdict is reached.
 
-    [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/github-status-monitor)
+    [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/github)
 
 </div>

@@ -16,7 +16,7 @@ from collections.abc import Callable, Iterable, Mapping
 
 from rich.console import Console
 
-from github_status_monitor import render
+from github.status_monitor import render
 from .types import (
     FAILURE_STATES,
     MISSING,

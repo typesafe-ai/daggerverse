@@ -1,4 +1,4 @@
-"""Reusable annotated type aliases for github-status-monitor Dagger function parameters."""
+"""Reusable annotated type aliases for status-monitor Dagger function parameters."""
 
 from typing import Annotated, TypeAlias
 

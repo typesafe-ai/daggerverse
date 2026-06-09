@@ -6,8 +6,8 @@ from collections.abc import Iterable
 import pytest
 from rich.console import Console
 
-from github_status_monitor.types import MISSING, Status, Step, Verdict
-from github_status_monitor.watcher import Watcher
+from github.status_monitor.types import MISSING, Status, Step, Verdict
+from github.status_monitor.watcher import Watcher
 
 
 def make_console() -> Console:
