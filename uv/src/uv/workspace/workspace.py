@@ -234,6 +234,15 @@ class UvWorkspaceSource:
             uv_toml=await self._uv_toml(),
         )
 
+    @staticmethod
+    async def _has_uv(ctr: dagger.Container) -> bool:
+        """Check whether uv is on $PATH in the given container."""
+        with get_tracer().start_as_current_span("detect uv on PATH") as span:
+            exit_code = await ctr.with_exec(["sh", "-c", "command -v uv"], expect=dagger.ReturnType.ANY).exit_code()
+            found = exit_code == 0
+            span.set_attribute("uv.found", found)
+            return found
+
     async def _default_base_container(self) -> dagger.Container:
         """A Debian-based uv image pinned to this workspace's uv version.
 
@@ -263,6 +272,13 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
+        auto_install_uv: Annotated[
+            bool,
+            Doc(
+                "Automatically install the uv binary if it is not already on $PATH. "
+                "Set to False if your base_container already ships uv."
+            ),
+        ] = True,
     ) -> UvWorkspaceBuild:
         """Prepare a build for this workspace without installing anything yet.
 
@@ -274,11 +290,6 @@ class UvWorkspaceSource:
         Skip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)
         handles dependency installation.
         """
-        # Wrap the prep in a span so the trace shows what this phase resolved
-        # (the requested selection, the chosen base, and the computed plan)
-        # distinctly from the later install steps. No deps are installed here —
-        # this only resolves the plan (uv.lock parse, codegen, local-package
-        # discovery) and stages the base image + pyproject.toml/uv.lock.
         with get_tracer().start_as_current_span("prepare workspace build") as span:
             span.set_attribute("workspace.path", self.path)
             span.set_attribute("build.packages", package or [])
@@ -310,17 +321,18 @@ class UvWorkspaceSource:
                 plan.ws_dir.file("pyproject.toml"),
             ).with_file(posixpath.join(workdir, "uv.lock"), plan.ws_dir.file("uv.lock"))
 
-            # Stage the workspace's Python pin so `uv venv`/`uv sync` select the
-            # locked interpreter instead of falling back to `requires-python`.
             python_version = await self.python_version()
             if python_version:
                 ctr = ctr.with_new_file(posixpath.join(workdir, ".python-version"), python_version)
 
-            # `with_file`/`with_mounted_cache` are lazy; sync() inside the span so it
-            # captures the base pull + file staging rather than just plan resolution.
             ctr = await ctr.sync()
 
-            return UvWorkspaceBuild(container=ctr, plan=plan)
+            build = UvWorkspaceBuild(container=ctr, plan=plan)
+
+            if auto_install_uv and not await self._has_uv(ctr):
+                build = await build.with_uv(await self.uv_version())
+
+            return build
 
     @function
     async def install(
@@ -348,6 +360,13 @@ class UvWorkspaceSource:
             bool,
             Doc("When `venv` is set, make it relocatable (`uv venv --relocatable`)."),
         ] = False,
+        auto_install_uv: Annotated[
+            bool,
+            Doc(
+                "Automatically install the uv binary if it is not already on $PATH. "
+                "Set to False if your base_container already ships uv."
+            ),
+        ] = True,
     ) -> dagger.Container:
         """Build a minimal container with deps installed for the given package(s).
 
@@ -366,6 +385,7 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             dagger_codegen=dagger_codegen,
             no_editable=no_editable,
+            auto_install_uv=auto_install_uv,
         )
         if venv:
             b = await b.with_venv(relocatable=venv_relocatable)
@@ -388,6 +408,13 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
+        auto_install_uv: Annotated[
+            bool,
+            Doc(
+                "Automatically install the uv binary if it is not already on $PATH. "
+                "Set to False if your base_container already ships uv."
+            ),
+        ] = True,
     ) -> UvVenv:
         """Install into a relocatable venv and export it with the Python it links against.
 
@@ -407,6 +434,7 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             dagger_codegen=dagger_codegen,
             no_editable=no_editable,
+            auto_install_uv=auto_install_uv,
         )
         b = await b.with_venv(relocatable=True)
         b = await b.with_remote_dependencies()

@@ -474,6 +474,15 @@ class TypesafeDaggerverse:
             tg.start_soon(self.uv_workspace_build_self)
             tg.start_soon(self.uv_workspace_pytest_self)
             tg.start_soon(self.uv_workspace_build_partial_workspace)
+            tg.start_soon(self.uv_workspace_auto_install_uv)
+
+    @function
+    async def uv_workspace_auto_install_uv(self) -> None:
+        """Build with a base container that has no uv and verify auto_install_uv works."""
+        bare = dag.container().from_("debian:bookworm-slim").with_workdir("/workspace")
+        ctr = await self._workspace().install(package=["my-app"], base_container=bare)
+        uv_path = await ctr.with_exec(["which", "uv"]).stdout()
+        assert uv_path.strip() == "/uv/uv"
 
     @function
     async def uv_workspace_build_workspace(self) -> None:
