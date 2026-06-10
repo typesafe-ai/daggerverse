@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ["*/v[0-9]*"]
+
+env:
+  DAGGER_VERSION: "0.21.4"
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Extract module and version from tag
+        id: meta
+        run: |
+          echo "module=${GITHUB_REF_NAME%%/v*}" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#*/}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate changelog
+        id: changelog
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+        with:
+          config: cliff.toml
+          args: --current --strip header --include-path "${{ steps.meta.outputs.module }}/**/*"
+
+      - name: Install Dagger
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: ${{ env.DAGGER_VERSION }}
+          install-only: true
+
+      - name: Publish ${{ steps.meta.outputs.module }}
+        run: dagger publish -m "./${MODULE}"
+        env:
+          MODULE: ${{ steps.meta.outputs.module }}
+          DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          MODULE: ${{ steps.meta.outputs.module }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          BODY: ${{ steps.changelog.outputs.content }}
+        run: |
+          gh release create "${TAG}" \
+            --title "${MODULE} ${VERSION}" \
+            --notes "${BODY}"
