@@ -13,7 +13,6 @@ nav = [
 ]
 
 [project.theme]
-custom_dir = "overrides"
 features = [
   "content.action.edit",
   "content.code.copy",
@@ -34,6 +33,16 @@ toggle.name = "Switch to light mode"
 scheme = "default"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
+
+[[project.extra.social]]
+icon = "lucide/home"
+link = "https://typesafe-ai.github.io/daggerverse/"
+name = "Typesafe Daggerverse"
+
+[[project.extra.social]]
+icon = "lucide/blocks"
+link = "https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/ruff"
+name = "Daggerverse (SDK reference)"
 
 [project.markdown_extensions.admonition]
 [project.markdown_extensions.attr_list]
