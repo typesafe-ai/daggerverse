@@ -1,4 +1,7 @@
+import asyncio
 import posixpath
+import tomllib
+from pathlib import PurePosixPath
 from typing import Annotated
 
 import dagger
@@ -18,6 +21,7 @@ from uv.args import (
 from uv.utils import (
     _DEFAULT_VERSION,
     debian_image_ref,
+    extract_indices,
     image_ref,
     parse_indices,
     parse_required_version_from_pyproject,
@@ -26,7 +30,8 @@ from uv.utils import (
 )
 from uv.workspace.audit import Audit
 from uv.workspace.build import UvWorkspaceBuild
-from uv.workspace.index import UvIndex
+from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices
+from uv.workspace.package import UvPackageSource
 from uv.workspace.plan import UvSyncPlan
 from uv.workspace.venv import UvVenv
 
@@ -109,20 +114,94 @@ class UvWorkspaceSource:
             return None
         return (await ws.file(".python-version").contents()).strip()
 
+    @staticmethod
+    def _member_paths_from(pyproject_data: dict, all_pyprojects: list[str]) -> list[str]:
+        """Workspace member paths from pre-parsed pyproject.toml and a glob result."""
+        members_globs = pyproject_data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+        if not members_globs:
+            return []
+        return sorted(
+            d
+            for p in all_pyprojects
+            if (d := posixpath.dirname(p) or ".") != "." and any(PurePosixPath(d).full_match(g) for g in members_globs)
+        )
+
     @function
-    async def indices(self) -> list[UvIndex]:
+    async def indices(
+        self,
+        include_from_members: Annotated[
+            bool,
+            Doc(
+                "Merge indices from all workspace members' pyproject.toml files. "
+                "When True, member-level indices are included alongside "
+                "workspace-level indices (member entries win on name collision)."
+            ),
+        ] = False,
+    ) -> list[UvIndex]:
         """The package indices configured for this workspace.
 
         Reads `[[index]]` from `uv.toml` when present, otherwise falls back
         to `[[tool.uv.index]]` in `pyproject.toml` — matching uv's own
         precedence (`uv.toml` overrides the entire `[tool.uv]` section).
+
+        When `include_from_members` is set, also reads `[[tool.uv.index]]`
+        from every workspace member's `pyproject.toml` and merges them
+        (member entries take precedence on name collision).
         """
+        tracer = get_tracer()
+        ws = self._ws_dir()
+
         uv_toml = await self._uv_toml()
-        if uv_toml is not None:
-            raw = parse_indices(await uv_toml.contents(), uv_toml=True)
-        else:
-            raw = parse_indices(await self._ws_dir().file("pyproject.toml").contents())
-        return [UvIndex(name=entry["name"], url=entry["url"], publish_url=entry["publish_url"]) for entry in raw]
+        pyproject_data = tomllib.loads(await ws.file("pyproject.toml").contents())
+
+        with tracer.start_as_current_span("read workspace indices") as ws_span:
+            ws_span.set_attribute("workspace.path", self.path)
+            if uv_toml is not None:
+                ws_raw = parse_indices(await uv_toml.contents(), uv_toml=True)
+            else:
+                ws_raw = extract_indices(pyproject_data)
+            ws_span.set_attribute("indices.count", len(ws_raw))
+            ws_span.set_attribute("indices.names", [e["name"] for e in ws_raw])
+
+        if not include_from_members:
+            return dicts_to_indices(ws_raw)
+
+        member_paths = self._member_paths_from(pyproject_data, await ws.glob("**/pyproject.toml"))
+
+        async def _read_member(member_path: str) -> list[dict]:
+            with tracer.start_as_current_span(f"read member indices ({member_path})") as m_span:
+                content = await ws.directory(member_path).file("pyproject.toml").contents()
+                raw = parse_indices(content)
+                m_span.set_attribute("member.path", member_path)
+                m_span.set_attribute("indices.count", len(raw))
+                m_span.set_attribute("indices.names", [e["name"] for e in raw])
+                return raw
+
+        member_results = await asyncio.gather(*[_read_member(p) for p in member_paths])
+        member_raw = [e for r in member_results for e in r]
+
+        with tracer.start_as_current_span("merge indices") as merge_span:
+            merge_span.set_attribute("indices.workspace_count", len(ws_raw))
+            merge_span.set_attribute("indices.member_count", len(member_raw))
+            result = merge_indices(ws_raw, member_raw)
+            merge_span.set_attribute("indices.total", len(result))
+            merge_span.set_attribute("indices.names", [r.name for r in result])
+            return result
+
+    @function
+    def package(
+        self,
+        path: Annotated[
+            str,
+            Doc("Member package path relative to the workspace root."),
+        ],
+    ) -> UvPackageSource:
+        """A single member package within this workspace."""
+        return UvPackageSource(
+            source=self.source,
+            workspace_path=self.path,
+            package_path=path,
+        )
 
     @function
     async def audit(

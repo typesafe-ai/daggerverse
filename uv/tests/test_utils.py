@@ -19,6 +19,7 @@ from uv.utils import (
     resolve_specifier,
     workspace_path,
 )
+from uv.workspace.index import UvIndex, merge_indices
 
 
 class TestRequirePackageSelection:
@@ -200,17 +201,22 @@ class TestParseIndices:
     def test_pyproject_toml(self):
         content = '[[tool.uv.index]]\nname = "pytorch"\nurl = "https://download.pytorch.org/whl/cpu"\n'
         result = parse_indices(content)
-        assert result == [{"name": "pytorch", "url": "https://download.pytorch.org/whl/cpu", "publish_url": None}]
+        assert len(result) == 1
+        assert result[0]["name"] == "pytorch"
+        assert result[0]["url"] == "https://download.pytorch.org/whl/cpu"
+        assert result[0]["publish_url"] is None
 
     def test_uv_toml(self):
         content = '[[index]]\nname = "internal"\nurl = "https://pypi.internal.dev/simple"\n'
         result = parse_indices(content, uv_toml=True)
-        assert result == [{"name": "internal", "url": "https://pypi.internal.dev/simple", "publish_url": None}]
+        assert len(result) == 1
+        assert result[0]["name"] == "internal"
+        assert result[0]["url"] == "https://pypi.internal.dev/simple"
 
     def test_publish_url(self):
         content = '[[tool.uv.index]]\nname = "corp"\nurl = "https://corp.dev/simple"\npublish-url = "https://corp.dev/upload"\n'
         result = parse_indices(content)
-        assert result == [{"name": "corp", "url": "https://corp.dev/simple", "publish_url": "https://corp.dev/upload"}]
+        assert result[0]["publish_url"] == "https://corp.dev/upload"
 
     def test_multiple_indices_sorted_by_name(self):
         content = (
@@ -230,6 +236,123 @@ class TestParseIndices:
 
     def test_empty(self):
         assert parse_indices('[project]\nname = "x"\n') == []
+
+    def test_default_flag(self):
+        content = '[[tool.uv.index]]\nname = "corp"\nurl = "https://corp.dev"\ndefault = true\n'
+        result = parse_indices(content)
+        assert result[0]["default"] is True
+
+    def test_explicit_flag(self):
+        content = '[[tool.uv.index]]\nname = "corp"\nurl = "https://corp.dev"\nexplicit = true\n'
+        result = parse_indices(content)
+        assert result[0]["explicit"] is True
+
+    def test_authenticate(self):
+        content = '[[tool.uv.index]]\nname = "corp"\nurl = "https://corp.dev"\nauthenticate = "always"\n'
+        result = parse_indices(content)
+        assert result[0]["authenticate"] == "always"
+
+    def test_format_flat(self):
+        content = '[[tool.uv.index]]\nname = "local"\nurl = "file:///wheels"\nformat = "flat"\n'
+        result = parse_indices(content)
+        assert result[0]["format"] == "flat"
+
+    def test_defaults_for_optional_fields(self):
+        content = '[[tool.uv.index]]\nname = "plain"\nurl = "https://plain.dev"\n'
+        result = parse_indices(content)
+        assert result[0]["default"] is False
+        assert result[0]["explicit"] is False
+        assert result[0]["authenticate"] is None
+        assert result[0]["format"] is None
+
+
+class TestMergeIndices:
+    def test_base_only(self):
+        base = [{"name": "alpha", "url": "https://a.dev", "publish_url": None}]
+        result = merge_indices(base, [])
+        assert result == [UvIndex(name="alpha", url="https://a.dev", publish_url=None)]
+
+    def test_override_only(self):
+        override = [{"name": "beta", "url": "https://b.dev", "publish_url": None}]
+        result = merge_indices([], override)
+        assert result == [UvIndex(name="beta", url="https://b.dev", publish_url=None)]
+
+    def test_override_wins_on_name_collision(self):
+        base = [{"name": "corp", "url": "https://old.dev", "publish_url": None}]
+        override = [{"name": "corp", "url": "https://new.dev", "publish_url": "https://new.dev/upload"}]
+        result = merge_indices(base, override)
+        assert len(result) == 1
+        assert result[0].url == "https://new.dev"
+        assert result[0].publish_url == "https://new.dev/upload"
+
+    def test_disjoint_sets_merge_sorted(self):
+        base = [{"name": "zeta", "url": "https://z.dev", "publish_url": None}]
+        override = [{"name": "alpha", "url": "https://a.dev", "publish_url": None}]
+        result = merge_indices(base, override)
+        assert [r.name for r in result] == ["alpha", "zeta"]
+
+    def test_mixed_overlap_and_unique(self):
+        base = [
+            {"name": "alpha", "url": "https://a.dev", "publish_url": None},
+            {"name": "shared", "url": "https://old.dev", "publish_url": None},
+        ]
+        override = [
+            {"name": "beta", "url": "https://b.dev", "publish_url": None},
+            {"name": "shared", "url": "https://new.dev", "publish_url": None},
+        ]
+        result = merge_indices(base, override)
+        assert [r.name for r in result] == ["alpha", "beta", "shared"]
+        shared = next(r for r in result if r.name == "shared")
+        assert shared.url == "https://new.dev"
+
+    def test_empty_both(self):
+        assert merge_indices([], []) == []
+
+    def test_preserves_extra_fields(self):
+        base = [
+            {
+                "name": "corp",
+                "url": "https://corp.dev",
+                "publish_url": None,
+                "default": True,
+                "explicit": False,
+                "authenticate": "always",
+                "format": None,
+            }
+        ]
+        result = merge_indices(base, [])
+        assert result[0].default is True
+        assert result[0].authenticate == "always"
+
+    def test_override_replaces_all_fields(self):
+        base = [
+            {
+                "name": "corp",
+                "url": "https://old.dev",
+                "publish_url": None,
+                "default": False,
+                "explicit": False,
+                "authenticate": None,
+                "format": None,
+            }
+        ]
+        override = [
+            {
+                "name": "corp",
+                "url": "https://new.dev",
+                "publish_url": None,
+                "default": True,
+                "explicit": True,
+                "authenticate": "always",
+                "format": "flat",
+            }
+        ]
+        result = merge_indices(base, override)
+        assert result[0].url == "https://new.dev"
+        assert result[0].default is True
+        assert result[0].explicit is True
+        assert result[0].authenticate == "always"
+        assert result[0].format == "flat"
 
 
 class TestResolveSpecifier:
