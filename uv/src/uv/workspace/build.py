@@ -103,17 +103,57 @@ class UvWorkspaceBuild:
     async def with_python_install(
         self,
         version: Annotated[
-            str,
-            Doc("Python version to install via `uv python install` (e.g. `3.12`, `3.13.7`)."),
-        ],
+            str | None,
+            Doc("Python version to install (e.g. `3.12`, `3.13.7`). Omit to let uv auto-detect from requires-python."),
+        ] = None,
     ) -> "UvWorkspaceBuild":
-        """Install a managed Python via `uv python install`.
+        """Install a managed Python via `uv python install`."""
+        argv = ["uv", "python", "install"]
+        if version:
+            argv.append(version)
+        label = f"install python {version}" if version else "install python"
+        return await self._exec_step(label, argv, {"uv.python_version": version or "auto"})
 
-        Useful on a bare base with no system Python; pass the version the
-        workspace's `requires-python` resolves to.
+    @function
+    async def with_uv_env(self) -> "UvWorkspaceBuild":
+        """Configure uv environment variables for the build container.
+
+        Detects whether a `.venv` exists or a system/managed Python is used.
+        With a `.venv`: sets `UV_PROJECT_ENVIRONMENT`, `VIRTUAL_ENV`, and
+        prepends `.venv/bin` to `PATH`.
+        Without: sets `UV_PROJECT_ENVIRONMENT` to the Python prefix,
+        `UV_BREAK_SYSTEM_PACKAGES=1`, and prepends the Python `bin/` to `PATH`.
         """
-        argv = ["uv", "python", "install", version]
-        return await self._exec_step(f"install python {version}", argv, {"uv.python_version": version})
+        with get_tracer().start_as_current_span("configure uv environment") as span:
+            workdir = await self.container.workdir()
+            venv_path = posixpath.join(workdir, ".venv")
+            has_venv = (
+                await self.container.with_exec(
+                    ["sh", "-c", f"test -d {venv_path}"], expect=dagger.ReturnType.ANY
+                ).exit_code()
+            ) == 0
+            span.set_attribute("uv.has_venv", has_venv)
+
+            if has_venv:
+                span.set_attribute("uv.project_environment", venv_path)
+                ctr = (
+                    self.container.with_env_variable("UV_PROJECT_ENVIRONMENT", venv_path)
+                    .with_env_variable("VIRTUAL_ENV", venv_path)
+                    .with_env_variable("PATH", f"{venv_path}/bin:${{PATH}}", expand=True)
+                )
+            else:
+                python_path = (await self.container.with_exec(["uv", "python", "find"]).stdout()).strip()
+                python_bin_dir = posixpath.dirname(python_path)
+                prefix = posixpath.dirname(python_bin_dir)
+                span.set_attribute("uv.project_environment", prefix)
+                span.set_attribute("uv.python_bin_dir", python_bin_dir)
+                span.set_attribute("uv.break_system_packages", True)
+                ctr = (
+                    self.container.with_env_variable("UV_PROJECT_ENVIRONMENT", prefix)
+                    .with_env_variable("UV_BREAK_SYSTEM_PACKAGES", "1")
+                    .with_env_variable("PATH", f"{python_bin_dir}:${{PATH}}", expand=True)
+                )
+        return self.with_container(ctr)
 
     @function
     async def with_python_pin(

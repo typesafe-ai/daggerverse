@@ -243,6 +243,17 @@ class UvWorkspaceSource:
             span.set_attribute("uv.found", found)
             return found
 
+    @staticmethod
+    async def _has_python(ctr: dagger.Container) -> bool:
+        """Check whether python3 is on $PATH in the given container."""
+        with get_tracer().start_as_current_span("detect python on PATH") as span:
+            exit_code = await ctr.with_exec(
+                ["sh", "-c", "command -v python3 || command -v python"], expect=dagger.ReturnType.ANY
+            ).exit_code()
+            found = exit_code == 0
+            span.set_attribute("python.found", found)
+            return found
+
     async def _default_base_container(self) -> dagger.Container:
         """A Debian-based uv image pinned to this workspace's uv version.
 
@@ -277,6 +288,14 @@ class UvWorkspaceSource:
             Doc(
                 "Automatically install the uv binary if it is not already on $PATH. "
                 "Set to False if your base_container already ships uv."
+            ),
+        ] = True,
+        auto_install_python: Annotated[
+            bool,
+            Doc(
+                "Automatically install Python (via `uv python install`) if not already on $PATH, "
+                "and configure environment variables with `with_uv_env`. "
+                "Set to False if your base_container already has the Python you need."
             ),
         ] = True,
     ) -> UvWorkspaceBuild:
@@ -332,6 +351,9 @@ class UvWorkspaceSource:
             if auto_install_uv and not await self._has_uv(ctr):
                 build = await build.with_uv(await self.uv_version())
 
+            if auto_install_python and not await self._has_python(build.container):
+                build = await build.with_python_install(version=python_version)
+
             return build
 
     @function
@@ -367,6 +389,14 @@ class UvWorkspaceSource:
                 "Set to False if your base_container already ships uv."
             ),
         ] = True,
+        auto_install_python: Annotated[
+            bool,
+            Doc(
+                "Automatically install Python (via `uv python install`) if not already on $PATH, "
+                "and configure environment variables with `with_uv_env`. "
+                "Set to False if your base_container already has the Python you need."
+            ),
+        ] = True,
     ) -> dagger.Container:
         """Build a minimal container with deps installed for the given package(s).
 
@@ -386,9 +416,12 @@ class UvWorkspaceSource:
             dagger_codegen=dagger_codegen,
             no_editable=no_editable,
             auto_install_uv=auto_install_uv,
+            auto_install_python=auto_install_python,
         )
         if venv:
             b = await b.with_venv(relocatable=venv_relocatable)
+        if auto_install_python:
+            b = await b.with_uv_env()
         b = await b.with_remote_dependencies()
         b = await b.with_workspace_files()
         return await b.with_local_dependencies()
@@ -415,6 +448,14 @@ class UvWorkspaceSource:
                 "Set to False if your base_container already ships uv."
             ),
         ] = True,
+        auto_install_python: Annotated[
+            bool,
+            Doc(
+                "Automatically install Python (via `uv python install`) if not already on $PATH, "
+                "and configure environment variables with `with_uv_env`. "
+                "Set to False if your base_container already has the Python you need."
+            ),
+        ] = True,
     ) -> UvVenv:
         """Install into a relocatable venv and export it with the Python it links against.
 
@@ -435,6 +476,7 @@ class UvWorkspaceSource:
             dagger_codegen=dagger_codegen,
             no_editable=no_editable,
             auto_install_uv=auto_install_uv,
+            auto_install_python=auto_install_python,
         )
         b = await b.with_venv(relocatable=True)
         b = await b.with_remote_dependencies()
