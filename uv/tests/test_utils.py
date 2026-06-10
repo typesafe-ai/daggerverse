@@ -48,7 +48,7 @@ class TestImageRef:
 class TestDebianImageRef:
     def test_latest_resolves_to_pinned_version(self):
         # `latest` must not float — it maps to a concrete pinned version.
-        assert debian_image_ref("latest") == "ghcr.io/astral-sh/uv:0.11.18-debian"
+        assert debian_image_ref("latest") == "ghcr.io/astral-sh/uv:0.11.19-debian"
 
     def test_version_pinned(self):
         assert debian_image_ref("0.9.6") == "ghcr.io/astral-sh/uv:0.9.6-debian"

@@ -2,9 +2,10 @@ import posixpath
 from typing import Annotated
 
 import dagger
-from dagger import Doc, field, function, object_type
+from dagger import Doc, dag, field, function, object_type
 from dagger.telemetry import get_tracer
 
+from uv.utils import _DEFAULT_BASE_UV_VERSION, image_ref
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
 
@@ -38,6 +39,25 @@ class UvWorkspaceBuild:
             for key, value in attributes.items():
                 span.set_attribute(key, value)
             ctr = await self.container.with_exec(argv).sync()
+        return self.with_container(ctr)
+
+    @function
+    async def with_uv(
+        self,
+        version: Annotated[
+            str | None,
+            Doc("uv version to install. Defaults to the version detected from the workspace."),
+        ] = None,
+    ) -> "UvWorkspaceBuild":
+        """Copy the uv binary into the build container.
+
+        Useful when using a custom `base_container` that doesn't ship uv.
+        Copies the static binary from the official distroless image to `/uv/uv`
+        and prepends `/uv` to `$PATH`.
+        """
+        v = version or _DEFAULT_BASE_UV_VERSION
+        uv_bin = dag.container().from_(image_ref(v)).file("/uv")
+        ctr = self.container.with_file("/uv/uv", uv_bin).with_env_variable("PATH", "/uv:${PATH}", expand=True)
         return self.with_container(ctr)
 
     @function
