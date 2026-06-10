@@ -24,7 +24,7 @@
 
     ---
 
-    [:octicons-book-16: Docs](./ruff/) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/ruff)
+    [:octicons-book-16: Docs](./ruff/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/ruff) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/ruff)
 
 -   ![zizmor](assets/logos/zizmor.svg){ .lg .middle style="width: 40px; height: 40px" } __zizmor__
 

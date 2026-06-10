@@ -47,3 +47,7 @@ When you pass a `--source` directory the module auto-detects the ruff version fr
 3. `pyproject.toml` — `[tool.ruff].required-version`
 
 You can override this with `--version` or supply your own `--ctr`.
+
+## Where to go next
+
+- [SDK reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/ruff)
