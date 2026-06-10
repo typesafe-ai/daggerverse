@@ -14,7 +14,7 @@ _DEFAULT_VERSION = "latest"
 # Pinned uv version for the default Debian build base, so a workspace that
 # doesn't declare `required-version` builds on a fixed image instead of silently
 # floating to the latest uv release. Bump deliberately.
-_DEFAULT_BASE_UV_VERSION = "0.11.18"
+_DEFAULT_BASE_UV_VERSION = "0.11.19"
 
 _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
 
