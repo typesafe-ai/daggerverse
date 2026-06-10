@@ -83,22 +83,37 @@ def parse_pyvenv_cfg(content: str) -> dict[str, str]:
     return result
 
 
-def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict[str, str | None]]:
-    """Extract `[[tool.uv.index]]` (or `[[index]]` in uv.toml) entries.
+def extract_indices(data: dict, *, uv_toml: bool = False) -> list[dict]:
+    """Extract index entries from parsed TOML data.
 
-    Returns dicts with `name`, `url`, and optional `publish_url` for each
-    index that declares at least a `name` and `url`.
+    Reads `[[index]]` (uv.toml) or `[[tool.uv.index]]` (pyproject.toml).
+    Returns dicts with all recognised index fields for each entry that
+    declares at least a `name` and `url`.
     """
-    data = tomllib.loads(content)
     raw = data.get("index", []) if uv_toml else data.get("tool", {}).get("uv", {}).get("index", [])
-    results: list[dict[str, str | None]] = []
+    results: list[dict] = []
     for idx in raw:
         name = idx.get("name")
         url = idx.get("url")
         if name and url:
-            results.append({"name": name, "url": url, "publish_url": idx.get("publish-url")})
+            results.append(
+                {
+                    "name": name,
+                    "url": url,
+                    "publish_url": idx.get("publish-url"),
+                    "default": idx.get("default", False),
+                    "explicit": idx.get("explicit", False),
+                    "authenticate": idx.get("authenticate"),
+                    "format": idx.get("format"),
+                }
+            )
     results.sort(key=lambda e: e["name"] or "")
     return results
+
+
+def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict]:
+    """Convenience wrapper: parse TOML string then extract indices."""
+    return extract_indices(tomllib.loads(content), uv_toml=uv_toml)
 
 
 def parse_project_name(content: str) -> str | None:
