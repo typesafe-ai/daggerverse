@@ -11,6 +11,7 @@ in {
     pkgs.pinact
     pkgs.zizmor
     pkgs.prek
+    pkgs.git-cliff
     pkgs-unstable.uv
   ];
 }
