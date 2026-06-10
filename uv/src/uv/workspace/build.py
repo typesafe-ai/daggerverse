@@ -56,8 +56,13 @@ class UvWorkspaceBuild:
         and prepends `/uv` to `$PATH`.
         """
         v = version or _DEFAULT_BASE_UV_VERSION
-        uv_bin = dag.container().from_(image_ref(v)).file("/uv")
-        ctr = self.container.with_file("/uv/uv", uv_bin).with_env_variable("PATH", "/uv:${PATH}", expand=True)
+        with get_tracer().start_as_current_span("install uv binary") as span:
+            span.set_attribute("uv.version", v)
+            span.set_attribute("uv.image", image_ref(v))
+            uv_bin = dag.container().from_(image_ref(v)).file("/uv")
+            ctr = await (
+                self.container.with_file("/uv/uv", uv_bin).with_env_variable("PATH", "/uv:${PATH}", expand=True).sync()
+            )
         return self.with_container(ctr)
 
     @function

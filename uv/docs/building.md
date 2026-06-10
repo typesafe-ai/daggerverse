@@ -106,6 +106,9 @@ Provide your own base when you need system packages, private registry auth, or a
 specific platform — for example a musl/Alpine base. Whatever you pass determines the
 platform and libc of the resulting environment.
 
+!!! tip
+    If your custom base doesn't ship `uv`, the module auto-installs it from the official image (`auto_install_uv=True` by default) — or call `with_uv` explicitly in the pipeline.
+
 ## The pipeline — when you need control
 
 `install` is a convenience wrapper. When you need to do something *between* the steps, drive the pipeline yourself. `build` prepares the build without
