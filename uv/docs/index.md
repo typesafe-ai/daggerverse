@@ -72,7 +72,7 @@ $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
     from dagger import dag
 
     # Build a minimal container with a package and its local dependencies installed.
-    ctr = dag.uv(source=src).workspace().install(package=["my-app"])
+    ctr = dag.uv(source=src).workspace().build_container(package=["my-app"])
 
     # Audit every workspace's locked dependencies.
     await dag.uv(source=src).audit()
@@ -84,9 +84,9 @@ $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / get_workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
       WS -->|audit| A["Audit"]
-      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + sync plan)</i>"]
-      WS -->|install| C1["Container"]
-      B -->|with_local_dependencies / copy_venv| C2["Container"]
+      WS -->|builder| B["UvWorkspaceContainerBuilder<br/><i>(container + build plan)</i>"]
+      WS -->|build_container| C1["Container"]
+      B -->|with_local_sync / copy_venv| C2["Container"]
       B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
@@ -94,14 +94,14 @@ $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
       (`workspace`) or for every workspace it can find (`get_workspaces`), and run the
       aggregate `audit` check across all of them.
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it, `build` a container step by step, or
-      `install` everything in one call.
-    - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
-      plan. It exposes the individual pipeline steps so you can splice your own work in
+      you can read the required `uv` version, `audit` it, `builder` a container step by step, or
+      `build_container` everything in one call.
+    - **`UvWorkspaceContainerBuilder`** is an in-progress build: a container plus the resolved
+      build plan. It exposes the individual pipeline steps so you can splice your own work in
       between them, and can export the result as a container or a [`UvVenv`](virtual-environments.md).
 
     You don't have to learn every type up front — the convenience methods (`audit`,
-    `install`) cover the common cases, and you reach for the pipeline only when you need
+    `build_container`) cover the common cases, and you reach for the pipeline only when you need
     fine-grained control.
 
 ## Where to go next
