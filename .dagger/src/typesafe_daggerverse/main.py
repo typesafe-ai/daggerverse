@@ -94,7 +94,7 @@ class TypesafeDaggerverse:
     def _uv_self(self) -> "dagger.UvWorkspaceSource":
         """The uv module built against its own source.
 
-        uv is itself a Dagger module — `install()` detects the
+        uv is itself a Dagger module — `build_container()` detects the
         `dagger.json` and runs codegen so `sdk/` is materialized
         before `uv sync`.
         """
@@ -148,7 +148,11 @@ class TypesafeDaggerverse:
         the docs sources are supplied separately by `_zensical_site`.
         """
         src = self.source.directory(module)
-        ctr = await dag.uv(source=src).workspace().install(package=[module], base_container=_base(), group=["docs"])
+        ctr = (
+            await dag.uv(source=src)
+            .workspace()
+            .build_container(package=[module], base_container=_base(), group=["docs"])
+        )
         return await self._zensical_site(ctr, src)
 
     async def _landing(self) -> dagger.Directory:
@@ -159,7 +163,11 @@ class TypesafeDaggerverse:
         build path as the modules, just nothing to import.
         """
         src = self.source.directory(_LANDING_PROJECT)
-        ctr = await dag.uv(source=src).workspace().install(base_container=_base(), group=["docs"], dagger_codegen=False)
+        ctr = (
+            await dag.uv(source=src)
+            .workspace()
+            .build_container(base_container=_base(), group=["docs"], dagger_codegen=False)
+        )
         return await self._zensical_site(ctr, src)
 
     @function
@@ -337,7 +345,7 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_install_venv(self) -> None:
-        """`install` with `venv=True` creates a relocatable venv via `uv venv`, then syncs into it.
+        """`build_container` with `venv=True` creates a relocatable venv via `uv venv`, then syncs into it.
 
         Exercises the bare-image default (uv provisions Python), the `with_venv`
         step, and local-package scaffolding; then confirms deps import from the venv.
@@ -347,7 +355,7 @@ class TypesafeDaggerverse:
         out = await (
             dag.uv(source=src)
             .workspace()
-            .install(package=["my-app"], venv=True, venv_relocatable=True)
+            .build_container(package=["my-app"], venv=True, venv_relocatable=True)
             .with_exec(["uv", "run", "python", "-c", "import my_app, my_core; print('VENV_OK')"])
             .stdout()
         )
@@ -380,9 +388,9 @@ class TypesafeDaggerverse:
         out = await (
             dag.uv(source=src)
             .workspace()
-            .build(extra=["viz"])
+            .builder(extra=["viz"])
             .with_venv(relocatable=True)
-            .with_remote_dependencies()
+            .with_remote_sync()
             .copy_venv(base, set_env_vars=True)
             .with_exec(["python", "-c", "import tabulate; print('FRESH_VENV_OK')"])
             .stdout()
@@ -395,7 +403,7 @@ class TypesafeDaggerverse:
         """`no_editable=True` bakes real local-package *source* into site-packages.
 
         Regression test for the editable-only copy-last optimization in
-        `with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from
+        `with_local_sync`: under `no_editable`, `uv sync` builds wheels from
         whatever source is on disk at sync time, so real source must be copied in
         *before* the sync — otherwise the empty scaffold stubs get baked into
         site-packages. We export the venv into a fresh Python-less container (so
@@ -474,50 +482,52 @@ class TypesafeDaggerverse:
             tg.start_soon(self.uv_workspace_build_self)
             tg.start_soon(self.uv_workspace_pytest_self)
             tg.start_soon(self.uv_workspace_build_partial_workspace)
-            tg.start_soon(self.uv_workspace_auto_install_uv)
+            tg.start_soon(self.uv_workspace_ensure_uv)
 
     @function
-    async def uv_workspace_auto_install_uv(self) -> None:
-        """Build with a base container that has no uv and verify auto_install_uv works."""
+    async def uv_workspace_ensure_uv(self) -> None:
+        """Build with a base container that has no uv and verify ensure_uv works."""
         bare = dag.container().from_("debian:bookworm-slim").with_workdir("/workspace")
-        ctr = await self._workspace().install(package=["my-app"], base_container=bare)
+        ctr = await self._workspace().build_container(package=["my-app"], base_container=bare)
         uv_path = await ctr.with_exec(["which", "uv"]).stdout()
         assert uv_path.strip() == "/uv/uv"
 
     @function
     async def uv_workspace_build_workspace(self) -> None:
         """Build the multi-package fixture and verify every local package imports."""
-        ctr = await self._workspace().install(package=["my-app"], base_container=_base())
+        ctr = await self._workspace().build_container(package=["my-app"], base_container=_base())
         await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
 
     @function
     async def uv_workspace_build_full_workspace(self) -> None:
         """Build the full workspace (no package filter) and verify every local package imports."""
-        ctr = await self._workspace().install(all_packages=True, base_container=_base())
+        ctr = await self._workspace().build_container(all_packages=True, base_container=_base())
         await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
 
     @function
     async def uv_workspace_build_workspace_app(self) -> None:
         """Build a workspace where the target package is a flat app (no build-system)."""
-        ctr = await self._workspace_app().install(package=["my-app"], base_container=_base())
+        ctr = await self._workspace_app().build_container(package=["my-app"], base_container=_base())
         await ctr.with_exec(["python", "-c", "import my_lib, my_core"]).stdout()
 
     @function
     async def uv_workspace_build_workspace_flat(self) -> None:
         """Build a workspace where dependencies use flat layout (no src/ directory)."""
-        ctr = await self._workspace_flat().install(package=["my-app"], base_container=_base())
+        ctr = await self._workspace_flat().build_container(package=["my-app"], base_container=_base())
         await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
 
     @function
     async def uv_workspace_build_standalone(self) -> None:
         """Build the standalone fixture and verify it imports."""
-        ctr = await self._standalone().install(package=["standalone-app"], base_container=_base())
+        ctr = await self._standalone().build_container(package=["standalone-app"], base_container=_base())
         await ctr.with_exec(["python", "-c", "import standalone_app"]).stdout()
 
     @function
     async def uv_workspace_standalone_selective_extra(self) -> None:
         """`extra=['viz']` installs only the viz extra's deps, not other extras or groups."""
-        ctr = await self._standalone().install(package=["standalone-app"], base_container=_base(), extra=["viz"])
+        ctr = await self._standalone().build_container(
+            package=["standalone-app"], base_container=_base(), extra=["viz"]
+        )
         script = _assert_modules_script(
             present=["tabulate"],
             absent=["idna", "six", "packaging"],
@@ -527,7 +537,9 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_standalone_all_extras(self) -> None:
         """`all_extras=True` installs every extra but no groups."""
-        ctr = await self._standalone().install(package=["standalone-app"], base_container=_base(), all_extras=True)
+        ctr = await self._standalone().build_container(
+            package=["standalone-app"], base_container=_base(), all_extras=True
+        )
         script = _assert_modules_script(
             present=["tabulate", "idna"],
             absent=["six", "packaging"],
@@ -537,7 +549,9 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_standalone_selective_group(self) -> None:
         """`group=['docs']` installs only the docs group's deps, not other groups or extras."""
-        ctr = await self._standalone().install(package=["standalone-app"], base_container=_base(), group=["docs"])
+        ctr = await self._standalone().build_container(
+            package=["standalone-app"], base_container=_base(), group=["docs"]
+        )
         script = _assert_modules_script(
             present=["six"],
             absent=["packaging", "tabulate", "idna"],
@@ -547,7 +561,9 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_standalone_all_groups(self) -> None:
         """`all_groups=True` installs every group but no extras."""
-        ctr = await self._standalone().install(package=["standalone-app"], base_container=_base(), all_groups=True)
+        ctr = await self._standalone().build_container(
+            package=["standalone-app"], base_container=_base(), all_groups=True
+        )
         script = _assert_modules_script(
             present=["six", "packaging"],
             absent=["tabulate", "idna"],
@@ -557,7 +573,7 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_full_workspace_all_extras_all_groups(self) -> None:
         """Full workspace build with all extras (from my-app) and all groups (from root) installed."""
-        ctr = await self._workspace().install(
+        ctr = await self._workspace().build_container(
             all_packages=True, all_extras=True, all_groups=True, base_container=_base()
         )
         script = _assert_modules_script(
@@ -569,7 +585,7 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_build_self(self) -> None:
         """Build the uv module from its own source on a fresh tree."""
-        ctr = await self._uv_self().install(package=["uv"], base_container=_base())
+        ctr = await self._uv_self().build_container(package=["uv"], base_container=_base())
         await ctr.with_exec(["python", "-c", "import uv"]).stdout()
 
     @check
@@ -577,7 +593,7 @@ class TypesafeDaggerverse:
     async def github_pytest(self) -> None:
         """Run the github module's unit-test suite inside a freshly-built
         container."""
-        ctr = await self._github().install(package=["github"], base_container=_base(), all_groups=True)
+        ctr = await self._github().build_container(package=["github"], base_container=_base(), all_groups=True)
         workdir = await ctr.workdir()
         tests = self.source.directory("github").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
@@ -594,12 +610,12 @@ class TypesafeDaggerverse:
     async def uv_workspace_pytest_self(self) -> None:
         """Run the uv module's own pytest suite inside a freshly-built container.
 
-        `install()` only copies `src/` for each package (to keep layer
+        `build_container()` only copies `src/` for each package (to keep layer
         granularity tight). `tests/` has to be mounted explicitly so
         pytest can find them — without this, `pytest -q` collects nothing
         and exits with code 5 (NO_TESTS_COLLECTED).
         """
-        ctr = await self._uv_self().install(package=["uv"], base_container=_base(), all_groups=True)
+        ctr = await self._uv_self().build_container(package=["uv"], base_container=_base(), all_groups=True)
         workdir = await ctr.workdir()
         tests = self.source.directory("uv").directory("tests")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
@@ -676,7 +692,9 @@ class TypesafeDaggerverse:
         The missing dep (ext-pkg at ../../gone/ext-pkg) should be silently
         skipped. The present dep (my-dep at ../my-dep) should be installed.
         """
-        ctr = await self._partial_workspace().install(package=["sub-project"], base_container=_base(), group=["dev"])
+        ctr = await self._partial_workspace().build_container(
+            package=["sub-project"], base_container=_base(), group=["dev"]
+        )
         script = _assert_modules_script(
             present=["my_dep"],
             absent=["ext_pkg"],

@@ -121,8 +121,8 @@ class LocalPackage:
 
 
 @object_type
-class UvSyncPlan:
-    """Resolved build configuration for a uv workspace sync."""
+class UvBuildPlan:
+    """Resolved build configuration for a uv workspace build."""
 
     ws_dir: Annotated[
         dagger.Directory,
@@ -154,6 +154,11 @@ class UvSyncPlan:
         Doc("Local packages installed non-editable (source baked into site-packages, not path-linked)"),
     ] = field(default=False)
 
+    python_version: Annotated[
+        str | None,
+        Doc("Python version from the workspace's .python-version file, if any"),
+    ] = field(default=None)
+
     @classmethod
     async def create(
         cls,
@@ -167,6 +172,7 @@ class UvSyncPlan:
         all_packages: bool = False,
         dagger_codegen: bool = True,
         no_editable: bool = False,
+        python_version: str | None = None,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front."""
         ws_dir = source_dir if workspace_path == "." else source_dir.directory(workspace_path)
@@ -234,4 +240,5 @@ class UvSyncPlan:
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
             no_editable=no_editable,
+            python_version=python_version,
         )
