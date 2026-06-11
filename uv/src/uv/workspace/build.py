@@ -6,17 +6,17 @@ from dagger import Doc, dag, field, function, object_type
 from dagger.telemetry import get_tracer
 
 from uv.utils import _DEFAULT_BASE_UV_VERSION, image_ref
-from uv.workspace.plan import LocalPackage, UvSyncPlan
+from uv.workspace.plan import LocalPackage, UvBuildPlan
 from uv.workspace.venv import UvVenv
 
 
 @object_type
-class UvWorkspaceBuild:
-    """An in-progress workspace build: a container plus its resolved sync plan.
+class UvWorkspaceContainerBuilder:
+    """An in-progress workspace build: a container plus its resolved build plan.
 
-    Drives the install pipeline: `with_remote_dependencies` to install remote
-    deps, `with_workspace_files` to scaffold local packages, then
-    `with_local_dependencies` to install them.
+    Drives the install pipeline: `with_remote_sync` to install remote deps,
+    `with_local_sources` to scaffold local packages, then `with_local_sync`
+    to install them.
     """
 
     container: Annotated[
@@ -25,11 +25,13 @@ class UvWorkspaceBuild:
     ] = field()
 
     plan: Annotated[
-        UvSyncPlan,
+        UvBuildPlan,
         Doc("Build configuration carried through the pipeline"),
     ] = field()
 
-    async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> "UvWorkspaceBuild":
+    async def _exec_step(
+        self, span_name: str, argv: list[str], attributes: dict[str, object]
+    ) -> "UvWorkspaceContainerBuilder":
         """Run `argv` in the build container under a span, returning a new build with the result.
 
         `with_exec` is lazy; sync() inside the span so it captures the actual work
@@ -41,6 +43,15 @@ class UvWorkspaceBuild:
             ctr = await self.container.with_exec(argv).sync()
         return self.with_container(ctr)
 
+    @staticmethod
+    async def _has_uv(ctr: dagger.Container) -> bool:
+        """Check whether uv is on $PATH in the given container."""
+        with get_tracer().start_as_current_span("detect uv on PATH") as span:
+            exit_code = await ctr.with_exec(["sh", "-c", "command -v uv"], expect=dagger.ReturnType.ANY).exit_code()
+            found = exit_code == 0
+            span.set_attribute("uv.found", found)
+            return found
+
     @function
     async def with_uv(
         self,
@@ -48,7 +59,7 @@ class UvWorkspaceBuild:
             str | None,
             Doc("uv version to install. Defaults to the version detected from the workspace."),
         ] = None,
-    ) -> "UvWorkspaceBuild":
+    ) -> "UvWorkspaceContainerBuilder":
         """Copy the uv binary into the build container.
 
         Useful when using a custom `base_container` that doesn't ship uv.
@@ -66,7 +77,35 @@ class UvWorkspaceBuild:
         return self.with_container(ctr)
 
     @function
-    async def with_remote_dependencies(self) -> "UvWorkspaceBuild":
+    async def ensure_uv(
+        self,
+        version: Annotated[
+            str | None,
+            Doc("uv version to install if missing. Defaults to the version detected from the workspace."),
+        ] = None,
+    ) -> "UvWorkspaceContainerBuilder":
+        """Install the uv binary only if it is not already on $PATH.
+
+        Checks for an existing uv and skips installation when found. Otherwise
+        delegates to `with_uv` to copy the binary from the official image.
+        """
+        if await self._has_uv(self.container):
+            return self
+        return await self.with_uv(version)
+
+    @function
+    async def ensure_python(self) -> "UvWorkspaceContainerBuilder":
+        """Install the workspace's pinned Python if `.python-version` was declared.
+
+        Runs `uv python install <version>` when the build plan carries a
+        `.python-version` pin. No-op when no pin is declared.
+        """
+        if not self.plan.python_version:
+            return self
+        return await self.with_python_install(self.plan.python_version)
+
+    @function
+    async def with_remote_sync(self) -> "UvWorkspaceContainerBuilder":
         """Install remote (non-local) dependencies via `uv sync --no-install-local`.
 
         Skip this step when another tool (e.g. `pulumi install`) handles
@@ -86,7 +125,7 @@ class UvWorkspaceBuild:
             list[str] | None,
             Doc("Additional arguments passed through to `uv venv` (e.g. `--python`, `--seed`)."),
         ] = None,
-    ) -> "UvWorkspaceBuild":
+    ) -> "UvWorkspaceContainerBuilder":
         """Create the project virtual environment with `uv venv`.
 
         Run before the install steps so the subsequent `uv sync` populates this
@@ -100,13 +139,47 @@ class UvWorkspaceBuild:
         return await self._exec_step("create virtual environment", argv, {"uv.venv_args": argv})
 
     @function
+    async def with_system_env(self) -> "UvWorkspaceContainerBuilder":
+        """Configure uv to install into the system Python environment instead of a venv.
+
+        Discovers the system site-packages directory and the Python binary location,
+        then sets `UV_PROJECT_ENVIRONMENT` to that path, `UV_BREAK_SYSTEM_PACKAGES=1`,
+        and prepends the Python `bin/` directory to `$PATH`.
+
+        Use instead of `with_venv()` when packages should be installed system-wide
+        (e.g. in a container image where a venv adds no value).
+        Requires Python to be available in the container (run after `ensure_python`).
+        """
+        with get_tracer().start_as_current_span("configure system environment") as span:
+            site_packages = (
+                await self.container.with_exec(
+                    ["python3", "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+                ).stdout()
+            ).strip()
+            python_bin = (
+                await self.container.with_exec(
+                    ["python3", "-c", "import sys, os; print(os.path.dirname(sys.executable))"],
+                ).stdout()
+            ).strip()
+            span.set_attribute("uv.project_environment", site_packages)
+            span.set_attribute("python.bin_dir", python_bin)
+
+            ctr = await (
+                self.container.with_env_variable("UV_PROJECT_ENVIRONMENT", site_packages)
+                .with_env_variable("UV_BREAK_SYSTEM_PACKAGES", "1")
+                .with_env_variable("PATH", f"{python_bin}:${{PATH}}", expand=True)
+                .sync()
+            )
+        return self.with_container(ctr)
+
+    @function
     async def with_python_install(
         self,
         version: Annotated[
             str,
             Doc("Python version to install via `uv python install` (e.g. `3.12`, `3.13.7`)."),
         ],
-    ) -> "UvWorkspaceBuild":
+    ) -> "UvWorkspaceContainerBuilder":
         """Install a managed Python via `uv python install`.
 
         Useful on a bare base with no system Python; pass the version the
@@ -122,7 +195,7 @@ class UvWorkspaceBuild:
             str,
             Doc("Python version to pin via `uv python pin` (writes a `.python-version` file)."),
         ],
-    ) -> "UvWorkspaceBuild":
+    ) -> "UvWorkspaceContainerBuilder":
         """Pin the project's Python with `uv python pin` (writes `.python-version`).
 
         Makes subsequent `uv venv`/`uv sync` select this exact version.
@@ -136,8 +209,8 @@ class UvWorkspaceBuild:
 
         Bundles the venv and the exact interpreter it links against into a
         `UvVenv` (see `UvVenv.create`). Call after the venv is populated (e.g.
-        after `with_remote_dependencies`/`with_local_dependencies`). Requires a
-        relocatable venv built against a uv-managed Python; raises otherwise.
+        after `with_remote_sync`/`with_local_sync`). Requires a relocatable venv
+        built against a uv-managed Python; raises otherwise.
         """
         workdir = await self.container.workdir()
         return await UvVenv.create(self.container, posixpath.join(workdir, ".venv"))
@@ -205,18 +278,18 @@ class UvWorkspaceBuild:
             return await ctr.sync()
 
     @function
-    async def with_workspace_files(self) -> "UvWorkspaceBuild":
+    async def with_local_sources(self) -> "UvWorkspaceContainerBuilder":
         """Scaffold needed local package stubs (pyproject.toml + empty src/) into the container."""
         workdir = await self.container.workdir()
         ctr = await self._scaffold(self.plan.needed_local, workdir, "scaffold local dependencies")
-        return UvWorkspaceBuild(container=ctr, plan=self.plan)
+        return UvWorkspaceContainerBuilder(container=ctr, plan=self.plan)
 
     @function
-    async def with_all_workspace_members(self) -> "UvWorkspaceBuild":
-        """Like with_workspace_files but scaffolds every local package, not just transitive deps."""
+    async def with_all_workspace_members(self) -> "UvWorkspaceContainerBuilder":
+        """Like with_local_sources but scaffolds every local package, not just transitive deps."""
         workdir = await self.container.workdir()
         ctr = await self._scaffold(self.plan.all_local, workdir, "scaffold all workspace members")
-        return UvWorkspaceBuild(container=ctr, plan=self.plan)
+        return UvWorkspaceContainerBuilder(container=ctr, plan=self.plan)
 
     @function
     def with_container(
@@ -225,9 +298,9 @@ class UvWorkspaceBuild:
             dagger.Container,
             Doc("Replacement container (e.g. after installing non-Python packages)"),
         ],
-    ) -> "UvWorkspaceBuild":
-        """Return a new UvWorkspaceBuild with a different container but the same plan."""
-        return UvWorkspaceBuild(container=container, plan=self.plan)
+    ) -> "UvWorkspaceContainerBuilder":
+        """Return a new builder with a different container but the same plan."""
+        return UvWorkspaceContainerBuilder(container=container, plan=self.plan)
 
     def _copy_package(self, ctr: dagger.Container, workdir: str, pkg: LocalPackage) -> dagger.Container:
         """Copy a single local package's real source into the container."""
@@ -264,16 +337,14 @@ class UvWorkspaceBuild:
         """Run the plan's `uv sync` to install the local members, under a span."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
-            # `with_exec` is lazy; sync() inside the span so it captures the actual
-            # install rather than just the query-graph construction.
             return await ctr.with_exec(self.plan.uv_sync_args).sync()
 
     @function
-    async def with_local_dependencies(self) -> dagger.Container:
+    async def with_local_sync(self) -> "UvWorkspaceContainerBuilder":
         """Install the scaffolded local packages, copying their real source at the right time.
 
         For **editable** installs (the default), run `uv sync` against the package
-        stubs from `with_workspace_files`, then copy real source over the stubs last.
+        stubs from `with_local_sources`, then copy real source over the stubs last.
         Editable installs are path links, so the source goes live without a re-sync —
         meaning source-only changes don't invalidate the cached install layer.
 
@@ -285,9 +356,8 @@ class UvWorkspaceBuild:
         workdir = await self.container.workdir()
         if self.plan.no_editable:
             ctr = await self._copy_sources(self.container, workdir)
-            return await self._sync_local(ctr)
-        ctr = await self._sync_local(self.container)
-        # Copy real source last: the editable installs above already point at these
-        # paths, so the code goes live with no re-sync — keeping the install layer
-        # cached across source-only changes.
-        return await self._copy_sources(ctr, workdir)
+            ctr = await self._sync_local(ctr)
+        else:
+            ctr = await self._sync_local(self.container)
+            ctr = await self._copy_sources(ctr, workdir)
+        return self.with_container(ctr)
