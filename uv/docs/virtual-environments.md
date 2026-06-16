@@ -22,9 +22,9 @@ so the subsequent `uv sync` populates that relocatable environment:
 b = (
     dag.uv(source=src)
     .workspace()
-    .build(package=["my-app"], no_editable=True)
+    .builder(package=["my-app"], no_editable=True)
     .with_venv(relocatable=True)  # uv venv --relocatable
-    .with_remote_dependencies()   # sync installs into the relocatable venv
+    .with_remote_sync()           # sync installs into the relocatable venv
 )
 ```
 
@@ -41,9 +41,9 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger call uv workspace build --package my-app --no-editable \
+    $ dagger call uv workspace builder --package my-app --no-editable \
         with-venv --relocatable \
-        with-remote-dependencies \
+        with-remote-sync \
         copy-venv --container alpine --set-env-vars
     ```
 
@@ -53,9 +53,9 @@ paths the venv expects:
     runner = (
         dag.uv(source=src)
         .workspace()
-        .build(package=["my-app"], no_editable=True)
+        .builder(package=["my-app"], no_editable=True)
         .with_venv(relocatable=True)
-        .with_remote_dependencies()
+        .with_remote_sync()
         .copy_venv(dag.container().from_("debian:bookworm-slim"), set_env_vars=True)
     )
     ```
@@ -64,7 +64,7 @@ paths the venv expects:
 
     By default `uv` installs your workspace's own packages **editable**: their
     `.pth` entries point back at the source tree, which does not exist at the target container.
-    Use `build(..., no_editable=True)` to bake the local sources into `site-packages` instead.
+    Use `builder(..., no_editable=True)` to bake the local sources into `site-packages` instead.
 
 `copy_venv` mounts the venv at `.venv` (relative to the target's working directory by
 default) and, with `set_env_vars`, exports `VIRTUAL_ENV` and prepends the venv's `bin/`

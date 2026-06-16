@@ -121,13 +121,23 @@ class LocalPackage:
 
 
 @object_type
-class UvSyncPlan:
-    """Resolved build configuration for a uv workspace sync."""
+class UvBuildPlan:
+    """Resolved build configuration for a uv workspace build."""
 
     ws_dir: Annotated[
         dagger.Directory,
         Doc("Resolved workspace directory (with codegen overlay if applicable)"),
     ] = field()
+
+    source_dir: Annotated[
+        dagger.Directory,
+        Doc("Full source directory (with codegen overlay if applicable)"),
+    ] = field()
+
+    workspace_path: Annotated[
+        str,
+        Doc("Workspace path within the source directory"),
+    ] = field(default=".")
 
     all_local: Annotated[
         list[LocalPackage],
@@ -154,6 +164,11 @@ class UvSyncPlan:
         Doc("Local packages installed non-editable (source baked into site-packages, not path-linked)"),
     ] = field(default=False)
 
+    python_version: Annotated[
+        str | None,
+        Doc("Python version from the workspace's .python-version file, if any"),
+    ] = field(default=None)
+
     @classmethod
     async def create(
         cls,
@@ -167,6 +182,7 @@ class UvSyncPlan:
         all_packages: bool = False,
         dagger_codegen: bool = True,
         no_editable: bool = False,
+        python_version: str | None = None,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front."""
         ws_dir = source_dir if workspace_path == "." else source_dir.directory(workspace_path)
@@ -207,7 +223,8 @@ class UvSyncPlan:
         # lives at the package root, with no src/ or module dir to copy).
         flat_packages: list[str] = []
         for name, pkg_path in all_local.items():
-            pkg_toml = tomllib.loads(await ws_dir.file(posixpath.join(pkg_path, "pyproject.toml")).contents())
+            resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
+            pkg_toml = tomllib.loads(await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents())
             if "build-system" not in pkg_toml:
                 flat_packages.append(name)
 
@@ -229,9 +246,12 @@ class UvSyncPlan:
 
         return cls(
             ws_dir=ws_dir,
+            source_dir=source_dir,
+            workspace_path=workspace_path,
             all_local=to_pkgs(all_local),
             needed_local=to_pkgs(needed_local),
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
             no_editable=no_editable,
+            python_version=python_version,
         )

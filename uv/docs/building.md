@@ -24,9 +24,9 @@ context yourself.
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / get_workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
       WS -->|audit| A["Audit"]
-      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + sync plan)</i>"]
-      WS -->|install| C1["Container"]
-      B -->|with_local_dependencies / copy_venv| C2["Container"]
+      WS -->|builder| B["UvWorkspaceContainerBuilder<br/><i>(container + build plan)</i>"]
+      WS -->|build_container| C1["Container"]
+      B -->|with_local_sync / copy_venv| C2["Container"]
       B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
@@ -34,30 +34,30 @@ context yourself.
       (`workspace`) or for every workspace it can find (`get_workspaces`), and run the
       aggregate `audit` check across all of them.
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it, `build` a container step by step, or
-      `install` everything in one call.
-    - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
-      plan. It exposes the individual pipeline steps so you can splice your own work in
+      you can read the required `uv` version, `audit` it, `builder` a container step by step, or
+      `build_container` everything in one call.
+    - **`UvWorkspaceContainerBuilder`** is an in-progress build: a container plus the resolved
+      build plan. It exposes the individual pipeline steps so you can splice your own work in
       between them, and can export the result as a container or a [`UvVenv`](virtual-environments.md).
 
     You don't have to learn every type up front — the convenience methods (`audit`,
-    `install`) cover the common cases, and you reach for the pipeline only when you need
+    `build_container`) cover the common cases, and you reach for the pipeline only when you need
     fine-grained control.
 
-## `install` — the one-call path
+## `build_container` — the one-call path
 
-`install` builds a container with everything a package needs:
+`build_container` builds a container with everything a package needs:
 
 === "CLI"
 
     ```console
-    $ dagger call uv workspace install
+    $ dagger call uv workspace build-container
     ```
 
 === "Python SDK"
 
     ```python
-    ctr = dag.uv(source=src).workspace().install()
+    ctr = dag.uv(source=src).workspace().build_container()
     ```
 
 Under the hood this is equivalent to:
@@ -66,10 +66,12 @@ Under the hood this is equivalent to:
 ctr = (
     dag.uv(source=src)
     .workspace()
-    .build()
-    .with_remote_dependencies()   # uv sync --no-install-local
-    .with_workspace_files()       # scaffold local package stubs
-    .with_local_dependencies()    # editable-install from stubs, then copy real source
+    .builder()
+    .with_system_env()                # configure system Python environment
+    .with_remote_sync()               # uv sync --no-install-local
+    .with_local_sources()             # scaffold local package stubs
+    .with_local_sync()                # editable-install from stubs, then copy real source
+    .container
 )
 ```
 
@@ -93,10 +95,10 @@ package** — the one declared at the workspace root. To install every member of
 workspace instead, ask for all packages.
 
 !!! note
-    By default there is no `.venv` created and the system environment is used instead.
-    Set `venv=True` to create a `.venv` in the workspace root.
-    Also, see [virtual environments](./virtual-environments.md) to learn how to produce a virtual environment
-    for multi-staged builds with this module.
+    By default `build_container` installs into the system Python environment
+    (`with_system_env`). Set `venv=True` to create a `.venv` in the workspace root
+    instead. Also, see [virtual environments](./virtual-environments.md) to learn how
+    to produce a virtual environment for multi-staged builds with this module.
 
 ### Choosing a base image
 
@@ -107,25 +109,27 @@ specific platform — for example a musl/Alpine base. Whatever you pass determin
 platform and libc of the resulting environment.
 
 !!! tip
-    If your custom base doesn't ship `uv`, the module auto-installs it from the official image (`auto_install_uv=True` by default) — or call `with_uv` explicitly in the pipeline.
+    If your custom base doesn't ship `uv`, the module auto-installs it (`ensure_uv=True` by default) — or call `with_uv` explicitly in the pipeline.
 
 ## The pipeline — when you need control
 
-`install` is a convenience wrapper. When you need to do something *between* the steps, drive the pipeline yourself. `build` prepares the build without
-installing anything and hands back a `UvWorkspaceBuild`; you then call the steps in
+`build_container` is a convenience wrapper. When you need to do something *between* the steps, drive the pipeline yourself. `builder` prepares the build without
+installing anything and hands back a `UvWorkspaceContainerBuilder`; you then call the steps in
 order:
 
 ```python
-b = dag.uv(source=src).workspace().build(package=["my-app"])
-b = b.with_remote_dependencies()      # uv sync --no-install-local
+b = dag.uv(source=src).workspace().builder(package=["my-app"])
+b = b.with_system_env()                  # or with_venv() for a venv
+b = b.with_remote_sync()                 # uv sync --no-install-local
 # ... run your own step here, e.g. `pulumi install` ...
-b = b.with_workspace_files()          # scaffold local package stubs
-ctr = b.with_local_dependencies()     # editable-install from stubs, then copy real source last
+b = b.with_local_sources()               # scaffold local package stubs
+b = b.with_local_sync()                  # editable-install from stubs, then copy real source last
+ctr = b.container
 ```
 
-Each step returns a new `UvWorkspaceBuild` (or, at the end, a `Container`), so the
-chain reads top to bottom. You can also swap in a different container mid-pipeline
-(for instance after installing OS packages) and keep the same resolved plan.
+Each step returns a new `UvWorkspaceContainerBuilder`, so the chain reads top to bottom.
+You can also swap in a different container mid-pipeline (for instance after installing OS
+packages) and keep the same resolved plan.
 
 ## Dagger modules as dependencies
 
