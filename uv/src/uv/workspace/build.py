@@ -167,19 +167,21 @@ class UvWorkspaceBuild:
 
     def _scaffold_package(self, ctr: dagger.Container, workdir: str, pkg: LocalPackage) -> dagger.Container:
         """Scaffold a single package stub (pyproject.toml + README + empty module)."""
+        resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
+        ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
         ctr = ctr.with_file(
-            posixpath.join(workdir, pkg.path, "pyproject.toml"),
-            self.plan.ws_dir.file(posixpath.join(pkg.path, "pyproject.toml")),
+            posixpath.join(ctr_base, "pyproject.toml"),
+            self.plan.source_dir.file(posixpath.join(resolved, "pyproject.toml")),
         )
         if pkg.name in self.plan.flat_packages:
             return ctr
         src_name = pkg.module
-        ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, "README.md"), "")
+        ctr = ctr.with_new_file(posixpath.join(ctr_base, "README.md"), "")
         if pkg.flat:
-            ctr = ctr.with_new_file(posixpath.join(workdir, pkg.path, src_name, "__init__.py"), "")
+            ctr = ctr.with_new_file(posixpath.join(ctr_base, src_name, "__init__.py"), "")
         else:
             ctr = ctr.with_new_file(
-                posixpath.join(workdir, pkg.path, "src", src_name, "__init__.py"),
+                posixpath.join(ctr_base, "src", src_name, "__init__.py"),
                 "",
             )
         return ctr
@@ -231,16 +233,18 @@ class UvWorkspaceBuild:
 
     def _copy_package(self, ctr: dagger.Container, workdir: str, pkg: LocalPackage) -> dagger.Container:
         """Copy a single local package's real source into the container."""
+        resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
+        ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
         if pkg.flat:
             src_name = pkg.module
             ctr = ctr.with_directory(
-                posixpath.join(workdir, pkg.path, src_name),
-                self.plan.ws_dir.directory(posixpath.join(pkg.path, src_name)),
+                posixpath.join(ctr_base, src_name),
+                self.plan.source_dir.directory(posixpath.join(resolved, src_name)),
             )
         else:
             ctr = ctr.with_directory(
-                posixpath.join(workdir, pkg.path, "src"),
-                self.plan.ws_dir.directory(posixpath.join(pkg.path, "src")),
+                posixpath.join(ctr_base, "src"),
+                self.plan.source_dir.directory(posixpath.join(resolved, "src")),
             )
         return ctr
 

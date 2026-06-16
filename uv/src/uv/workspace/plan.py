@@ -129,6 +129,16 @@ class UvSyncPlan:
         Doc("Resolved workspace directory (with codegen overlay if applicable)"),
     ] = field()
 
+    source_dir: Annotated[
+        dagger.Directory,
+        Doc("Full source directory (with codegen overlay if applicable)"),
+    ] = field()
+
+    workspace_path: Annotated[
+        str,
+        Doc("Workspace path within the source directory"),
+    ] = field(default=".")
+
     all_local: Annotated[
         list[LocalPackage],
         Doc("Every local package in the workspace (sorted by name)"),
@@ -207,7 +217,8 @@ class UvSyncPlan:
         # lives at the package root, with no src/ or module dir to copy).
         flat_packages: list[str] = []
         for name, pkg_path in all_local.items():
-            pkg_toml = tomllib.loads(await ws_dir.file(posixpath.join(pkg_path, "pyproject.toml")).contents())
+            resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
+            pkg_toml = tomllib.loads(await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents())
             if "build-system" not in pkg_toml:
                 flat_packages.append(name)
 
@@ -229,6 +240,8 @@ class UvSyncPlan:
 
         return cls(
             ws_dir=ws_dir,
+            source_dir=source_dir,
+            workspace_path=workspace_path,
             all_local=to_pkgs(all_local),
             needed_local=to_pkgs(needed_local),
             flat_packages=flat_packages,

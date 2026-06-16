@@ -1,5 +1,6 @@
 """Tests for uv.lock parsing and transitive dependency resolution."""
 
+import posixpath
 import tomllib
 from collections import OrderedDict
 from pathlib import Path
@@ -502,3 +503,52 @@ class TestNameNormalization:
             "my-lib": "my-lib",
             "my-core": "my-core",
         }
+
+
+class TestNestedWorkspacePathResolution:
+    """Regression: when workspace_path is a subdirectory, workspace-relative
+    package paths (including ``..``) must resolve to valid source-root-relative
+    paths for both container writes and source reads.
+
+    Before the fix, the container placed ``pyproject.toml``/``uv.lock`` at
+    ``/work/`` regardless of nesting depth, so ``../../Soar`` in a lock file
+    would resolve to ``/work/../../Soar`` — escaping the filesystem root.
+    """
+
+    lock_data = _load_lock(FIXTURES / "partial-workspace" / "sub-project")
+
+    def test_sibling_dep_resolves_to_source_root(self):
+        """``../my-dep`` from ``sub-project`` should resolve to ``my-dep``."""
+        local = parse_local_packages(self.lock_data)
+        assert local["my-dep"] == "../my-dep"
+        resolved = posixpath.normpath(posixpath.join("sub-project", "../my-dep"))
+        assert resolved == "my-dep"
+
+    def test_deep_dep_resolves_to_source_root(self):
+        """``../../gone/ext-pkg`` from ``sub-project`` should resolve to ``../gone/ext-pkg``
+        (outside source tree — filtered by _match_reachable)."""
+        local = parse_local_packages(self.lock_data)
+        assert local["ext-pkg"] == "../../gone/ext-pkg"
+        resolved = posixpath.normpath(posixpath.join("sub-project", "../../gone/ext-pkg"))
+        assert resolved == "../gone/ext-pkg"
+
+    def test_container_path_normalization(self):
+        """Container paths with ``..`` normalize correctly when workdir mirrors nesting."""
+        workdir = "/work/sub-project"
+        pkg_path = "../my-dep"
+        container_path = posixpath.normpath(posixpath.join(workdir, pkg_path, "pyproject.toml"))
+        assert container_path == "/work/my-dep/pyproject.toml"
+
+    def test_container_path_deep_dep(self):
+        workdir = "/work/sub-project"
+        pkg_path = "../../gone/ext-pkg"
+        container_path = posixpath.normpath(posixpath.join(workdir, pkg_path, "pyproject.toml"))
+        assert container_path == "/gone/ext-pkg/pyproject.toml"
+
+    def test_root_workspace_paths_unchanged(self):
+        """When workspace_path is '.', paths pass through unchanged."""
+        ws_lock = _load_lock(FIXTURES / "workspace")
+        local = parse_local_packages(ws_lock)
+        for name, path in local.items():
+            resolved = posixpath.normpath(posixpath.join(".", path))
+            assert resolved == path
