@@ -6,6 +6,7 @@ from typing import Annotated, TYPE_CHECKING
 
 import dagger
 from dagger import DefaultPath, Doc, check, dag, field, function, object_type
+from dagger.telemetry import get_tracer
 
 
 if TYPE_CHECKING:
@@ -90,6 +91,10 @@ class TypesafeDaggerverse:
         return dag.uv(source=self.source.directory("uv/tests/_packages/partial-workspace")).workspace(
             path="sub-project"
         )
+
+    def _nested_standalone(self) -> "dagger.UvWorkspaceSource":
+        """A standalone project nested under a non-root path with a relative path dep."""
+        return dag.uv(source=self.source.directory("uv/tests/_packages/nested-standalone")).workspace(path="app")
 
     def _uv_self(self) -> "dagger.UvWorkspaceSource":
         """The uv module built against its own source.
@@ -237,18 +242,43 @@ class TypesafeDaggerverse:
     @function
     async def all_uv(self) -> None:
         """Run all checks for the `uv` module in parallel."""
+        tracer = get_tracer()
+
+        async def _run(name: str, fn) -> None:
+            with tracer.start_as_current_span(name):
+                await fn()
+
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.uv_detect_version_pyproject)
-            tg.start_soon(self.uv_detect_version_uv_toml_precedence)
-            tg.start_soon(self.uv_detect_version_range)
-            tg.start_soon(self.uv_detect_version_default)
-            tg.start_soon(self.uv_discovers_workspaces)
-            tg.start_soon(self.uv_audit_clean)
-            tg.start_soon(self.uv_audit_detects_vulnerability)
-            tg.start_soon(self.uv_audit_exclude)
-            tg.start_soon(self.uv_install_venv)
-            tg.start_soon(self.uv_relocatable_venv_runs_in_fresh_container)
-            tg.start_soon(self.uv_no_editable_bakes_local_source)
+            tg.start_soon(_run, "detect_version_pyproject", self.uv_detect_version_pyproject)
+            tg.start_soon(_run, "detect_version_uv_toml_precedence", self.uv_detect_version_uv_toml_precedence)
+            tg.start_soon(_run, "detect_version_range", self.uv_detect_version_range)
+            tg.start_soon(_run, "detect_version_default", self.uv_detect_version_default)
+            tg.start_soon(_run, "discovers_workspaces", self.uv_discovers_workspaces)
+            tg.start_soon(_run, "audit_clean", self.uv_audit_clean)
+            tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
+            tg.start_soon(_run, "audit_exclude", self.uv_audit_exclude)
+            tg.start_soon(_run, "install_venv", self.uv_install_venv)
+            tg.start_soon(
+                _run, "relocatable_venv_runs_in_fresh_container", self.uv_relocatable_venv_runs_in_fresh_container
+            )
+            tg.start_soon(_run, "no_editable_bakes_local_source", self.uv_no_editable_bakes_local_source)
+            tg.start_soon(_run, "build_workspace", self.uv_workspace_build_workspace)
+            tg.start_soon(_run, "build_full_workspace", self.uv_workspace_build_full_workspace)
+            tg.start_soon(_run, "build_workspace_app", self.uv_workspace_build_workspace_app)
+            tg.start_soon(_run, "build_workspace_flat", self.uv_workspace_build_workspace_flat)
+            tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
+            tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
+            tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
+            tg.start_soon(_run, "standalone_selective_group", self.uv_workspace_standalone_selective_group)
+            tg.start_soon(_run, "standalone_all_groups", self.uv_workspace_standalone_all_groups)
+            tg.start_soon(
+                _run, "full_workspace_all_extras_all_groups", self.uv_workspace_full_workspace_all_extras_all_groups
+            )
+            tg.start_soon(_run, "build_self", self.uv_workspace_build_self)
+            tg.start_soon(_run, "pytest_self", self.uv_workspace_pytest_self)
+            tg.start_soon(_run, "build_partial_workspace", self.uv_workspace_build_partial_workspace)
+            tg.start_soon(_run, "build_nested_standalone", self.uv_workspace_build_nested_standalone)
+            tg.start_soon(_run, "auto_install_uv", self.uv_workspace_auto_install_uv)
 
     @function
     async def uv_detect_version_pyproject(self) -> None:
@@ -456,26 +486,6 @@ class TypesafeDaggerverse:
             ["sh", "-c", "ls -la /store; echo ---; cat /store/link/marker.txt 2>&1 || echo MISSING"]
         ).stdout()
 
-    @check
-    @function
-    async def all_uv_workspace(self):
-        """Run all uv workspace build/install checks in parallel."""
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(self.uv_workspace_build_workspace)
-            tg.start_soon(self.uv_workspace_build_full_workspace)
-            tg.start_soon(self.uv_workspace_build_workspace_app)
-            tg.start_soon(self.uv_workspace_build_workspace_flat)
-            tg.start_soon(self.uv_workspace_build_standalone)
-            tg.start_soon(self.uv_workspace_standalone_selective_extra)
-            tg.start_soon(self.uv_workspace_standalone_all_extras)
-            tg.start_soon(self.uv_workspace_standalone_selective_group)
-            tg.start_soon(self.uv_workspace_standalone_all_groups)
-            tg.start_soon(self.uv_workspace_full_workspace_all_extras_all_groups)
-            tg.start_soon(self.uv_workspace_build_self)
-            tg.start_soon(self.uv_workspace_pytest_self)
-            tg.start_soon(self.uv_workspace_build_partial_workspace)
-            tg.start_soon(self.uv_workspace_auto_install_uv)
-
     @function
     async def uv_workspace_auto_install_uv(self) -> None:
         """Build with a base container that has no uv and verify auto_install_uv works."""
@@ -680,5 +690,20 @@ class TypesafeDaggerverse:
         script = _assert_modules_script(
             present=["my_dep"],
             absent=["ext_pkg"],
+        )
+        await ctr.with_exec(["python", "-c", script]).stdout()
+
+    @function
+    async def uv_workspace_build_nested_standalone(self) -> None:
+        """Build a standalone project at a non-root workspace path with a relative path dep.
+
+        Regression test: when workspace_path != "." the container must mirror
+        the repo's directory structure so that relative paths like ../lib in
+        uv.lock resolve correctly. Also verifies dev deps are installed.
+        """
+        ctr = await self._nested_standalone().install(base_container=_base(), group=["dev"])
+        script = _assert_modules_script(
+            present=["six", "lib_pkg"],
+            absent=[],
         )
         await ctr.with_exec(["python", "-c", script]).stdout()

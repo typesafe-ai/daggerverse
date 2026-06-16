@@ -316,15 +316,19 @@ class UvWorkspaceSource:
 
             ctr = ctr.with_mounted_cache("/root/.cache/uv", dag.cache_volume("uv-cache"))
 
+            # Place workspace files at their real path within the source tree
+            # so that relative paths in uv.lock resolve correctly.
+            ws_ctr_path = posixpath.join(workdir, self.path) if self.path != "." else workdir
             ctr = ctr.with_file(
-                posixpath.join(workdir, "pyproject.toml"),
+                posixpath.join(ws_ctr_path, "pyproject.toml"),
                 plan.ws_dir.file("pyproject.toml"),
-            ).with_file(posixpath.join(workdir, "uv.lock"), plan.ws_dir.file("uv.lock"))
+            ).with_file(posixpath.join(ws_ctr_path, "uv.lock"), plan.ws_dir.file("uv.lock"))
 
             python_version = await self.python_version()
             if python_version:
-                ctr = ctr.with_new_file(posixpath.join(workdir, ".python-version"), python_version)
+                ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, ".python-version"), python_version)
 
+            ctr = ctr.with_workdir(ws_ctr_path)
             ctr = await ctr.sync()
 
             build = UvWorkspaceBuild(container=ctr, plan=plan)
