@@ -109,6 +109,16 @@ platform and libc of the resulting environment.
 !!! tip
     If your custom base doesn't ship `uv`, the module auto-installs it from the official image (`auto_install_uv=True` by default) — or call `with_uv` explicitly in the pipeline.
 
+### Caching
+
+By default, the module mounts a Dagger cache volume at `/mnt/cache/uv` and sets
+`UV_CACHE_DIR` to point there. This means both **Python downloads** and **package
+downloads** are cached across builds — so a second `uv sync` or `uv python install` that
+hits the same versions skips the network entirely.
+
+If your `base_container` already sets `UV_CACHE_DIR`, the module respects that and
+does not mount its own cache, assuming the container is already prepared.
+
 ## The pipeline — when you need control
 
 `install` is a convenience wrapper. When you need to do something *between* the steps, drive the pipeline yourself. `build` prepares the build without
