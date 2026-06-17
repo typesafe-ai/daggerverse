@@ -314,9 +314,12 @@ class UvWorkspaceSource:
 
             ctr = base_container if base_container is not None else await self._default_base_container()
             if not await ctr.env_variable("UV_CACHE_DIR"):
-                ctr = ctr.with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR).with_mounted_cache(
-                    _UV_CACHE_DIR, dag.cache_volume("uv-cache")
-                )
+                # Set UV_CACHE_DIR but do NOT mount a cache volume.
+                # CacheVolume IDs are engine-specific, so withMountedCache
+                # makes all downstream BuildKit cache keys non-deterministic
+                # across engine restarts — breaking the remote cache entirely
+                # (every Dagger Cloud check-runner invocation is a fresh engine).
+                ctr = ctr.with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR)
             workdir = await ctr.workdir()
 
             # Place workspace files at their real path within the source tree
