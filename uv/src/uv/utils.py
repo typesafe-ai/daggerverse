@@ -11,6 +11,7 @@ from packaging.version import Version
 
 _DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
 _DEFAULT_VERSION = "latest"
+_UV_CACHE_DIR = "/mnt/cache/uv"
 # Pinned uv version for the default Debian build base, so a workspace that
 # doesn't declare `required-version` builds on a fixed image instead of silently
 # floating to the latest uv release. Bump deliberately.

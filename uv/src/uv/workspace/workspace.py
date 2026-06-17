@@ -20,6 +20,7 @@ from uv.args import (
 )
 from uv.utils import (
     _DEFAULT_VERSION,
+    _UV_CACHE_DIR,
     debian_image_ref,
     extract_indices,
     image_ref,
@@ -312,9 +313,11 @@ class UvWorkspaceSource:
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
 
             ctr = base_container if base_container is not None else await self._default_base_container()
+            if not await ctr.env_variable("UV_CACHE_DIR"):
+                ctr = ctr.with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR).with_mounted_cache(
+                    _UV_CACHE_DIR, dag.cache_volume("uv-cache")
+                )
             workdir = await ctr.workdir()
-
-            ctr = ctr.with_mounted_cache("/root/.cache/uv", dag.cache_volume("uv-cache"))
 
             # Place workspace files at their real path within the source tree
             # so that relative paths in uv.lock resolve correctly.
