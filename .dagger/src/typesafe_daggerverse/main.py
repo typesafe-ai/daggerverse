@@ -1,17 +1,12 @@
 """Checks for typesafe-ai daggerverse modules."""
 
-import anyio
 from collections.abc import Awaitable
-from typing import Annotated, TYPE_CHECKING
+from typing import Annotated
 
+import anyio
 import dagger
 from dagger import DefaultPath, Doc, check, dag, field, function, object_type
 from dagger.telemetry import get_tracer
-
-
-if TYPE_CHECKING:
-    import dagger.UvWorkspaceSource
-
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
@@ -74,29 +69,29 @@ class TypesafeDaggerverse:
         DefaultPath("."),
     ] = field()
 
-    def _standalone(self) -> "dagger.UvWorkspaceSource":
+    def _standalone(self) -> dagger.UvWorkspaceSource:
         return dag.uv(source=self.source.directory("uv/tests/_packages/standalone-app")).workspace()
 
-    def _workspace(self) -> "dagger.UvWorkspaceSource":
+    def _workspace(self) -> dagger.UvWorkspaceSource:
         return dag.uv(source=self.source.directory("uv/tests/_packages/workspace")).workspace()
 
-    def _workspace_app(self) -> "dagger.UvWorkspaceSource":
+    def _workspace_app(self) -> dagger.UvWorkspaceSource:
         return dag.uv(source=self.source.directory("uv/tests/_packages/workspace-app")).workspace()
 
-    def _workspace_flat(self) -> "dagger.UvWorkspaceSource":
+    def _workspace_flat(self) -> dagger.UvWorkspaceSource:
         return dag.uv(source=self.source.directory("uv/tests/_packages/workspace-flat")).workspace()
 
-    def _partial_workspace(self) -> "dagger.UvWorkspaceSource":
+    def _partial_workspace(self) -> dagger.UvWorkspaceSource:
         """A workspace where one local dep in uv.lock doesn't exist in the source tree."""
         return dag.uv(source=self.source.directory("uv/tests/_packages/partial-workspace")).workspace(
             path="sub-project"
         )
 
-    def _nested_standalone(self) -> "dagger.UvWorkspaceSource":
+    def _nested_standalone(self) -> dagger.UvWorkspaceSource:
         """A standalone project nested under a non-root path with a relative path dep."""
         return dag.uv(source=self.source.directory("uv/tests/_packages/nested-standalone")).workspace(path="app")
 
-    def _uv_self(self) -> "dagger.UvWorkspaceSource":
+    def _uv_self(self) -> dagger.UvWorkspaceSource:
         """The uv module built against its own source.
 
         uv is itself a Dagger module — `install()` detects the
@@ -105,7 +100,7 @@ class TypesafeDaggerverse:
         """
         return dag.uv(source=self.source.directory("uv")).workspace()
 
-    def _github(self) -> "dagger.UvWorkspaceSource":
+    def _github(self) -> dagger.UvWorkspaceSource:
         return dag.uv(source=self.source.directory("github")).workspace()
 
     @function(cache="never")
@@ -351,7 +346,7 @@ class TypesafeDaggerverse:
         src = self.source.directory("uv/tests/_packages/vulnerable")
         try:
             await dag.uv(source=src).audit()
-        except Exception:
+        except dagger.DaggerError:
             return
         raise AssertionError("expected uv audit to fail for the vulnerable fixture")
 

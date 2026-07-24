@@ -24,7 +24,7 @@ b = (
     .workspace()
     .build(package=["my-app"], no_editable=True)
     .with_venv(relocatable=True)  # uv venv --relocatable
-    .with_remote_dependencies()   # sync installs into the relocatable venv
+    .with_remote_dependencies()  # sync installs into the relocatable venv
 )
 ```
 

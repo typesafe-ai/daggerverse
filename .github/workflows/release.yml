@@ -5,7 +5,7 @@ on:
     tags: ["*/v[0-9]*"]
 
 env:
-  DAGGER_VERSION: "0.21.4"
+  DAGGER_VERSION: "0.21.7"
 
 jobs:
   release:

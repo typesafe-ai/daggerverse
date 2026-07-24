@@ -11,19 +11,12 @@ hooks = [
 ]
 
 [[repos]]
-repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.15.11" # Ruff version.
-hooks = [
-  # Run the linter.
-  { id = "ruff-check", args = ["--fix"], types_or = ["python", "pyi"] },
-
-  # Run the formatter.
-  { id = "ruff-format", types_or = ["python", "pyi"] },
-]
-
-[[repos]]
 repo = "local"
 hooks = [
+  # Ruff comes from the project's `uv.lock` (via `uv run`) so the hook and the
+  # rest of the toolchain stay on one pinned version.
+  { id = "ruff-check", name = "ruff check", entry = "uv run ruff check --fix", language = "system", types_or = ["python", "pyi"], require_serial = true },
+  { id = "ruff-format", name = "ruff format", entry = "uv run ruff format", language = "system", types_or = ["python", "pyi"], require_serial = true },
   { id = "pinact", name = "Pin GitHub Actions", entry = "pinact run", language = "system", pass_filenames = false, files = '^\.github/'},
 ]
 

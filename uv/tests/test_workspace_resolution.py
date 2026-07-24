@@ -4,6 +4,7 @@ import posixpath
 import tomllib
 from collections import OrderedDict
 from pathlib import Path
+from typing import ClassVar
 
 from uv.utils import (
     build_uv_sync_args,
@@ -118,7 +119,7 @@ class TestVirtualWorkspaceRoot:
     bare `uv sync` (current-package default) leaves members unscaffolded.
     """
 
-    lock_data = {
+    lock_data: ClassVar = {
         "package": [
             {
                 "name": "the-root",
@@ -272,14 +273,14 @@ class TestBuildUvSyncArgs:
     """Tests for `uv sync` argv construction — mirrors uv CLI flags verbatim."""
 
     def _args(self, **overrides):
-        defaults = dict(
-            packages=[],
-            extras=[],
-            groups=[],
-            all_extras=False,
-            all_groups=False,
-            all_packages=False,
-        )
+        defaults = {
+            "packages": [],
+            "extras": [],
+            "groups": [],
+            "all_extras": False,
+            "all_groups": False,
+            "all_packages": False,
+        }
         return build_uv_sync_args(**{**defaults, **overrides})
 
     def test_bare_defaults(self):
@@ -549,6 +550,6 @@ class TestNestedWorkspacePathResolution:
         """When workspace_path is '.', paths pass through unchanged."""
         ws_lock = _load_lock(FIXTURES / "workspace")
         local = parse_local_packages(ws_lock)
-        for name, path in local.items():
+        for path in local.values():
             resolved = posixpath.normpath(posixpath.join(".", path))
             assert resolved == path

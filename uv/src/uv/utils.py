@@ -167,7 +167,7 @@ def minimal_compatible_version(specifier: str) -> str | None:
     candidates: list[Version] = []
     for clause in spec:
         if clause.operator in (">=", "~=", "=="):
-            base = clause.version[:-2] if clause.version.endswith(".*") else clause.version
+            base = clause.version.removesuffix(".*")
             candidates.append(_pad_release(Version(base)))
         elif clause.operator == ">":
             release = _pad_release(Version(clause.version)).release

@@ -64,6 +64,11 @@ class TestParseVersionFromUvLock:
         content = (FIXTURES / "uv_lock_no_ruff.toml").read_text()
         assert parse_version_from_uv_lock(content) is None
 
+    def test_skips_project_named_ruff(self):
+        # A project literally named "ruff" must not shadow the ruff dependency.
+        content = (FIXTURES / "uv_lock_project_named_ruff.toml").read_text()
+        assert parse_version_from_uv_lock(content) == "0.4.8"
+
 
 class TestParseVersionFromRuffToml:
     def test_exact_pin(self):

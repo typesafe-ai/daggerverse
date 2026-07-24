@@ -67,9 +67,9 @@ ctr = (
     dag.uv(source=src)
     .workspace()
     .build()
-    .with_remote_dependencies()   # uv sync --no-install-local
-    .with_workspace_files()       # scaffold local package stubs
-    .with_local_dependencies()    # editable-install from stubs, then copy real source
+    .with_remote_dependencies()  # uv sync --no-install-local
+    .with_workspace_files()  # scaffold local package stubs
+    .with_local_dependencies()  # editable-install from stubs, then copy real source
 )
 ```
 
@@ -127,10 +127,10 @@ order:
 
 ```python
 b = dag.uv(source=src).workspace().build(package=["my-app"])
-b = b.with_remote_dependencies()      # uv sync --no-install-local
+b = b.with_remote_dependencies()  # uv sync --no-install-local
 # ... run your own step here, e.g. `pulumi install` ...
-b = b.with_workspace_files()          # scaffold local package stubs
-ctr = b.with_local_dependencies()     # editable-install from stubs, then copy real source last
+b = b.with_workspace_files()  # scaffold local package stubs
+ctr = b.with_local_dependencies()  # editable-install from stubs, then copy real source last
 ```
 
 Each step returns a new `UvWorkspaceBuild` (or, at the end, a `Container`), so the

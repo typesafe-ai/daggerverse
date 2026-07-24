@@ -27,8 +27,14 @@ def normalize_exact_version(value: str) -> str:
 def parse_version_from_uv_lock(content: str) -> str | None:
     data = tomllib.loads(content)
     for pkg in data.get("package", []):
-        if pkg.get("name") == "ruff":
-            return pkg["version"]
+        if pkg.get("name") != "ruff":
+            continue
+        # Skip the workspace root / local members (which may also be named
+        # "ruff"); only the resolved dependency carries the tool's version.
+        source = pkg.get("source", {})
+        if "editable" in source or "virtual" in source:
+            continue
+        return pkg.get("version")
     return None
 
 
@@ -70,7 +76,7 @@ def minimal_compatible_version(specifier: str) -> str | None:
     candidates: list[Version] = []
     for clause in spec:
         if clause.operator in (">=", "~=", "=="):
-            base = clause.version[:-2] if clause.version.endswith(".*") else clause.version
+            base = clause.version.removesuffix(".*")
             candidates.append(_pad_release(Version(base)))
         elif clause.operator == ">":
             release = _pad_release(Version(clause.version)).release
