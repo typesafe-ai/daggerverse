@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import posixpath
 from typing import Annotated
 
@@ -29,7 +31,7 @@ class UvWorkspaceBuild:
         Doc("Build configuration carried through the pipeline"),
     ] = field()
 
-    async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> "UvWorkspaceBuild":
+    async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> UvWorkspaceBuild:
         """Run `argv` in the build container under a span, returning a new build with the result.
 
         `with_exec` is lazy; sync() inside the span so it captures the actual work
@@ -48,7 +50,7 @@ class UvWorkspaceBuild:
             str | None,
             Doc("uv version to install. Defaults to the version detected from the workspace."),
         ] = None,
-    ) -> "UvWorkspaceBuild":
+    ) -> UvWorkspaceBuild:
         """Copy the uv binary into the build container.
 
         Useful when using a custom `base_container` that doesn't ship uv.
@@ -66,7 +68,7 @@ class UvWorkspaceBuild:
         return self.with_container(ctr)
 
     @function
-    async def with_remote_dependencies(self) -> "UvWorkspaceBuild":
+    async def with_remote_dependencies(self) -> UvWorkspaceBuild:
         """Install remote (non-local) dependencies via `uv sync --no-install-local`.
 
         Skip this step when another tool (e.g. `pulumi install`) handles
@@ -86,7 +88,7 @@ class UvWorkspaceBuild:
             list[str] | None,
             Doc("Additional arguments passed through to `uv venv` (e.g. `--python`, `--seed`)."),
         ] = None,
-    ) -> "UvWorkspaceBuild":
+    ) -> UvWorkspaceBuild:
         """Create the project virtual environment with `uv venv`.
 
         Run before the install steps so the subsequent `uv sync` populates this
@@ -106,7 +108,7 @@ class UvWorkspaceBuild:
             str,
             Doc("Python version to install via `uv python install` (e.g. `3.12`, `3.13.7`)."),
         ],
-    ) -> "UvWorkspaceBuild":
+    ) -> UvWorkspaceBuild:
         """Install a managed Python via `uv python install`.
 
         Useful on a bare base with no system Python; pass the version the
@@ -122,7 +124,7 @@ class UvWorkspaceBuild:
             str,
             Doc("Python version to pin via `uv python pin` (writes a `.python-version` file)."),
         ],
-    ) -> "UvWorkspaceBuild":
+    ) -> UvWorkspaceBuild:
         """Pin the project's Python with `uv python pin` (writes `.python-version`).
 
         Makes subsequent `uv venv`/`uv sync` select this exact version.
@@ -207,14 +209,14 @@ class UvWorkspaceBuild:
             return await ctr.sync()
 
     @function
-    async def with_workspace_files(self) -> "UvWorkspaceBuild":
+    async def with_workspace_files(self) -> UvWorkspaceBuild:
         """Scaffold needed local package stubs (pyproject.toml + empty src/) into the container."""
         workdir = await self.container.workdir()
         ctr = await self._scaffold(self.plan.needed_local, workdir, "scaffold local dependencies")
         return UvWorkspaceBuild(container=ctr, plan=self.plan)
 
     @function
-    async def with_all_workspace_members(self) -> "UvWorkspaceBuild":
+    async def with_all_workspace_members(self) -> UvWorkspaceBuild:
         """Like with_workspace_files but scaffolds every local package, not just transitive deps."""
         workdir = await self.container.workdir()
         ctr = await self._scaffold(self.plan.all_local, workdir, "scaffold all workspace members")
@@ -227,7 +229,7 @@ class UvWorkspaceBuild:
             dagger.Container,
             Doc("Replacement container (e.g. after installing non-Python packages)"),
         ],
-    ) -> "UvWorkspaceBuild":
+    ) -> UvWorkspaceBuild:
         """Return a new UvWorkspaceBuild with a different container but the same plan."""
         return UvWorkspaceBuild(container=container, plan=self.plan)
 

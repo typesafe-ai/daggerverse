@@ -37,6 +37,7 @@ from typing import Annotated
 import dagger
 from dagger import Doc, dag, function, object_type
 
+
 @object_type
 class MyModule:
     @function
@@ -46,9 +47,7 @@ class MyModule:
         ref: Annotated[str, Doc("Commit SHA to poll")],
         token: Annotated[dagger.Secret, Doc("GitHub token")],
     ) -> str:
-        return await dag.github().status_monitor().wait_for_dagger_checks(
-            repo=repo, ref=ref, token=token
-        )
+        return await dag.github().status_monitor().wait_for_dagger_checks(repo=repo, ref=ref, token=token)
 ```
 
 ### Example: GitHub Actions

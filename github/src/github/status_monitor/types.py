@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from enum import Enum
 
-
 TERMINAL_STATES: frozenset[str] = frozenset({"success", "failure", "error"})
 FAILURE_STATES: frozenset[str] = frozenset({"failure", "error"})
 MISSING: str = "missing"

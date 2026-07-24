@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from typing import Annotated
 
 import dagger
 from dagger import Doc, dag, field, function, object_type
 
+from ruff.args import SourceDir
 from ruff.checker import RuffChecker
 from ruff.formatter import RuffFormatter
-from ruff.utils import _DEFAULT_IMAGE, _DEFAULT_VERSION, resolve_version
+from ruff.utils import _DEFAULT_IMAGE, resolve_version
 
 
 @object_type
@@ -20,13 +23,7 @@ class Ruff:
     @classmethod
     async def create(
         cls,
-        source: Annotated[
-            dagger.Directory | None,
-            Doc(
-                "Project source directory used to auto-detect the ruff version "
-                "from uv.lock, ruff.toml, .ruff.toml, or pyproject.toml."
-            ),
-        ] = None,
+        source: SourceDir,
         ctr: Annotated[
             dagger.Container | None,
             Doc("Container with ruff installed. Defaults to the official ghcr.io/astral-sh/ruff image."),
@@ -35,13 +32,10 @@ class Ruff:
             str | None,
             Doc("Ruff image tag. Only used when `ctr` is not provided. Overrides auto-detection from source."),
         ] = None,
-    ) -> "Ruff":
+    ) -> Ruff:
         if ctr is None:
             if version is None:
-                if source is not None:
-                    version = await resolve_version(source)
-                else:
-                    version = _DEFAULT_VERSION
+                version = await resolve_version(source)
             ctr = dag.container().from_(f"{_DEFAULT_IMAGE}:{version}")
         return cls(ctr=ctr)
 

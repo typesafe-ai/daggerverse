@@ -4,10 +4,9 @@ calls. Output is captured via a recording `rich.console.Console`."""
 from collections.abc import Iterable
 
 import pytest
-from rich.console import Console
-
 from github.status_monitor.types import MISSING, Status, Step, Verdict
 from github.status_monitor.watcher import Watcher
+from rich.console import Console
 
 
 def make_console() -> Console:

@@ -6,7 +6,6 @@ from rich.console import Console
 
 from .types import MISSING
 
-
 STATE_STYLE: dict[str, str] = {
     "success": "bold green",
     "pending": "yellow",

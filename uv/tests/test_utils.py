@@ -1,7 +1,6 @@
 """Tests for the uv module's pure helpers (no Dagger runtime)."""
 
 import pytest
-
 from uv.utils import (
     debian_image_ref,
     format_audit_failure,

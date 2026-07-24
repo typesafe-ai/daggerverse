@@ -1,1 +1,10 @@
 line-length = 120
+
+[lint]
+ignore = [
+    # PEP 695 `type X = ...` aliases produce a `TypeAliasType` that Dagger's
+    # runtime type introspection (beartype) can't resolve, breaking module
+    # loading. Keep the `X: TypeAlias = ...` form for annotations Dagger reads.
+    "UP040",
+    "UP037",  # keep quotes around type annotations
+]
