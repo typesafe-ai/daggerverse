@@ -109,7 +109,11 @@ async def _discover_local_packages(
 
 @object_type
 class LocalPackage:
-    """A local (editable/directory) package in a uv workspace."""
+    """A local (editable/directory) package in a uv workspace.
+
+    ``pyproject_contents`` is captured while resolving the plan so scaffold
+    layers depend on package metadata, not on the whole source directory.
+    """
 
     name: Annotated[str, Doc("Package name")] = field()
     path: Annotated[str, Doc("Workspace-relative path")] = field()
@@ -118,6 +122,10 @@ class LocalPackage:
         bool,
         Doc("Flat layout (module at package root) vs src layout (module under src/)"),
     ] = field(default=False)
+    pyproject_contents: Annotated[
+        str,
+        Doc("Already-read package metadata used when creating a dependency scaffold"),
+    ] = field(default="")
 
 
 @object_type
@@ -216,9 +224,12 @@ class UvSyncPlan:
         # or a transitive workspace dependency (e.g. a Pulumi program whose code
         # lives at the package root, with no src/ or module dir to copy).
         flat_packages: list[str] = []
+        pyproject_contents: dict[str, str] = {}
         for name, pkg_path in all_local.items():
             resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
-            pkg_toml = tomllib.loads(await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents())
+            contents = await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
+            pyproject_contents[name] = contents
+            pkg_toml = tomllib.loads(contents)
             if "build-system" not in pkg_toml:
                 flat_packages.append(name)
 
@@ -234,7 +245,13 @@ class UvSyncPlan:
 
         def to_pkgs(local: OrderedDict[str, str]) -> list[LocalPackage]:
             return [
-                LocalPackage(name=n, path=p, module=_module_name(n), flat=flat_flags.get(n, False))
+                LocalPackage(
+                    name=n,
+                    path=p,
+                    module=_module_name(n),
+                    flat=flat_flags.get(n, False),
+                    pyproject_contents=pyproject_contents[n],
+                )
                 for n, p in local.items()
             ]
 
