@@ -179,9 +179,7 @@ class UvWorkspaceBuild:
         src_name = pkg.module
         overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
         if pkg.flat:
-            overlay = overlay.with_new_file(
-                posixpath.join(ctr_base, src_name, "__init__.py").lstrip("/"), ""
-            )
+            overlay = overlay.with_new_file(posixpath.join(ctr_base, src_name, "__init__.py").lstrip("/"), "")
         else:
             overlay = overlay.with_new_file(
                 posixpath.join(ctr_base, "src", src_name, "__init__.py").lstrip("/"),

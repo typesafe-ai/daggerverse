@@ -519,7 +519,7 @@ class TypesafeDaggerverse:
         checker = dag.container().from_("python:3.14-slim").with_workdir("/check")
         for name, image in (("base", base), ("first", first), ("second", second)):
             checker = checker.with_file(f"/check/{name}.tar", image.as_tarball())
-        script = r'''
+        script = r"""
 import json, tarfile
 
 def layers(path):
@@ -535,7 +535,7 @@ assert len(first) == len(second)
 assert first[:-1] == second[:-1], (first, second)
 assert first[-1] != second[-1]
 print("LAYER_CACHE_OK")
-'''
+"""
         output = await checker.with_exec(["python", "-c", script]).stdout()
         if "LAYER_CACHE_OK" not in output:
             raise AssertionError(f"expected source-only change to preserve build layers, got: {output!r}")

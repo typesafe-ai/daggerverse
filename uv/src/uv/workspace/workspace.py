@@ -326,9 +326,9 @@ class UvWorkspaceSource:
                 plan.ws_dir.file("pyproject.toml").contents(),
                 plan.ws_dir.file("uv.lock").contents(),
             )
-            ctr = ctr.with_new_file(
-                posixpath.join(ws_ctr_path, "pyproject.toml"), pyproject_contents
-            ).with_new_file(posixpath.join(ws_ctr_path, "uv.lock"), uv_lock_contents)
+            ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, "pyproject.toml"), pyproject_contents).with_new_file(
+                posixpath.join(ws_ctr_path, "uv.lock"), uv_lock_contents
+            )
 
             python_version = await self.python_version()
             if python_version:
