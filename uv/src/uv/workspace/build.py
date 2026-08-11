@@ -7,6 +7,7 @@ import dagger
 from dagger import Doc, dag, field, function, object_type
 from dagger.telemetry import get_tracer
 
+from uv.args import PruneCache
 from uv.utils import _DEFAULT_BASE_UV_VERSION, image_ref
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
@@ -68,14 +69,36 @@ class UvWorkspaceBuild:
         return self.with_container(ctr)
 
     @function
-    async def with_remote_dependencies(self) -> UvWorkspaceBuild:
+    async def with_remote_dependencies(self, prune_cache: PruneCache = True) -> UvWorkspaceBuild:
         """Install remote (non-local) dependencies via `uv sync --no-install-local`.
 
         Skip this step when another tool (e.g. `pulumi install`) handles
-        dependency installation.
+        dependency installation. When `prune_cache` is set (the default), the
+        install is followed by `uv cache prune --ci` (see `with_cache_prune`).
         """
         args = [*self.plan.uv_sync_args, "--no-install-local"]
-        return await self._exec_step("install remote dependencies", args, {"uv.sync_args": args})
+        build = await self._exec_step("install remote dependencies", args, {"uv.sync_args": args})
+        if prune_cache:
+            build = await build.with_cache_prune()
+        return build
+
+    @function
+    async def with_cache_prune(self) -> UvWorkspaceBuild:
+        """Prune the uv cache with `uv cache prune --ci`.
+
+        Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).
+        """
+        argv = ["uv", "cache", "prune", "--ci"]
+        with get_tracer().start_as_current_span("prune uv cache") as span:
+            span.set_attribute("uv.cache_args", argv)
+            executed = self.container.with_exec(argv)
+            ctr = await executed.sync()
+            # uv reports what it removed on stderr; surface it so the span shows
+            # the reclaimed space rather than just the command that ran.
+            summary = (await executed.stderr()).strip()
+            if summary:
+                span.set_attribute("uv.cache_prune_summary", summary)
+        return self.with_container(ctr)
 
     @function
     async def with_venv(
