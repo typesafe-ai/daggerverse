@@ -125,7 +125,7 @@ class LocalPackage:
     pyproject_contents: Annotated[
         str,
         Doc("Already-read package metadata used when creating a dependency scaffold"),
-    ] = field(default="")
+    ] = field()
 
 
 @object_type
