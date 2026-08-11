@@ -167,26 +167,25 @@ class UvWorkspaceBuild:
         """
         return await (await self.venv()).into(container, path, set_env_vars)
 
-    def _scaffold_package(self, ctr: dagger.Container, workdir: str, pkg: LocalPackage) -> dagger.Container:
+    def _scaffold_package(self, overlay: dagger.Directory, workdir: str, pkg: LocalPackage) -> dagger.Directory:
         """Scaffold a single package stub (pyproject.toml + README + empty module)."""
-        resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
-        ctr = ctr.with_file(
-            posixpath.join(ctr_base, "pyproject.toml"),
-            self.plan.source_dir.file(posixpath.join(resolved, "pyproject.toml")),
+        overlay = overlay.with_new_file(
+            posixpath.join(ctr_base, "pyproject.toml").lstrip("/"),
+            pkg.pyproject_contents,
         )
         if pkg.name in self.plan.flat_packages:
-            return ctr
+            return overlay
         src_name = pkg.module
-        ctr = ctr.with_new_file(posixpath.join(ctr_base, "README.md"), "")
+        overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
         if pkg.flat:
-            ctr = ctr.with_new_file(posixpath.join(ctr_base, src_name, "__init__.py"), "")
+            overlay = overlay.with_new_file(posixpath.join(ctr_base, src_name, "__init__.py").lstrip("/"), "")
         else:
-            ctr = ctr.with_new_file(
-                posixpath.join(ctr_base, "src", src_name, "__init__.py"),
+            overlay = overlay.with_new_file(
+                posixpath.join(ctr_base, "src", src_name, "__init__.py").lstrip("/"),
                 "",
             )
-        return ctr
+        return overlay
 
     async def _scaffold(
         self,
@@ -196,16 +195,17 @@ class UvWorkspaceBuild:
     ) -> dagger.Container:
         """Scaffold package stubs (pyproject.toml + README + empty module) for `packages`.
 
-        The per-package `with_file`/`with_new_file` calls are lazy, so the span
+        The per-package `with_new_file` calls are lazy, so the span
         forces evaluation with `sync()` before closing; otherwise it would capture
         only Python graph-building and report ~zero duration.
         """
-        ctr = self.container
+        overlay = dag.directory()
         with get_tracer().start_as_current_span(span_name) as span:
             span.set_attribute("packages.count", len(packages))
             span.set_attribute("packages.names", [pkg.name for pkg in packages])
             for pkg in packages:
-                ctr = self._scaffold_package(ctr, workdir, pkg)
+                overlay = self._scaffold_package(overlay, workdir, pkg)
+            ctr = self.container.with_directory("/", overlay)
             return await ctr.sync()
 
     @function
@@ -233,22 +233,22 @@ class UvWorkspaceBuild:
         """Return a new UvWorkspaceBuild with a different container but the same plan."""
         return UvWorkspaceBuild(container=container, plan=self.plan)
 
-    def _copy_package(self, ctr: dagger.Container, workdir: str, pkg: LocalPackage) -> dagger.Container:
+    def _copy_package(self, overlay: dagger.Directory, workdir: str, pkg: LocalPackage) -> dagger.Directory:
         """Copy a single local package's real source into the container."""
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
         if pkg.flat:
             src_name = pkg.module
-            ctr = ctr.with_directory(
-                posixpath.join(ctr_base, src_name),
+            overlay = overlay.with_directory(
+                posixpath.join(ctr_base, src_name).lstrip("/"),
                 self.plan.source_dir.directory(posixpath.join(resolved, src_name)),
             )
         else:
-            ctr = ctr.with_directory(
-                posixpath.join(ctr_base, "src"),
+            overlay = overlay.with_directory(
+                posixpath.join(ctr_base, "src").lstrip("/"),
                 self.plan.source_dir.directory(posixpath.join(resolved, "src")),
             )
-        return ctr
+        return overlay
 
     async def _copy_sources(self, ctr: dagger.Container, workdir: str) -> dagger.Container:
         """Copy real source for each needed local package into `ctr`.
@@ -257,14 +257,15 @@ class UvWorkspaceBuild:
         evaluation with `sync()` before closing; otherwise it would capture only
         Python graph-building and report ~zero duration.
         """
+        overlay = dag.directory()
         with get_tracer().start_as_current_span("copy local dependency sources") as span:
             span.set_attribute("packages.count", len(self.plan.needed_local))
             span.set_attribute("packages.names", [pkg.name for pkg in self.plan.needed_local])
             for pkg in self.plan.needed_local:
                 if pkg.name in self.plan.flat_packages:
                     continue
-                ctr = self._copy_package(ctr, workdir, pkg)
-            return await ctr.sync()
+                overlay = self._copy_package(overlay, workdir, pkg)
+            return await ctr.with_directory("/", overlay).sync()
 
     async def _sync_local(self, ctr: dagger.Container) -> dagger.Container:
         """Run the plan's `uv sync` to install the local members, under a span."""

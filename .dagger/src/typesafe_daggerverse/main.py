@@ -259,6 +259,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "no_editable_bakes_local_source", self.uv_no_editable_bakes_local_source)
             tg.start_soon(_run, "build_workspace", self.uv_workspace_build_workspace)
             tg.start_soon(_run, "build_full_workspace", self.uv_workspace_build_full_workspace)
+            tg.start_soon(_run, "workspace_layer_cache", self.uv_workspace_layer_cache)
             tg.start_soon(_run, "build_workspace_app", self.uv_workspace_build_workspace_app)
             tg.start_soon(_run, "build_workspace_flat", self.uv_workspace_build_workspace_flat)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
@@ -500,6 +501,44 @@ class TypesafeDaggerverse:
         """Build the full workspace (no package filter) and verify every local package imports."""
         ctr = await self._workspace().install(all_packages=True, base_container=_base())
         await ctr.with_exec(["python", "-c", "import my_app, my_lib, my_core"]).stdout()
+
+    @function
+    async def uv_workspace_layer_cache(self) -> None:
+        """Keep workspace metadata/dependencies stable when only package source changes."""
+        source = self.source.directory("uv/tests/_packages/workspace")
+        changed = source.with_new_file("my-app/src/my_app/cache_marker.py", "CACHE_MARKER = 'changed'\n")
+        base = _base()
+        first = await self._workspace().install(all_packages=True, base_container=base)
+        second = await dag.uv(source=changed).workspace().install(all_packages=True, base_container=base)
+        marker = await second.with_exec(
+            ["python", "-c", "from my_app.cache_marker import CACHE_MARKER; print(CACHE_MARKER)"]
+        ).stdout()
+        if marker.strip() != "changed":
+            raise AssertionError(f"expected source overlay to be live, got: {marker!r}")
+
+        checker = dag.container().from_("python:3.14-slim").with_workdir("/check")
+        for name, image in (("base", base), ("first", first), ("second", second)):
+            checker = checker.with_file(f"/check/{name}.tar", image.as_tarball())
+        script = r"""
+import json, tarfile
+
+def layers(path):
+    with tarfile.open(path) as archive:
+        index = json.load(archive.extractfile("index.json"))
+        digest = index["manifests"][0]["digest"].split(":", 1)[1]
+        manifest = json.load(archive.extractfile(f"blobs/sha256/{digest}"))
+        return [layer["digest"] for layer in manifest["layers"]]
+
+base, first, second = (layers(f"/check/{name}.tar") for name in ("base", "first", "second"))
+assert len(first) - len(base) <= 8, (len(base), len(first))
+assert len(first) == len(second)
+assert first[:-1] == second[:-1], (first, second)
+assert first[-1] != second[-1]
+print("LAYER_CACHE_OK")
+"""
+        output = await checker.with_exec(["python", "-c", script]).stdout()
+        if "LAYER_CACHE_OK" not in output:
+            raise AssertionError(f"expected source-only change to preserve build layers, got: {output!r}")
 
     @function
     async def uv_workspace_build_workspace_app(self) -> None:
