@@ -67,7 +67,7 @@ ctr = (
     dag.uv(source=src)
     .workspace()
     .build()
-    .with_remote_dependencies()  # uv sync --no-install-local
+    .with_remote_dependencies()  # uv sync --no-install-local, then uv cache prune --ci
     .with_workspace_files()  # scaffold local package stubs
     .with_local_dependencies()  # editable-install from stubs, then copy real source
 )
@@ -79,7 +79,9 @@ so the expensive work is cached across builds:
 1. The workspace's `uv.lock` is parsed to find the **local** packages your target
    transitively depends on.
 2. **Remote** (third-party) dependencies are installed first. They change rarely, so
-   this layer caches well.
+   this layer caches well. The install is then followed by `uv cache prune --ci` (drops
+   pre-built wheels, keeps sdists) to stop the mounted cache volume from growing
+   unbounded — disable with `prune_cache=False`.
 3. The needed **local** members are scaffolded as stubs (their `pyproject.toml` plus an
    empty module) and installed with `uv sync`. `uv` installs workspace members as
    *editable* by default, so this only records path links — it depends on the packages'
@@ -127,7 +129,7 @@ order:
 
 ```python
 b = dag.uv(source=src).workspace().build(package=["my-app"])
-b = b.with_remote_dependencies()  # uv sync --no-install-local
+b = b.with_remote_dependencies()  # uv sync --no-install-local, then uv cache prune --ci
 # ... run your own step here, e.g. `pulumi install` ...
 b = b.with_workspace_files()  # scaffold local package stubs
 ctr = b.with_local_dependencies()  # editable-install from stubs, then copy real source last

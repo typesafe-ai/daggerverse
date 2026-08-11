@@ -78,6 +78,13 @@ DaggerCodegen: TypeAlias = Annotated[
     ),
 ]
 
+PruneCache: TypeAlias = Annotated[
+    bool,
+    Doc(
+        "Whether to run `uv cache prune --ci` after installing remote dependencies. Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration)."
+    ),
+]
+
 NoEditable: TypeAlias = Annotated[
     bool,
     Doc(
