@@ -118,8 +118,7 @@ By default, the module mounts a Dagger cache volume at `/mnt/cache/uv` and sets
 downloads** are cached across builds — so a second `uv sync` or `uv python install` that
 hits the same versions skips the network entirely.
 
-If your `base_container` already sets `UV_CACHE_DIR`, the module respects that and
-does not mount its own cache, assuming the container is already prepared.
+If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a directory there, the module mounts the cache volume at that path instead of the default.
 
 ## The pipeline — when you need control
 
