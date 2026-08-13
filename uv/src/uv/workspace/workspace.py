@@ -237,6 +237,19 @@ class UvWorkspaceSource:
         )
 
     @staticmethod
+    async def _has_cache(ctr: dagger.Container, path: str) -> bool:
+        """Whether `path` already holds a populated uv cache in the container.
+
+        A deliberately prepared base may ship a warm cache baked at `UV_CACHE_DIR`;
+        mounting an empty volume over it would hide it. An absent-or-empty directory
+        means there's nothing to preserve, so the caller should mount the cache volume.
+        """
+        try:
+            return len(await ctr.directory(path).entries()) > 0
+        except dagger.DaggerError:
+            return False
+
+    @staticmethod
     async def _has_uv(ctr: dagger.Container) -> bool:
         """Check whether uv is on $PATH in the given container."""
         with get_tracer().start_as_current_span("detect uv on PATH") as span:
@@ -314,9 +327,21 @@ class UvWorkspaceSource:
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
 
             ctr = base_container if base_container is not None else await self._default_base_container()
-            if not await ctr.env_variable("UV_CACHE_DIR"):
-                ctr = ctr.with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR).with_mounted_cache(
-                    _UV_CACHE_DIR, dag.cache_volume("uv-cache")
+            cache_dir = await ctr.env_variable("UV_CACHE_DIR")
+            if cache_dir:
+                # The base already points uv at a cache dir. Mount the cache volume there
+                # unless the base actually ships a populated cache — don't shadow a warm,
+                # deliberately prepared one with an empty mount. Crucially, a base built by
+                # this module carries a baked UV_CACHE_DIR but *no* directory there (Dagger
+                # mounts don't survive a push), so it gets re-mounted: without the mount,
+                # `uv sync` would materialize the cache into a real image layer
+                # (non-reproducible, ~2x size) instead of writing to the volume.
+                if not await self._has_cache(ctr, cache_dir):
+                    ctr = ctr.with_mounted_cache(cache_dir, dag.cache_volume("uv-cache"))
+            else:
+                cache_dir = _UV_CACHE_DIR
+                ctr = ctr.with_env_variable("UV_CACHE_DIR", cache_dir).with_mounted_cache(
+                    cache_dir, dag.cache_volume("uv-cache")
                 )
             workdir = await ctr.workdir()
 
