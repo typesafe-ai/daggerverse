@@ -7,7 +7,7 @@ import dagger
 from dagger import Doc, dag, field, function, object_type
 from dagger.telemetry import get_tracer
 
-from uv.args import PruneCache
+from uv.args import LockTimeout, MaxCacheSize, PruneCache
 from uv.utils import _DEFAULT_BASE_UV_VERSION, image_ref
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
@@ -69,32 +69,66 @@ class UvWorkspaceBuild:
         return self.with_container(ctr)
 
     @function
-    async def with_remote_dependencies(self, prune_cache: PruneCache = True) -> UvWorkspaceBuild:
+    async def with_remote_dependencies(
+        self,
+        prune_cache: PruneCache = True,
+        max_cache_size: MaxCacheSize = 100,
+        lock_timeout: LockTimeout = 600,
+    ) -> UvWorkspaceBuild:
         """Install remote (non-local) dependencies via `uv sync --no-install-local`.
 
-        Skip this step when another tool (e.g. `pulumi install`) handles
-        dependency installation. When `prune_cache` is set (the default), the
-        install is followed by `uv cache prune --ci` (see `with_cache_prune`).
+        When `prune_cache` is set (the default), the
+        install is followed by a size-gated `uv cache prune --ci` (see
+        `with_cache_prune`): the cache is pruned only once it exceeds
+        `max_cache_size` GiB, and `lock_timeout` bounds how long that prune waits
+        for the cache lock.
         """
         args = [*self.plan.uv_sync_args, "--no-install-local"]
         build = await self._exec_step("install remote dependencies", args, {"uv.sync_args": args})
         if prune_cache:
-            build = await build.with_cache_prune()
+            build = await build.with_cache_prune(max_cache_size=max_cache_size, lock_timeout=lock_timeout)
         return build
 
     @function
-    async def with_cache_prune(self) -> UvWorkspaceBuild:
-        """Prune the uv cache with `uv cache prune --ci`.
+    async def with_cache_prune(
+        self,
+        max_cache_size: MaxCacheSize = 100,
+        lock_timeout: LockTimeout = 600,
+    ) -> UvWorkspaceBuild:
+        """Prune the uv cache with `uv cache prune --ci`, gated on cache size.
+
+        Measures the cache dir (`uv cache dir`) and only prunes when it exceeds `max_cache_size`
+        GiB, so most builds skip the prune (and never take the cache lock). Because
+        `uv cache prune --ci` keeps only compiled wheels — nearly a full clean — one
+        prune resets the footprint. `lock_timeout` sets `UV_LOCK_TIMEOUT` for the
+        prune so concurrent builds sharing the cache volume wait instead of erroring.
+        Set `max_cache_size=0` to prune on every build.
+
+        The size check and conditional prune run in a single exec so the live cache
+        volume is measured each time this step actually runs, rather than reading a
+        stale, separately-cached size.
 
         Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).
         """
-        argv = ["uv", "cache", "prune", "--ci"]
+        limit_kib = max_cache_size * 1024 * 1024  # GiB -> KiB, to compare with `du -sk`
+        gate = f'[ "${{used_kib:-0}}" -gt {limit_kib} ]' if max_cache_size > 0 else "true"
+        script = (
+            'used_kib=$(du -sk "$(uv cache dir)" 2>/dev/null | cut -f1 || echo 0); '
+            f"if {gate}; then "
+            f'echo "uv cache: ${{used_kib}} KiB used > {limit_kib} KiB limit; pruning" >&2; '
+            f"UV_LOCK_TIMEOUT={lock_timeout} uv cache prune --ci; "
+            "else "
+            f'echo "uv cache: ${{used_kib}} KiB used <= {limit_kib} KiB limit; skipping prune" >&2; '
+            "fi"
+        )
+        argv = ["sh", "-c", script]
         with get_tracer().start_as_current_span("prune uv cache") as span:
-            span.set_attribute("uv.cache_args", argv)
+            span.set_attribute("uv.cache_max_size_gib", max_cache_size)
+            span.set_attribute("uv.cache_lock_timeout", lock_timeout)
             executed = self.container.with_exec(argv)
             ctr = await executed.sync()
-            # uv reports what it removed on stderr; surface it so the span shows
-            # the reclaimed space rather than just the command that ran.
+            # uv (and the gate) report on stderr what was measured / removed; surface
+            # it so the span shows the outcome rather than just the command that ran.
             summary = (await executed.stderr()).strip()
             if summary:
                 span.set_attribute("uv.cache_prune_summary", summary)

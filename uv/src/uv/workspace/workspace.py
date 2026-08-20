@@ -15,6 +15,8 @@ from uv.args import (
     DaggerCodegen,
     Extra,
     Group,
+    LockTimeout,
+    MaxCacheSize,
     NoEditable,
     Package,
     PruneCache,
@@ -389,6 +391,8 @@ class UvWorkspaceSource:
         dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
         prune_cache: PruneCache = True,
+        max_cache_size: MaxCacheSize = 100,
+        lock_timeout: LockTimeout = 600,
         venv: Annotated[
             bool,
             Doc("Create the virtual environment up front with `uv venv` (before installing)."),
@@ -426,7 +430,9 @@ class UvWorkspaceSource:
         )
         if venv:
             b = await b.with_venv(relocatable=venv_relocatable)
-        b = await b.with_remote_dependencies(prune_cache=prune_cache)
+        b = await b.with_remote_dependencies(
+            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
+        )
         b = await b.with_workspace_files()
         return await b.with_local_dependencies()
 
@@ -446,6 +452,8 @@ class UvWorkspaceSource:
         dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
         prune_cache: PruneCache = True,
+        max_cache_size: MaxCacheSize = 100,
+        lock_timeout: LockTimeout = 600,
         auto_install_uv: Annotated[
             bool,
             Doc(
@@ -475,7 +483,9 @@ class UvWorkspaceSource:
             auto_install_uv=auto_install_uv,
         )
         b = await b.with_venv(relocatable=True)
-        b = await b.with_remote_dependencies(prune_cache=prune_cache)
+        b = await b.with_remote_dependencies(
+            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
+        )
         b = await b.with_workspace_files()
         b = b.with_container(await b.with_local_dependencies())
         return await b.venv()
