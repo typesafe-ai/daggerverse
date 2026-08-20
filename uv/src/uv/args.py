@@ -85,6 +85,16 @@ PruneCache: TypeAlias = Annotated[
     ),
 ]
 
+MaxCacheSize: TypeAlias = Annotated[
+    int,
+    Doc("Prune the uv cache only once it grows past this many GiB."),
+]
+
+LockTimeout: TypeAlias = Annotated[
+    int,
+    Doc("Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache."),
+]
+
 NoEditable: TypeAlias = Annotated[
     bool,
     Doc(
