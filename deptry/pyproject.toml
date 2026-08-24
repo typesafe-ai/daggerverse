@@ -1,5 +1,5 @@
 [project]
-name = "zizmor"
+name = "deptry"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = ["dagger-io"]
@@ -19,4 +19,9 @@ dagger-io = "dagger"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "zensical>=0.0.57",
+]
+docs = [
+    "pymdown-extensions>=11.0.1",
+    "zensical>=0.0.44",
 ]

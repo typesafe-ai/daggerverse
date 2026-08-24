@@ -11,6 +11,11 @@ build-backend = "uv_build"
 [tool.uv.sources]
 dagger-io = { path = "sdk", editable = true }
 
+# The `dagger-io` distribution ships the `dagger` import package; map it so
+# deptry doesn't flag `import dagger` as a missing/unused dependency.
+[tool.deptry.package_module_name_map]
+dagger-io = "dagger"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

@@ -33,6 +33,10 @@
       "source": "github"
     },
     {
+      "name": "deptry",
+      "source": "deptry"
+    },
+    {
       "name": "pytest",
       "source": "github.com/dagger/pytest@main",
       "pin": "dd183e94449051abdc3c7d745dd148fdc08396d4"
