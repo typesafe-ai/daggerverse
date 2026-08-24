@@ -871,7 +871,10 @@ name = "uv"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "dagger-io" },
+    { name = "opentelemetry-api" },
+    { name = "packaging" },
 ]
 
 [package.dev-dependencies]
@@ -884,7 +887,12 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dagger-io", editable = "sdk" }]
+requires-dist = [
+    { name = "anyio" },
+    { name = "dagger-io", editable = "sdk" },
+    { name = "opentelemetry-api" },
+    { name = "packaging" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]

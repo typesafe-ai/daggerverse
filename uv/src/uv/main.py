@@ -78,7 +78,7 @@ class Uv:
             #
             # Capture failures per-workspace so one error can't cancel the
             # sibling audits — every workspace is always audited to completion.
-            with tracer.start_as_current_span(f"audit({ws.path})") as span:
+            with tracer.start_as_current_span(f"audit: {ws.path}") as span:
                 try:
                     await (await ws.audit(uv_version=uv_version, image=image)).run()
                 # We swallow the exception here (so a failure can't cancel the

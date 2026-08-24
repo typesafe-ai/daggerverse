@@ -1,0 +1,11 @@
+#:schema https://www.schemastore.org/prek.json
+# Per-project deptry check. prek's workspace mode discovers this file and runs
+# the hook from this directory, so deptry reads this project's pyproject.toml
+# (incl. its `[tool.deptry]` config). Scanning `.` (deptry's default) covers
+# the whole project; the generated `sdk/` is excluded, and `--known-first-party`
+# names this project's own package so a `src` layout isn't flagged as third-party.
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "deptry", name = "deptry", entry = "uvx deptry@0.25.1 --known-first-party uv --extend-exclude sdk .", language = "system", pass_filenames = false, files = '(\.py|pyproject\.toml)$' },
+]

@@ -635,11 +635,15 @@ name = "typesafe-daggerverse"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "dagger-io" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dagger-io", editable = "sdk" }]
+requires-dist = [
+    { name = "anyio" },
+    { name = "dagger-io", editable = "sdk" },
+]
 
 [[package]]
 name = "typing-extensions"

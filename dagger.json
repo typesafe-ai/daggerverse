@@ -25,6 +25,19 @@
     {
       "name": "zizmor",
       "source": "zizmor"
+    },
+    {
+      "name": "deptry",
+      "source": "deptry",
+      "customizations": [
+        {
+          "function": [
+            "check"
+          ],
+          "argument": "exclude",
+          "default": "[\"**/tests/_packages/**\", \".\"]"
+        }
+      ]
     }
   ],
   "dependencies": [

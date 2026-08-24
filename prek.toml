@@ -18,6 +18,10 @@ hooks = [
   { id = "ruff-check", name = "ruff check", entry = "uv run ruff check --fix", language = "system", types_or = ["python", "pyi"], require_serial = true },
   { id = "ruff-format", name = "ruff format", entry = "uv run ruff format", language = "system", types_or = ["python", "pyi"], require_serial = true },
   { id = "pinact", name = "Pin GitHub Actions", entry = "pinact run", language = "system", pass_filenames = false, files = '^\.github/'},
+  # Every other project has its own `prek.toml` with a deptry hook, discovered
+  # by prek's workspace mode. `.dagger` is a dot-directory, which that discovery
+  # skips, so its per-project deptry check has to live here.
+  { id = "deptry-dagger", name = "deptry (.dagger)", entry = "bash -c 'cd .dagger && uvx deptry@0.25.1 --known-first-party typesafe_daggerverse --extend-exclude sdk .'", language = "system", pass_filenames = false, files = '^\.dagger/.*(\.py|pyproject\.toml)$' },
 ]
 
 [[repos]]
