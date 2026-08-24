@@ -761,6 +761,8 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.deptry_clean_src_layout)
             tg.start_soon(self.deptry_detects_issue)
             tg.start_soon(self.deptry_exclude)
+            tg.start_soon(self.deptry_config_opts_in_nonstandard_layout)
+            tg.start_soon(self.deptry_skips_project_without_layout_or_config)
 
     @function
     async def deptry_discovers_projects(self) -> None:
@@ -833,3 +835,34 @@ print("LAYER_CACHE_OK")
         )
         src = dag.directory().with_directory("good", good).with_directory("bad", bad)
         await dag.deptry(source=src).check(exclude=["bad"])
+
+    @function
+    async def deptry_config_opts_in_nonstandard_layout(self) -> None:
+        """A `[tool.deptry]` section opts a non-standard-layout project in.
+
+        The project has neither a `src` nor a flat package directory, but
+        declares `[tool.deptry]`, so it is checked rather than skipped — here it
+        has an unused dependency and must fail.
+        """
+        src = self._deptry_project(
+            '[project]\nname = "flatmod"\nversion = "0"\ndependencies = ["requests"]\n\n[tool.deptry]\n',
+            {"run.py": "x = 1\n"},
+        )
+        try:
+            await dag.deptry(source=src).check()
+        except dagger.DaggerError:
+            return
+        raise AssertionError("expected deptry to check a [tool.deptry]-configured project and fail")
+
+    @function
+    async def deptry_skips_project_without_layout_or_config(self) -> None:
+        """A project with no `src`/flat layout and no `[tool.deptry]` is skipped.
+
+        The unused dependency would fail if it were checked, so passing proves
+        the project was skipped.
+        """
+        src = self._deptry_project(
+            '[project]\nname = "flatmod"\nversion = "0"\ndependencies = ["requests"]\n',
+            {"run.py": "x = 1\n"},
+        )
+        await dag.deptry(source=src).check()

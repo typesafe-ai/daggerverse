@@ -26,7 +26,11 @@ Run the check over the current source tree:
 $ dagger check deptry
 ```
 
-the check currently only supports `src/` and flat project layouts. For flat layouts it uses `pyproject.toml` to determine the project name.
+the check runs `deptry` over projects that either:
+
+- have a `src/` layout matching `[project].name`
+- have a directory matching `[project].name`
+- declare a `[tool.deptry]` section in their `pyproject.toml`
 
 ## Where to go next
 
