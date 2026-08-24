@@ -26,6 +26,16 @@
 
     [:octicons-book-16: Docs](./ruff/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/ruff) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/ruff)
 
+-   ![deptry](assets/logos/deptry.svg){ .lg .middle style="width: 40px; height: 40px" } __deptry__
+
+    ---
+
+    Lint Python dependency issues — unused, missing, misplaced, and transitive dependencies — with [deptry](https://deptry.com). Monorepo-friendly.
+
+    ---
+
+    [:octicons-book-16: Docs](./deptry/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/deptry) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/deptry)
+
 -   ![zizmor](assets/logos/zizmor.svg){ .lg .middle style="width: 40px; height: 40px" } __zizmor__
 
     ---

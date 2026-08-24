@@ -741,3 +741,95 @@ print("LAYER_CACHE_OK")
             absent=[],
         )
         await ctr.with_exec(["python", "-c", script]).stdout()
+
+    # ---- deptry module checks ----
+
+    def _deptry_project(self, pyproject: str, sources: dict[str, str]) -> dagger.Directory:
+        """A single deptry-checkable project: a pyproject.toml plus source files."""
+        d = dag.directory().with_new_file("pyproject.toml", pyproject)
+        for path, content in sources.items():
+            d = d.with_new_file(path, content)
+        return d
+
+    @check
+    @function
+    async def all_deptry(self) -> None:
+        """Run all checks for the `deptry` module in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.deptry_discovers_projects)
+            tg.start_soon(self.deptry_clean_flat_layout)
+            tg.start_soon(self.deptry_clean_src_layout)
+            tg.start_soon(self.deptry_detects_issue)
+            tg.start_soon(self.deptry_exclude)
+
+    @function
+    async def deptry_discovers_projects(self) -> None:
+        """`projects` finds one entry per pyproject.toml that declares dependencies.
+
+        A tooling-only pyproject (no `[project].dependencies`) is skipped.
+        """
+        pyproject = '[project]\nname = "x"\nversion = "0"\ndependencies = []\n'
+        src = (
+            dag.directory()
+            .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("b/c/pyproject.toml", pyproject)
+            .with_new_file("tool/pyproject.toml", "[tool.ruff]\nline-length = 100\n")
+        )
+        projects = await dag.deptry(source=src).projects()
+        if projects != ["a", "b/c"]:
+            raise AssertionError(f"expected ['a', 'b/c'], got {projects}")
+
+    @function
+    async def deptry_clean_flat_layout(self) -> None:
+        """A flat-layout project whose deps are all declared and used passes."""
+        src = self._deptry_project(
+            '[project]\nname = "flatpkg"\nversion = "0"\ndependencies = ["requests"]\n',
+            {
+                "flatpkg/__init__.py": "import requests\nfrom flatpkg import foo\n",
+                "flatpkg/foo.py": "",
+            },
+        )
+        await dag.deptry(source=src).check()
+
+    @function
+    async def deptry_clean_src_layout(self) -> None:
+        """A `src`-layout project passes: its own package isn't misreported as third-party.
+
+        Regression test for `--known-first-party` — a bare `deptry .` on a src
+        layout flags the project's own imports as DEP001/DEP003.
+        """
+        src = self._deptry_project(
+            '[project]\nname = "src-pkg"\nversion = "0"\ndependencies = ["requests"]\n',
+            {
+                "src/src_pkg/__init__.py": "import requests\nimport src_pkg.foo\n",
+                "src/src_pkg/foo.py": "",
+            },
+        )
+        await dag.deptry(source=src).check()
+
+    @function
+    async def deptry_detects_issue(self) -> None:
+        """A project with an unused dependency fails the check."""
+        src = self._deptry_project(
+            '[project]\nname = "badpkg"\nversion = "0"\ndependencies = ["requests"]\n',
+            {"src/badpkg/__init__.py": "x = 1\n"},
+        )
+        try:
+            await dag.deptry(source=src).check()
+        except dagger.DaggerError:
+            return
+        raise AssertionError("expected deptry to fail for an unused dependency")
+
+    @function
+    async def deptry_exclude(self) -> None:
+        """`exclude` skips matching projects, so a broken-but-excluded tree passes."""
+        good = self._deptry_project(
+            '[project]\nname = "goodpkg"\nversion = "0"\ndependencies = ["requests"]\n',
+            {"goodpkg/__init__.py": "import requests\n"},
+        )
+        bad = self._deptry_project(
+            '[project]\nname = "badpkg"\nversion = "0"\ndependencies = ["requests"]\n',
+            {"badpkg/__init__.py": "x = 1\n"},
+        )
+        src = dag.directory().with_directory("good", good).with_directory("bad", bad)
+        await dag.deptry(source=src).check(exclude=["bad"])
