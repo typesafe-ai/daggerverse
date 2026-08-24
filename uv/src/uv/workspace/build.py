@@ -112,8 +112,10 @@ class UvWorkspaceBuild:
         """
         limit_kib = max_cache_size * 1024 * 1024  # GiB -> KiB, to compare with `du -sk`
         gate = f'[ "${{used_kib:-0}}" -gt {limit_kib} ]' if max_cache_size > 0 else "true"
+        # `-x` keeps du on the cache mount's own filesystem (don't wander into
+        # other mounts nested under it).
         script = (
-            'used_kib=$(du -sk "$(uv cache dir)" 2>/dev/null | cut -f1 || echo 0); '
+            'used_kib=$(du -skx "$(uv cache dir)" 2>/dev/null | cut -f1 || echo 0); '
             f"if {gate}; then "
             f'echo "uv cache: ${{used_kib}} KiB used > {limit_kib} KiB limit; pruning" >&2; '
             f"UV_LOCK_TIMEOUT={lock_timeout} uv cache prune --ci; "
