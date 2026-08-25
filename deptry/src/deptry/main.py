@@ -110,6 +110,13 @@ async def _has_package_layout(project_dir: dagger.Directory, module: str | None)
     return "src" in entries or (module is not None and module in entries)
 
 
+# SGR (color) escape sequences. deptry colors its report on the live exec
+# stream (which Dagger renders as a terminal), but the same bytes become `[1m`
+# noise when folded into a span's plain-text status description — so strip them
+# there, not at the source.
+_ANSI_SGR_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def _format_failure(exc: dagger.ExecError, project: str) -> str:
     """Human-readable message for a failed deptry exec.
 
@@ -117,10 +124,12 @@ def _format_failure(exc: dagger.ExecError, project: str) -> str:
     :class:`dagger.ExecError` stringifies to only a terse "exit code N".
     Folding the captured output (and the project path) into the message keeps
     the findings in the trace/span error instead of solely in Dagger's logs.
+    Color codes are stripped here since the span description is rendered as
+    plain text (the live exec output keeps its color).
     """
     seen: list[str] = []
     for stream in (exc.stdout, exc.stderr):
-        text = (stream or "").strip()
+        text = _ANSI_SGR_RE.sub("", stream or "").strip()
         if text and text not in seen:
             seen.append(text)
     summary = f"deptry found issues in {project} (exit code {exc.exit_code})"
@@ -230,15 +239,23 @@ class Deptry:
                 # covers non-standard layouts). Otherwise skip, so an aggregator
                 # like a uv workspace root doesn't scan the whole monorepo.
                 if not configured and not await _has_package_layout(self.source.directory(project), module):
-                    span.set_status(Status(StatusCode.OK, "skipped: no src/flat layout and no [tool.deptry] config"))
+                    # A description on a non-ERROR Status is dropped by OTel with a
+                    # warning, so record the skip reason as an attribute instead.
+                    span.set_attribute("deptry.skipped", "no src/flat layout and no [tool.deptry] config")
                     return
                 checked.append(project)
                 try:
                     known = ["--known-first-party", module] if module else []
                     await (
-                        container.with_workdir("/work")
+                        # `FORCE_COLOR` makes deptry colorize its report even
+                        # though its stdout is a pipe, so Dagger's rendered exec
+                        # logs show color. The captured copy folded into the span
+                        # has the codes stripped (see `_format_failure`). Pass
+                        # `--no-ansi` via `args` to opt out.
+                        container.with_env_variable("FORCE_COLOR", "1")
+                        .with_workdir("/work")
                         .with_directory("/work", self.source.directory(project))
-                        .with_exec(["deptry", "--no-ansi", *known, *(args or []), "."])
+                        .with_exec(["deptry", *known, *(args or []), "."])
                         .sync()
                     )
                 except dagger.ExecError as exc:
