@@ -7,6 +7,10 @@ import httpx
 
 from .types import Status
 
+_MAX_CONSECUTIVE_TRANSIENT_ERRORS = 5
+_MAX_RETRY_DELAY = 30
+_RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
 
 def statuses_url(*, github_api: str, repo: str, ref: str) -> str:
     return f"{github_api}/repos/{repo}/commits/{ref}/statuses"
@@ -101,11 +105,42 @@ async def poll_snapshots(
     The first snapshot is yielded immediately; the sleep happens after each
     yield, so a consumer that breaks out of the loop never sleeps unnecessarily.
     """
+    consecutive_transient_errors = 0
     while True:
-        merged: dict[str, Status] = {}
-        if statuses_url:
-            merged.update(await fetch_statuses_snapshot(client, statuses_url))
-        if check_runs_url:
-            merged.update(await fetch_check_runs_snapshot(client, check_runs_url))
-        yield merged
-        await asyncio.sleep(interval)
+        try:
+            merged: dict[str, Status] = {}
+            if statuses_url:
+                merged.update(await fetch_statuses_snapshot(client, statuses_url))
+            if check_runs_url:
+                merged.update(await fetch_check_runs_snapshot(client, check_runs_url))
+        except httpx.HTTPStatusError as error:
+            response = error.response
+            is_rate_limited = response.status_code == 403 and (
+                "retry-after" in response.headers or response.headers.get("x-ratelimit-remaining") == "0"
+            )
+            if response.status_code not in _RETRYABLE_STATUS_CODES and not is_rate_limited:
+                raise
+            transient_error: httpx.HTTPError = error
+        except httpx.TransportError as error:
+            transient_error = error
+        else:
+            consecutive_transient_errors = 0
+            yield merged
+            await asyncio.sleep(interval)
+            continue
+
+        consecutive_transient_errors += 1
+        if consecutive_transient_errors >= _MAX_CONSECUTIVE_TRANSIENT_ERRORS:
+            raise transient_error
+
+        retry_after = (
+            transient_error.response.headers.get("retry-after")
+            if isinstance(transient_error, httpx.HTTPStatusError)
+            else None
+        )
+        retry_delay = (
+            int(retry_after)
+            if retry_after and retry_after.isdigit()
+            else min(2 ** (consecutive_transient_errors - 1), _MAX_RETRY_DELAY)
+        )
+        await asyncio.sleep(retry_delay)
