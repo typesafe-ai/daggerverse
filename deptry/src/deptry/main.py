@@ -199,7 +199,7 @@ class Deptry:
         ] = None,
         args: Annotated[
             list[str] | None,
-            Doc("Additional arguments to pass to deptry (added before the project root)."),
+            Doc("Additional arguments to pass to deptry (added before the project scope)."),
         ] = None,
         exclude: Annotated[
             list[str] | None,
@@ -209,7 +209,8 @@ class Deptry:
         """Run `deptry` for every Python project in the source tree, in parallel.
 
         Discovers projects by scanning for `pyproject.toml` files that declare
-        dependencies and runs `deptry .` in each. A project with no package of
+        dependencies and runs `deptry` from the source root for each, scoped to
+        the project's path and config. A project with no package of
         its own — e.g. a uv workspace root that only aggregates members in
         subdirectories — is skipped (so the scan never spills over the rest of
         the monorepo) unless it declares a `[tool.deptry]` section, which opts it
@@ -246,16 +247,21 @@ class Deptry:
                 checked.append(project)
                 try:
                     known = ["--known-first-party", module] if module else []
+                    config = ["--config", posixpath.join(project, "pyproject.toml")]
                     await (
                         # `FORCE_COLOR` makes deptry colorize its report even
                         # though its stdout is a pipe, so Dagger's rendered exec
                         # logs show color. The captured copy folded into the span
                         # has the codes stripped (see `_format_failure`). Pass
                         # `--no-ansi` via `args` to opt out.
+                        #
+                        # Run from the source root, scoping the scan to `project`
+                        # (and its config), so reported import paths are
+                        # root-relative rather than project-relative.
                         container.with_env_variable("FORCE_COLOR", "1")
                         .with_workdir("/work")
-                        .with_directory("/work", self.source.directory(project))
-                        .with_exec(["deptry", *known, *(args or []), "."])
+                        .with_directory("/work", self.source)
+                        .with_exec(["deptry", *config, *known, *(args or []), project])
                         .sync()
                     )
                 except dagger.ExecError as exc:
