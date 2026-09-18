@@ -39,3 +39,36 @@ jobs:
               --token=env:GITHUB_TOKEN
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Coverage gate: modules ship pytest suites, but no minimum coverage threshold
+  # is enforced anywhere in CI. Run each module's suite with coverage enabled and
+  # fail the build if line coverage drops below 80%.
+  coverage:
+    name: Coverage gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      # Fail only the module(s) below the bar; don't cancel the other modules'
+      # runs so their coverage is reported too.
+      fail-fast: false
+      matrix:
+        # Modules that ship pytest suites; deptry/twingate/zizmor have none.
+        module: [github, ruff, uv]
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # Pin uv alongside the rest of the toolchain for reproducible CI runs.
+          version: "0.12.5"
+          enable-cache: false
+      # pytest-cov is injected ephemerally via `uv run --with` so the gate adds
+      # no coverage dependency to the modules' locked dev groups. Coverage is
+      # measured against the module's own source only (`src/`), not its tests.
+      - name: Enforce minimum line coverage (>= 80%)
+        working-directory: ${{ matrix.module }}
+        run: >-
+          uv run --locked --with pytest-cov pytest -q
+          --cov=src --cov-report=term-missing --cov-fail-under=80
