@@ -58,6 +58,10 @@ class RuffFormatter:
         output = await result.combined_output()
         if output.strip():
             sys.stderr.write(output)
+        exit_code = await result.exit_code()
+        if exit_code != 0:
+            msg = f"Ruff format failed with exit code {exit_code}:\n{output}"
+            raise RuntimeError(msg)
         before = dag.directory().with_directory(".", source)
         fixed = result.directory("/work").without_directory(".ruff_cache")
         after = dag.directory().with_directory(".", fixed)
