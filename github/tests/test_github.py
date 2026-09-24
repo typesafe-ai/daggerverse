@@ -3,7 +3,7 @@
 import asyncio
 
 import pytest
-from github.status_monitor.api import _check_run_state, fetch_check_runs_snapshot
+from github.status_monitor.api import _check_run_state, fetch_check_runs_snapshot, poll_snapshots
 from github.status_monitor.types import Status
 
 # ---- _check_run_state mapping ----
@@ -88,3 +88,61 @@ def test_fetch_check_runs_snapshot_keeps_first_per_name():
     client = FakeClient([page])
     result = asyncio.run(fetch_check_runs_snapshot(client, "https://api.github.com/test"))
     assert result == {"a": Status(state="success")}
+
+
+def test_poll_snapshots_distinct_names_remain_unmodified():
+    class MultiEndpointClient:
+        async def get(self, url, params=None):
+            if "statuses" in str(url):
+                return FakeResponse([{"context": "legacy-build", "state": "success"}])
+            elif "check-runs" in str(url):
+                return FakeResponse(
+                    {"check_runs": [{"name": "actions-build", "status": "completed", "conclusion": "success"}]}
+                )
+            return FakeResponse({})
+
+    async def _run():
+        client = MultiEndpointClient()
+        async for snapshot in poll_snapshots(
+            client,
+            statuses_url="https://api.github.com/statuses",
+            check_runs_url="https://api.github.com/check-runs",
+            interval=0,
+            status_names=["legacy-build"],
+            check_run_names=["actions-build"],
+        ):
+            assert snapshot == {
+                "legacy-build": Status(state="success"),
+                "actions-build": Status(state="success"),
+            }
+            break
+
+    asyncio.run(_run())
+
+
+def test_poll_snapshots_disambiguates_colliding_status_and_check_run_names():
+    class CollidingClient:
+        async def get(self, url, params=None):
+            if "statuses" in str(url):
+                return FakeResponse([{"context": "build", "state": "failure"}])
+            elif "check-runs" in str(url):
+                return FakeResponse({"check_runs": [{"name": "build", "status": "completed", "conclusion": "success"}]})
+            return FakeResponse({})
+
+    async def _run():
+        client = CollidingClient()
+        async for snapshot in poll_snapshots(
+            client,
+            statuses_url="https://api.github.com/statuses",
+            check_runs_url="https://api.github.com/check-runs",
+            interval=0,
+            status_names=["build"],
+            check_run_names=["build"],
+        ):
+            assert snapshot == {
+                "status:build": Status(state="failure"),
+                "check_run:build": Status(state="success"),
+            }
+            break
+
+    asyncio.run(_run())

@@ -128,7 +128,10 @@ class GithubStatusMonitor:
     ) -> str:
         console = Console(force_terminal=True)
 
-        expected = sorted(set(status_names + check_run_names))
+        collisions = set(status_names) & set(check_run_names)
+        expected_statuses = [f"status:{name}" if name in collisions else name for name in status_names]
+        expected_check_runs = [f"check_run:{name}" if name in collisions else name for name in check_run_names]
+        expected = sorted(set(expected_statuses + expected_check_runs))
         if not expected:
             render.empty(console)
             return "no checks to wait for"
@@ -155,6 +158,8 @@ class GithubStatusMonitor:
                 statuses_url=s_url,
                 check_runs_url=cr_url,
                 interval=poll_interval,
+                status_names=status_names,
+                check_run_names=check_run_names,
             ):
                 match watcher.step(snapshot):
                     case Step.SUCCEEDED:

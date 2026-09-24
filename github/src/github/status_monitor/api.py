@@ -1,7 +1,7 @@
 """GitHub commit-status and check-run fetching."""
 
 import asyncio
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Iterable, Mapping
 
 import httpx
 
@@ -95,17 +95,26 @@ async def poll_snapshots(
     statuses_url: str | None,
     check_runs_url: str | None,
     interval: int,
+    status_names: Iterable[str] = (),
+    check_run_names: Iterable[str] = (),
 ) -> AsyncIterator[Mapping[str, Status]]:
     """Yield successive merged snapshots from both commit statuses and check runs.
 
     The first snapshot is yielded immediately; the sleep happens after each
     yield, so a consumer that breaks out of the loop never sleeps unnecessarily.
     """
+    collisions = set(status_names) & set(check_run_names)
     while True:
         merged: dict[str, Status] = {}
         if statuses_url:
-            merged.update(await fetch_statuses_snapshot(client, statuses_url))
+            statuses = await fetch_statuses_snapshot(client, statuses_url)
+            for name, status in statuses.items():
+                key = f"status:{name}" if name in collisions else name
+                merged[key] = status
         if check_runs_url:
-            merged.update(await fetch_check_runs_snapshot(client, check_runs_url))
+            check_runs = await fetch_check_runs_snapshot(client, check_runs_url)
+            for name, status in check_runs.items():
+                key = f"check_run:{name}" if name in collisions else name
+                merged[key] = status
         yield merged
         await asyncio.sleep(interval)
