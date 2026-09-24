@@ -205,7 +205,10 @@ class UvSyncPlan:
             raw_local = parse_local_packages(lock_data)
             # Overlay each target package's SDK (deduped); fall back to the
             # workspace root when no target is a local package.
-            codegen_paths = list(dict.fromkeys(raw_local[p] for p in packages if p in raw_local)) or ["."]
+            if all_packages:
+                codegen_paths = list(dict.fromkeys(raw_local.values())) or ["."]
+            else:
+                codegen_paths = list(dict.fromkeys(raw_local[p] for p in packages if p in raw_local)) or ["."]
             for codegen_path in codegen_paths:
                 ws_dir = await _run_codegen(ws_dir, codegen_path)
             if workspace_path == ".":

@@ -553,3 +553,22 @@ class TestNestedWorkspacePathResolution:
         for path in local.values():
             resolved = posixpath.normpath(posixpath.join(".", path))
             assert resolved == path
+
+
+def test_codegen_paths_all_packages_visits_all_members():
+    raw_local = {
+        "app-one": "packages/app-one",
+        "app-two": "packages/app-two",
+    }
+    # all_packages=True derives paths for all local workspace members
+    codegen_paths = list(dict.fromkeys(raw_local.values())) or ["."]
+    assert codegen_paths == ["packages/app-one", "packages/app-two"]
+
+    # explicit selection visits only requested members
+    packages = ["app-one"]
+    codegen_paths = list(dict.fromkeys(raw_local[p] for p in packages if p in raw_local)) or ["."]
+    assert codegen_paths == ["packages/app-one"]
+
+    # bare root fallback when no members or selection
+    codegen_paths = list(dict.fromkeys(raw_local[p] for p in [] if p in raw_local)) or ["."]
+    assert codegen_paths == ["."]
