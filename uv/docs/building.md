@@ -158,17 +158,10 @@ source-copy step. For a non-empty source root such as `src` or `python`, the ent
 source root is copied. Package metadata and declared `project.license-files` are
 staged separately.
 
-With editable installs, real source is copied after installation. With
-`no_editable=True`, it is copied before installation so the wheel contains real code.
-Changes inside the selected source paths therefore rebuild non-editable packages;
-changes to unrelated root-level files do not invalidate that installation layer.
-Callers that need tests or other runtime files can copy them after the install step.
-
-The resolved settings are stored in `UvBuildLayout`, a Dagger data object shared by
-the scaffolding and source-copy stages. The `resolve local package layouts` trace span
-records a `package layout` event for each local member, including its backend,
-dependency-only status, module paths, and source paths. The existing scaffold, copy,
-and install spans measure the work performed by each stage.
+Editable installs (the default) keep `uv sync` cached across source changes.
+With `no_editable=True`, source changes rebuild and reinstall local packages;
+third-party dependencies remain cached. Copy tests and other runtime files after
+installation.
 
 !!! warning "Staging limitations"
     `namespace = true` and type-stub (`-stubs`) packages are not supported by the
