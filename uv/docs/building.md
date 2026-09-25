@@ -159,7 +159,7 @@ source root is copied. Package metadata and declared `project.license-files` are
 staged separately.
 
 !!! warning "Non-editable installs"
-    With `no_editable=True`, source changes rebuild and reinstall local packages.
+    With `no_editable=True`, changes to source code trigger a rebuild of the package.
     Third-party dependencies remain cached.
 
 !!! warning "Staging limitations"
