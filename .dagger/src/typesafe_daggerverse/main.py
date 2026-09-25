@@ -457,10 +457,13 @@ class TypesafeDaggerverse:
     async def uv_build_layouts(self) -> None:
         """Virtual members, renamed modules, multiple modules, and custom roots build together."""
         source = self.source.directory("uv/tests/_packages/uv-build-layouts")
+        source = source.with_new_file("flat/tests/unrelated.py", "Must stay out of the package build layer\n")
         script = (
             "from importlib.metadata import distributions\n"
+            "from pathlib import Path\n"
             "import actual_package, compat_package, vendor_sdk\n"
             "assert actual_package.VALUE == compat_package.VALUE == vendor_sdk.VALUE == 'real source'\n"
+            "assert not Path('flat/tests/unrelated.py').exists()\n"
             "installed = {d.metadata['Name'] for d in distributions()}\n"
             "assert not {'layout-workspace', 'virtual-app'} & installed\n"
         )

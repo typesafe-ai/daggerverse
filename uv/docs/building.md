@@ -15,7 +15,8 @@ and installs everything in a cache-friendly order — so you don't hand-curate t
 context yourself.
 
 !!! note
-    Workspace members that declare no build system (also known as applications) are supported as well.
+    Dependency-only workspace members are supported too, including projects with
+    no build system and those with `tool.uv.package = false`.
 
 
 ??? abstract "The mental model"
@@ -121,6 +122,61 @@ hits the same versions skips the network entirely.
 If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a directory there, the module mounts the cache volume at that path instead of the default.
 
 The cache may be recycled with `uv cache prune --ci` if grown too large. This is enabled by default and the threshold is set to 100 GiB.
+
+## Supported build backends
+
+`uv` installs packages using their declared build backend. This module also needs to
+know their import layout so it can create valid stubs and copy the right source files.
+Backend support here describes that staging behavior:
+
+| Backend or project type | Layout support |
+| --- | --- |
+| `uv_build` | Default `src/` layout, custom `module-root`, and explicit `module-name` strings or lists. |
+| Other backends, including Hatchling | Conventional single-module flat or `src/` layouts, using the existing module-name heuristic. Backend-specific package mappings and build hooks are not interpreted. |
+| Dependency-only projects | Their metadata and transitive local dependencies are staged; the project itself is not installed or copied as a Python package. |
+
+### `uv_build` layouts
+
+The default module name is derived from the distribution name by lowercasing it and
+replacing dots and dashes with underscores. Explicit names can differ from the
+distribution name; dotted names map to nested import directories. See the
+[uv build backend documentation](https://docs.astral.sh/uv/concepts/build-backend/#modules)
+for the upstream settings.
+
+For example, this configuration declares two modules at the package root:
+
+```toml
+[tool.uv.build-backend]
+module-name = ["actual_package", "compat_package"]
+module-root = "."
+```
+
+The build copies `actual_package/` and `compat_package/`, including files inside those
+directories. Both `module-root = "."` and `module-root = ""` mean a flat layout.
+Unrelated root-level files such as `tests/` and documentation are excluded from this
+source-copy step. For a non-empty source root such as `src` or `python`, the entire
+source root is copied. Package metadata and declared `project.license-files` are
+staged separately.
+
+With editable installs, real source is copied after installation. With
+`no_editable=True`, it is copied before installation so the wheel contains real code.
+Changes inside the selected source paths therefore rebuild non-editable packages;
+changes to unrelated root-level files do not invalidate that installation layer.
+Callers that need tests or other runtime files can copy them after the install step.
+
+The resolved settings are stored in `UvBuildLayout`, a Dagger data object shared by
+the scaffolding and source-copy stages. The `resolve local package layouts` trace span
+records a `package layout` event for each local member, including its backend,
+dependency-only status, module paths, and source paths. The existing scaffold, copy,
+and install spans measure the work performed by each stage.
+
+!!! warning "Staging limitations"
+    `namespace = true` and type-stub (`-stubs`) packages are not supported by the
+    current scaffold, which creates `__init__.py` placeholders. External data
+    directories, custom include rules, and extra build-hook inputs are not staged
+    automatically. Supply required inputs before `with_local_dependencies()` when
+    using such settings; a full project copy after installation is too late for
+    files the backend needs while building.
 
 ## The pipeline — when you need control
 

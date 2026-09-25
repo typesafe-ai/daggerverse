@@ -10,4 +10,4 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "vendor_sdk"
-module-root = ""
+module-root = "."

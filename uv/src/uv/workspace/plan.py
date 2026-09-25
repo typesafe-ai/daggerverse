@@ -16,6 +16,7 @@ from uv.utils import (
     require_package_selection,
 )
 from uv.workspace._codegen import dagger_codegen as _run_codegen
+from uv.workspace.uv_build import UvBuildLayout
 
 
 def _match_reachable(
@@ -126,19 +127,24 @@ class LocalPackage:
         str,
         Doc("Already-read package metadata used when creating a dependency scaffold"),
     ] = field()
+    uv_build_layout: Annotated[
+        UvBuildLayout | None,
+        Doc("Backend-specific layout resolved once from package metadata"),
+    ] = field(default=None)
 
     @property
     def module_paths(self) -> list[str]:
-        """Package-relative import directories used for both stubs and source copies."""
-        metadata = tomllib.loads(self.pyproject_contents)
-        if metadata.get("build-system", {}).get("build-backend") == "uv_build":
-            backend = metadata.get("tool", {}).get("uv", {}).get("build-backend", {})
-            names = backend.get("module-name", self.name.lower().replace("-", "_").replace(".", "_"))
-            if isinstance(names, str):
-                names = [names]
-            root = backend.get("module-root", "src")
-            return [posixpath.join(root, name.replace(".", "/")) for name in names]
+        """Package-relative import directories used to scaffold modules."""
+        if self.uv_build_layout is not None:
+            return self.uv_build_layout.module_paths
         return [self.module if self.flat else posixpath.join("src", self.module)]
+
+    @property
+    def source_paths(self) -> list[str]:
+        """Copy source roots, or only declared modules for a flat layout."""
+        if self.uv_build_layout is not None:
+            return self.uv_build_layout.source_paths
+        return [self.module] if self.flat else ["src"]
 
 
 @object_type
@@ -237,14 +243,38 @@ class UvSyncPlan:
         # or a transitive workspace dependency (e.g. a Pulumi program whose code
         # lives at the package root, with no src/ or module dir to copy).
         flat_packages: list[str] = []
-        pyproject_contents: dict[str, str] = {}
-        for name, pkg_path in all_local.items():
-            resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
-            contents = await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
-            pyproject_contents[name] = contents
-            pkg_toml = tomllib.loads(contents)
-            if "build-system" not in pkg_toml or pkg_toml.get("tool", {}).get("uv", {}).get("package") is False:
-                flat_packages.append(name)
+        local_packages: dict[str, LocalPackage] = {}
+        with get_tracer().start_as_current_span("resolve local package layouts") as span:
+            span.set_attribute("packages.count", len(all_local))
+            for name, pkg_path in all_local.items():
+                resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
+                contents = await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
+                metadata = tomllib.loads(contents)
+                virtual = (
+                    "build-system" not in metadata or metadata.get("tool", {}).get("uv", {}).get("package") is False
+                )
+                if virtual:
+                    flat_packages.append(name)
+                pkg = LocalPackage(
+                    name=name,
+                    path=pkg_path,
+                    module=_module_name(name),
+                    flat=flat_flags.get(name, False),
+                    pyproject_contents=contents,
+                    uv_build_layout=UvBuildLayout.from_pyproject(metadata, name) if not virtual else None,
+                )
+                local_packages[name] = pkg
+                span.add_event(
+                    "package layout",
+                    {
+                        "package.name": name,
+                        "package.path": pkg_path,
+                        "package.backend": metadata.get("build-system", {}).get("build-backend", "none"),
+                        "package.virtual": virtual,
+                        "package.module_paths": [] if virtual else pkg.module_paths,
+                        "package.source_paths": [] if virtual else pkg.source_paths,
+                    },
+                )
 
         sync_args = build_uv_sync_args(
             packages=packages,
@@ -256,24 +286,12 @@ class UvSyncPlan:
             no_editable=no_editable,
         )
 
-        def to_pkgs(local: OrderedDict[str, str]) -> list[LocalPackage]:
-            return [
-                LocalPackage(
-                    name=n,
-                    path=p,
-                    module=_module_name(n),
-                    flat=flat_flags.get(n, False),
-                    pyproject_contents=pyproject_contents[n],
-                )
-                for n, p in local.items()
-            ]
-
         return cls(
             ws_dir=ws_dir,
             source_dir=source_dir,
             workspace_path=workspace_path,
-            all_local=to_pkgs(all_local),
-            needed_local=to_pkgs(needed_local),
+            all_local=[local_packages[name] for name in all_local],
+            needed_local=[local_packages[name] for name in needed_local],
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
             no_editable=no_editable,

@@ -303,13 +303,7 @@ class UvWorkspaceBuild:
         """Copy a single local package's real source into the container."""
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
-        metadata = tomllib.loads(pkg.pyproject_contents)
-        if metadata.get("build-system", {}).get("build-backend") == "uv_build":
-            root = metadata.get("tool", {}).get("uv", {}).get("build-backend", {}).get("module-root", "src")
-            paths = [root] if root else pkg.module_paths
-        else:
-            paths = [pkg.module] if pkg.flat else ["src"]
-        for module_path in paths:
+        for module_path in pkg.source_paths:
             overlay = overlay.with_directory(
                 posixpath.join(ctr_base, module_path).lstrip("/"),
                 self.plan.source_dir.directory(posixpath.join(resolved, module_path)),
