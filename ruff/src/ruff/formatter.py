@@ -54,7 +54,7 @@ class RuffFormatter:
             args.extend(extra_args)
         args.append(".")
         ctr = self._container(source)
-        result = ctr.with_exec(args, expect=dagger.ReturnType.ANY)
+        result = ctr.with_exec(args)
         output = await result.combined_output()
         if output.strip():
             sys.stderr.write(output)
