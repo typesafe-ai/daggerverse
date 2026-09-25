@@ -158,10 +158,9 @@ source-copy step. For a non-empty source root such as `src` or `python`, the ent
 source root is copied. Package metadata and declared `project.license-files` are
 staged separately.
 
-Editable installs (the default) keep `uv sync` cached across source changes.
-With `no_editable=True`, source changes rebuild and reinstall local packages;
-third-party dependencies remain cached. Copy tests and other runtime files after
-installation.
+!!! warning "Non-editable installs"
+    With `no_editable=True`, source changes rebuild and reinstall local packages.
+    Third-party dependencies remain cached.
 
 !!! warning "Staging limitations"
     `namespace = true` and type-stub (`-stubs`) packages are not supported by the
