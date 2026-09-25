@@ -109,7 +109,7 @@ async def _discover_local_packages(
 
 @object_type
 class LocalPackage:
-    """A local (editable/directory) package in a uv workspace.
+    """A local (editable/directory/virtual) package in a uv workspace.
 
     ``pyproject_contents`` is captured while resolving the plan so scaffold
     layers depend on package metadata, not on the whole source directory.
@@ -126,6 +126,19 @@ class LocalPackage:
         str,
         Doc("Already-read package metadata used when creating a dependency scaffold"),
     ] = field()
+
+    @property
+    def module_paths(self) -> list[str]:
+        """Package-relative import directories used for both stubs and source copies."""
+        metadata = tomllib.loads(self.pyproject_contents)
+        if metadata.get("build-system", {}).get("build-backend") == "uv_build":
+            backend = metadata.get("tool", {}).get("uv", {}).get("build-backend", {})
+            names = backend.get("module-name", self.name.lower().replace("-", "_").replace(".", "_"))
+            if isinstance(names, str):
+                names = [names]
+            root = backend.get("module-root", "src")
+            return [posixpath.join(root, name.replace(".", "/")) for name in names]
+        return [self.module if self.flat else posixpath.join("src", self.module)]
 
 
 @object_type
@@ -159,7 +172,7 @@ class UvSyncPlan:
 
     flat_packages: Annotated[
         list[str],
-        Doc("Local packages with no build-system (virtual/deps-only: pyproject scaffolded, source skipped)"),
+        Doc("Virtual/deps-only packages: pyproject scaffolded, source skipped"),
     ] = field(default=list)
 
     uv_sync_args: Annotated[
@@ -217,7 +230,7 @@ class UvSyncPlan:
             lock_data, packages, all_packages, default_package, workspace_path, source_dir, ws_dir
         )
 
-        # A local package with no [build-system] is a virtual (deps-only) project:
+        # A local package with no [build-system] or with package = false is deps-only:
         # uv installs its dependencies but never builds the package itself, so its
         # source must not be scaffolded or copied — only its pyproject.toml (for
         # dependency resolution). This holds whether the package is a build target
@@ -230,7 +243,7 @@ class UvSyncPlan:
             contents = await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
             pyproject_contents[name] = contents
             pkg_toml = tomllib.loads(contents)
-            if "build-system" not in pkg_toml:
+            if "build-system" not in pkg_toml or pkg_toml.get("tool", {}).get("uv", {}).get("package") is False:
                 flat_packages.append(name)
 
         sync_args = build_uv_sync_args(

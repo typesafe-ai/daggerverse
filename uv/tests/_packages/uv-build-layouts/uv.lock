@@ -1,0 +1,49 @@
+version = 1
+revision = 3
+requires-python = ">=3.13"
+
+[manifest]
+members = [
+    "flat-dist",
+    "layout-workspace",
+    "renamed-dist",
+    "virtual-app",
+]
+
+[[package]]
+name = "flat-dist"
+version = "0.1.0"
+source = { editable = "flat" }
+
+[[package]]
+name = "layout-workspace"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "virtual-app" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "virtual-app", virtual = "app" }]
+
+[[package]]
+name = "renamed-dist"
+version = "0.1.0"
+source = { editable = "renamed" }
+dependencies = [
+    { name = "flat-dist" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "flat-dist", editable = "flat" }]
+
+[[package]]
+name = "virtual-app"
+version = "0.1.0"
+source = { virtual = "app" }
+dependencies = [
+    { name = "renamed-dist" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "renamed-dist", editable = "renamed" }]

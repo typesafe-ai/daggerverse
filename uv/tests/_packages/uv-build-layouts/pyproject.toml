@@ -1,0 +1,14 @@
+[project]
+name = "layout-workspace"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["virtual-app"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["app", "renamed", "flat"]
+
+[tool.uv.sources]
+virtual-app = { workspace = true }

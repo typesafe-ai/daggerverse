@@ -236,13 +236,10 @@ class UvWorkspaceBuild:
         )
         if pkg.name in self.plan.flat_packages:
             return overlay
-        src_name = pkg.module
         overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
-        if pkg.flat:
-            overlay = overlay.with_new_file(posixpath.join(ctr_base, src_name, "__init__.py").lstrip("/"), "")
-        else:
+        for module_path in pkg.module_paths:
             overlay = overlay.with_new_file(
-                posixpath.join(ctr_base, "src", src_name, "__init__.py").lstrip("/"),
+                posixpath.join(ctr_base, module_path, "__init__.py").lstrip("/"),
                 "",
             )
         license_files = tomllib.loads(pkg.pyproject_contents).get("project", {}).get("license-files", [])
@@ -306,16 +303,16 @@ class UvWorkspaceBuild:
         """Copy a single local package's real source into the container."""
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
-        if pkg.flat:
-            src_name = pkg.module
-            overlay = overlay.with_directory(
-                posixpath.join(ctr_base, src_name).lstrip("/"),
-                self.plan.source_dir.directory(posixpath.join(resolved, src_name)),
-            )
+        metadata = tomllib.loads(pkg.pyproject_contents)
+        if metadata.get("build-system", {}).get("build-backend") == "uv_build":
+            root = metadata.get("tool", {}).get("uv", {}).get("build-backend", {}).get("module-root", "src")
+            paths = [root] if root else pkg.module_paths
         else:
+            paths = [pkg.module] if pkg.flat else ["src"]
+        for module_path in paths:
             overlay = overlay.with_directory(
-                posixpath.join(ctr_base, "src").lstrip("/"),
-                self.plan.source_dir.directory(posixpath.join(resolved, "src")),
+                posixpath.join(ctr_base, module_path).lstrip("/"),
+                self.plan.source_dir.directory(posixpath.join(resolved, module_path)),
             )
         return overlay
 

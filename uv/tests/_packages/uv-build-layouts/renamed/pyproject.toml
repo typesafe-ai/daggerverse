@@ -1,0 +1,16 @@
+[project]
+name = "renamed-dist"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["flat-dist"]
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["actual_package", "compat_package"]
+module-root = "python"
+
+[tool.uv.sources]
+flat-dist = { workspace = true }

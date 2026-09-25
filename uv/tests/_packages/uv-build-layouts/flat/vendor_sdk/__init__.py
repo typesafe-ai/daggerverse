@@ -1,0 +1,1 @@
+VALUE = "real source"

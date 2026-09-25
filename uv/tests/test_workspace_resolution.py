@@ -40,6 +40,7 @@ class TestWorkspace:
             "my-app": "my-app",
             "my-lib": "my-lib",
             "my-core": "my-core",
+            "test-ws": ".",
         }
 
     def test_find_transitive_from_app(self):
@@ -61,10 +62,10 @@ class TestWorkspace:
         result = find_transitive_local_deps(self.lock_data, "my-core")
         assert result == {"my-core": "my-core"}
 
-    def test_skips_virtual_root(self):
-        """The workspace root (source = virtual) should not appear in local packages."""
+    def test_includes_virtual_root(self):
+        """Virtual metadata must be available when staging the workspace."""
         result = parse_local_packages(self.lock_data)
-        assert "test-ws" not in result
+        assert result["test-ws"] == "."
 
     def test_parse_returns_ordered_dict(self):
         result = parse_local_packages(self.lock_data)
@@ -72,7 +73,7 @@ class TestWorkspace:
 
     def test_parse_sorted_order(self):
         result = parse_local_packages(self.lock_data)
-        assert list(result.keys()) == ["my-app", "my-core", "my-lib"]
+        assert list(result.keys()) == ["my-app", "my-core", "my-lib", "test-ws"]
 
     def test_transitive_returns_ordered_dict(self):
         result = find_transitive_local_deps(self.lock_data, "my-app")
@@ -114,9 +115,8 @@ class TestPartialWorkspace:
 class TestVirtualWorkspaceRoot:
     """A virtual workspace root (source = virtual) still pulls in its members.
 
-    Regression: `find_transitive_local_deps` must traverse the root's deps even
-    though the root itself isn't an editable/directory (local) package — else a
-    bare `uv sync` (current-package default) leaves members unscaffolded.
+    Virtual members must be scaffolded and traversed, including when their
+    dependencies are reached through another virtual member.
     """
 
     lock_data: ClassVar = {
@@ -126,17 +126,20 @@ class TestVirtualWorkspaceRoot:
                 "source": {"virtual": "."},
                 "dependencies": [{"name": "alarms"}, {"name": "networking"}],
             },
-            {"name": "alarms", "source": {"editable": "alarms"}, "dependencies": [{"name": "networking"}]},
+            {"name": "alarms", "source": {"virtual": "alarms"}, "dependencies": [{"name": "networking"}]},
             {"name": "networking", "source": {"editable": "networking"}},
         ]
     }
 
-    def test_root_not_local(self):
-        assert "the-root" not in parse_local_packages(self.lock_data)
+    def test_virtual_metadata_is_local(self):
+        assert parse_local_packages(self.lock_data) == {"the-root": ".", "alarms": "alarms", "networking": "networking"}
 
     def test_transitive_from_virtual_root(self):
         result = find_transitive_local_deps(self.lock_data, "the-root")
-        assert result == {"alarms": "alarms", "networking": "networking"}
+        assert result == {"the-root": ".", "alarms": "alarms", "networking": "networking"}
+
+    def test_transitive_through_virtual_member(self):
+        assert find_transitive_local_deps(self.lock_data, "alarms") == {"alarms": "alarms", "networking": "networking"}
 
 
 class TestStandalone:
@@ -169,6 +172,7 @@ class TestWorkspaceApp:
             "my-app": "my-app",
             "my-lib": "my-lib",
             "my-core": "my-core",
+            "test-ws-app": ".",
         }
 
     def test_directory_source_detected(self):
@@ -216,6 +220,8 @@ class TestWorkspaceApp:
         lock = _load_lock(ws)
         local = parse_local_packages(lock)
         for pkg in local:
+            if local[pkg] == ".":
+                continue
             assert _is_flat_package(ws, local, pkg) is False
 
 
@@ -231,6 +237,7 @@ class TestWorkspaceFlat:
             "my-app": "my-app",
             "my-lib": "my-lib",
             "my-core": "my-core",
+            "test-ws-flat": ".",
         }
 
     def test_find_transitive_from_app(self):
@@ -245,6 +252,8 @@ class TestWorkspaceFlat:
         """my-lib and my-core use flat layout (no src/), my-app uses src layout."""
         local = parse_local_packages(self.lock_data)
         for name, path in local.items():
+            if path == ".":
+                continue
             module = name.replace("-", "_")
             src_init = self.ws_root / path / "src" / module / "__init__.py"
             flat_init = self.ws_root / path / module / "__init__.py"
@@ -259,6 +268,8 @@ class TestWorkspaceFlat:
         """All packages in workspace-flat have [build-system], unlike workspace-app."""
         local = parse_local_packages(self.lock_data)
         for name, path in local.items():
+            if path == ".":
+                continue
             toml = tomllib.loads((self.ws_root / path / "pyproject.toml").read_text())
             assert "build-system" in toml, f"{name} should have build-system"
 
@@ -266,6 +277,8 @@ class TestWorkspaceFlat:
         """No package should be detected as flat-package (no build-system)."""
         local = parse_local_packages(self.lock_data)
         for pkg in local:
+            if local[pkg] == ".":
+                continue
             assert _is_flat_package(self.ws_root, local, pkg) is False
 
 

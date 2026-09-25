@@ -264,6 +264,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "workspace_layer_cache", self.uv_workspace_layer_cache)
             tg.start_soon(_run, "build_workspace_app", self.uv_workspace_build_workspace_app)
             tg.start_soon(_run, "build_workspace_flat", self.uv_workspace_build_workspace_flat)
+            tg.start_soon(_run, "uv_build_layouts", self.uv_build_layouts)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
@@ -451,6 +452,40 @@ class TypesafeDaggerverse:
         )
         if "NO_EDITABLE_OK" not in out:
             raise AssertionError(f"expected non-editable venv to bake real local source, got: {out!r}")
+
+    @function
+    async def uv_build_layouts(self) -> None:
+        """Virtual members, renamed modules, multiple modules, and custom roots build together."""
+        source = self.source.directory("uv/tests/_packages/uv-build-layouts")
+        script = (
+            "from importlib.metadata import distributions\n"
+            "import actual_package, compat_package, vendor_sdk\n"
+            "assert actual_package.VALUE == compat_package.VALUE == vendor_sdk.VALUE == 'real source'\n"
+            "installed = {d.metadata['Name'] for d in distributions()}\n"
+            "assert not {'layout-workspace', 'virtual-app'} & installed\n"
+        )
+        for no_editable in (False, True):
+            for package in (None, ["virtual-app"]):
+                await (
+                    dag.uv(source=source)
+                    .workspace()
+                    .build(package=package, no_editable=no_editable, dagger_codegen=False)
+                    .with_remote_dependencies(prune_cache=False)
+                    .with_workspace_files()
+                    .with_local_dependencies()
+                    .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
+                    .sync()
+                )
+        # Pulumi installs the entire workspace even when building one member.
+        await (
+            dag.uv(source=source)
+            .workspace()
+            .build(package=["flat-dist"], dagger_codegen=False)
+            .with_all_workspace_members()
+            .container()
+            .with_exec(["uv", "sync", "--frozen", "--all-packages"])
+            .sync()
+        )
 
     @function
     async def uv_license_files(self) -> None:

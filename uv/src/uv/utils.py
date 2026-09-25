@@ -237,8 +237,9 @@ def require_package_selection(packages: list[str], all_packages: bool, default_p
 
 
 def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
-    """Return {package_name: local_path} for all local packages (editable or directory).
+    """Return {package_name: local_path} for editable, directory, and virtual packages.
 
+    Virtual members still need their metadata staged for workspace resolution.
     Results are sorted by package name for deterministic build order.
     """
     result = {}
@@ -248,6 +249,8 @@ def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
             result[pkg["name"]] = source["editable"]
         elif "directory" in source:
             result[pkg["name"]] = source["directory"]
+        elif "virtual" in source:
+            result[pkg["name"]] = source["virtual"]
     return OrderedDict(sorted(result.items()))
 
 
@@ -258,10 +261,8 @@ def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str
     The *project* name is PEP 503-normalised so callers can pass the raw
     `[project].name` from `pyproject.toml` (which may use underscores).
 
-    `project` need not itself be a local package: a virtual workspace root
-    (`source = { virtual = ... }` in the lock) isn't editable/directory, but it
-    still declares dependencies on workspace members. We traverse its dependency
-    graph regardless, collecting the *local* packages reached.
+    Virtual roots and members participate in traversal just like installable
+    packages, including dependencies reached through a virtual member.
     """
     locals_ = parse_local_packages(lock_data)
     project = normalize_package_name(project)
@@ -275,9 +276,8 @@ def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str
         dep_graph[name] = sorted(deps)
 
     needed: dict[str, str] = {}
-    # Seed traversal from `project` even when it isn't local (e.g. a virtual
-    # workspace root) so we still walk its dependencies; only local packages are
-    # recorded in `needed`, and traversal continues only through local packages
+    # Seed traversal from `project` even when it isn't local so we still walk
+    # its dependencies. Only local packages are recorded in `needed` and traversed
     # (a third-party dep's transitive deps are remote, not workspace-local).
     visited = {project}
     queue: deque[str] = deque([project])

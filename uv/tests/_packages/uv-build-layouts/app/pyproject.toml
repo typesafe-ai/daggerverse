@@ -1,0 +1,15 @@
+[project]
+name = "virtual-app"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["renamed-dist"]
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+renamed-dist = { workspace = true }
