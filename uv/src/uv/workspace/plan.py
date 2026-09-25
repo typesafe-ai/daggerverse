@@ -222,9 +222,14 @@ class UvSyncPlan:
         # (where sdk/ is gitignored) silently drop dagger-io from the plan.
         if dagger_codegen:
             raw_local = parse_local_packages(lock_data)
-            # Overlay each target package's SDK (deduped); fall back to the
-            # workspace root when no target is a local package.
-            codegen_paths = list(dict.fromkeys(raw_local[p] for p in packages if p in raw_local)) or ["."]
+            if all_packages:
+                pyproject_paths = await source_dir.glob("**/pyproject.toml")
+                codegen_candidates = _match_reachable(raw_local, workspace_path, pyproject_paths).values()
+            else:
+                codegen_candidates = (raw_local[p] for p in packages if p in raw_local)
+            # Overlay each selected package's SDK (deduped); fall back to the
+            # workspace root when no explicit or local package is selected.
+            codegen_paths = list(dict.fromkeys(codegen_candidates)) or ["."]
             for codegen_path in codegen_paths:
                 ws_dir = await _run_codegen(ws_dir, codegen_path)
             if workspace_path == ".":

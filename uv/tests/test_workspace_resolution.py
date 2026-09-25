@@ -1,5 +1,6 @@
 """Tests for uv.lock parsing and transitive dependency resolution."""
 
+import asyncio
 import posixpath
 import tomllib
 from collections import OrderedDict
@@ -15,6 +16,125 @@ from uv.utils import (
 from uv.workspace.plan import _match_reachable, _module_name
 
 FIXTURES = Path(__file__).parent / "_packages"
+
+
+class _FakeFile:
+    def __init__(self, contents: str):
+        self._contents = contents
+
+    async def contents(self) -> str:
+        return self._contents
+
+
+class _PlanDirectory:
+    def __init__(self, files: dict[str, str], pyproject_paths: list[str]):
+        self._files = files
+        self._pyproject_paths = pyproject_paths
+
+    def directory(self, path: str):
+        return self
+
+    def file(self, path: str) -> _FakeFile:
+        return _FakeFile(self._files[path])
+
+    async def glob(self, pattern: str) -> list[str]:
+        assert pattern == "**/pyproject.toml"
+        return self._pyproject_paths
+
+    def with_directory(self, path: str, directory):
+        return self
+
+
+def _codegen_visits(
+    monkeypatch,
+    lock: str,
+    pyproject: str,
+    pyproject_paths: list[str] | None = None,
+    **selection,
+) -> list[str]:
+    from uv.workspace import plan
+    from uv.workspace.plan import UvSyncPlan
+
+    visited: list[str] = []
+
+    async def record_codegen(ws_dir, codegen_path: str):
+        visited.append(codegen_path)
+        return ws_dir
+
+    async def skip_discovery(*args, **kwargs):
+        return OrderedDict(), OrderedDict(), {}
+
+    monkeypatch.setattr(plan, "_run_codegen", record_codegen)
+    monkeypatch.setattr(plan, "_discover_local_packages", skip_discovery)
+    local_paths = parse_local_packages(tomllib.loads(lock)).values()
+    if pyproject_paths is None:
+        pyproject_paths = ["pyproject.toml", *(posixpath.join(path, "pyproject.toml") for path in local_paths)]
+    source = _PlanDirectory(
+        {"uv.lock": lock, "pyproject.toml": pyproject},
+        list(dict.fromkeys(pyproject_paths)),
+    )
+    asyncio.run(UvSyncPlan.create(source_dir=source, dagger_codegen=True, **selection))
+    return visited
+
+
+class TestCodegenPackageSelection:
+    workspace_lock = """version = 1
+[[package]]
+name = "app-one"
+source = { editable = "packages/app-one" }
+[[package]]
+name = "app-two"
+source = { editable = "packages/app-two" }
+"""
+    pure_workspace = '[tool.uv.workspace]\nmembers = ["packages/*"]\n'
+
+    def test_all_packages_visits_each_local_member(self, monkeypatch):
+        assert _codegen_visits(
+            monkeypatch,
+            self.workspace_lock,
+            self.pure_workspace,
+            all_packages=True,
+        ) == ["packages/app-one", "packages/app-two"]
+
+    def test_all_packages_skips_unreachable_lock_entries(self, monkeypatch):
+        lock = (
+            self.workspace_lock
+            + """[[package]]
+name = "outside-source"
+source = { editable = "../outside-source" }
+"""
+        )
+        assert _codegen_visits(
+            monkeypatch,
+            lock,
+            self.pure_workspace,
+            pyproject_paths=[
+                "pyproject.toml",
+                "packages/app-one/pyproject.toml",
+                "packages/app-two/pyproject.toml",
+            ],
+            all_packages=True,
+        ) == ["packages/app-one", "packages/app-two"]
+
+    def test_explicit_packages_preserve_selection_and_deduplicate(self, monkeypatch):
+        assert _codegen_visits(
+            monkeypatch,
+            self.workspace_lock,
+            self.pure_workspace,
+            package=["app-two", "app-one", "app-two"],
+        ) == ["packages/app-two", "packages/app-one"]
+
+    def test_default_package_preserves_workspace_root_codegen(self, monkeypatch):
+        standalone_lock = """version = 1
+[[package]]
+name = "root-app"
+source = { editable = "." }
+"""
+        assert _codegen_visits(
+            monkeypatch,
+            standalone_lock,
+            '[project]\nname = "root-app"\n',
+        ) == ["."]
 
 
 def _load_lock(path: Path) -> dict:
