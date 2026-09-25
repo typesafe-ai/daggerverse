@@ -33,7 +33,7 @@ from github.status_monitor.params import (
     Timeout,
     Token,
 )
-from github.status_monitor.types import Step
+from github.status_monitor.types import Check, Step, format_check
 from github.status_monitor.watcher import Watcher
 
 
@@ -128,7 +128,9 @@ class GithubStatusMonitor:
     ) -> str:
         console = Console(force_terminal=True)
 
-        expected = sorted(set(status_names + check_run_names))
+        expected = sorted(
+            {Check("status", name) for name in status_names} | {Check("check run", name) for name in check_run_names}
+        )
         if not expected:
             render.empty(console)
             return "no checks to wait for"
@@ -160,11 +162,14 @@ class GithubStatusMonitor:
                     case Step.SUCCEEDED:
                         return f"all {len(watcher.succeeded)} checks succeeded"
                     case Step.FAILED:
-                        raise RuntimeError(f"checks failed: {watcher.failed}")
+                        raise RuntimeError(f"checks failed: {[format_check(check) for check in watcher.failed]}")
                     case Step.DISCOVERY_TIMEOUT:
-                        raise TimeoutError(f"checks never appeared on {ref}: {watcher.missing}")
+                        missing = [format_check(check) for check in watcher.missing]
+                        raise TimeoutError(f"checks never appeared on {ref}: {missing}")
                     case Step.WALLCLOCK_TIMEOUT:
-                        raise TimeoutError(f"timed out: pending={watcher.pending} missing={watcher.missing}")
+                        pending = [format_check(check) for check in watcher.pending]
+                        missing = [format_check(check) for check in watcher.missing]
+                        raise TimeoutError(f"timed out: pending={pending} missing={missing}")
                     case Step.CONTINUE:
                         continue
 

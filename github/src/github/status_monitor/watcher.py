@@ -22,10 +22,12 @@ from .types import (
     FAILURE_STATES,
     MISSING,
     TERMINAL_STATES,
+    Check,
     Status,
     Step,
     Transition,
     Verdict,
+    format_check,
 )
 
 
@@ -42,7 +44,7 @@ class Watcher:
 
     def __init__(
         self,
-        expected: Iterable[str],
+        expected: Iterable[Check | str],
         *,
         repo: str = "",
         ref: str = "",
@@ -54,7 +56,7 @@ class Watcher:
         console: Console | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        self.expected: list[str] = sorted(set(expected))
+        self.expected: list[Check | str] = sorted(set(expected), key=format_check)
         self.repo: str = repo
         self.ref: str = ref
         self.fail_fast: bool = fail_fast
@@ -63,7 +65,7 @@ class Watcher:
         self.poll_interval: int = poll_interval
         self.progress_interval: float = progress_interval
         self.console: Console = console if console is not None else _default_console()
-        self.states: dict[str, str] = {name: MISSING for name in self.expected}
+        self.states: dict[Check | str, str] = {name: MISSING for name in self.expected}
 
         self._clock: Callable[[], float] = clock
         self._start: float | None = None
@@ -71,7 +73,7 @@ class Watcher:
 
     # ---- pure state ----
 
-    def observe(self, snapshot: Mapping[str, Status]) -> list[Transition]:
+    def observe(self, snapshot: Mapping[Check | str, Status]) -> list[Transition]:
         """Apply a snapshot, render any newly-terminal checks, and return them.
 
         Each terminal transition is reported exactly once. Per-transition
@@ -104,24 +106,24 @@ class Watcher:
         return Verdict.SUCCEEDED
 
     @property
-    def missing(self) -> list[str]:
+    def missing(self) -> list[Check | str]:
         return [c for c in self.expected if self.states[c] == MISSING]
 
     @property
-    def pending(self) -> list[str]:
+    def pending(self) -> list[Check | str]:
         return [c for c in self.expected if self.states[c] == "pending"]
 
     @property
-    def failed(self) -> list[str]:
+    def failed(self) -> list[Check | str]:
         return [c for c in self.expected if self.states[c] in FAILURE_STATES]
 
     @property
-    def succeeded(self) -> list[str]:
+    def succeeded(self) -> list[Check | str]:
         return [c for c in self.expected if self.states[c] == "success"]
 
     # ---- orchestration ----
 
-    def step(self, snapshot: Mapping[str, Status]) -> Step:
+    def step(self, snapshot: Mapping[Check | str, Status]) -> Step:
         """Apply `snapshot`, advance deadlines, and emit progress output.
 
         Returns the :class:`Step` outcome — :data:`Step.CONTINUE` means the

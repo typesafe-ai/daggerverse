@@ -2,10 +2,25 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Literal, NamedTuple
 
 TERMINAL_STATES: frozenset[str] = frozenset({"success", "failure", "error"})
 FAILURE_STATES: frozenset[str] = frozenset({"failure", "error"})
 MISSING: str = "missing"
+
+
+class Check(NamedTuple):
+    """A check's API channel and display name."""
+
+    channel: Literal["status", "check run"]
+    name: str
+
+
+def format_check(check: Check | str) -> str:
+    """Render a channel-qualified check, tolerating legacy string keys."""
+    if isinstance(check, Check):
+        return f"{check.channel}: {check.name}"
+    return check
 
 
 @dataclass(frozen=True)
@@ -19,7 +34,7 @@ class Status:
 class Transition:
     """A check that just reached a terminal state."""
 
-    name: str
+    name: Check | str
     state: str
 
 

@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator, Mapping
 
 import httpx
 
-from .types import Status
+from .types import Check, Status
 
 
 def statuses_url(*, github_api: str, repo: str, ref: str) -> str:
@@ -95,17 +95,23 @@ async def poll_snapshots(
     statuses_url: str | None,
     check_runs_url: str | None,
     interval: int,
-) -> AsyncIterator[Mapping[str, Status]]:
-    """Yield successive merged snapshots from both commit statuses and check runs.
+) -> AsyncIterator[Mapping[Check | str, Status]]:
+    """Yield snapshots keyed by API channel and check name.
 
     The first snapshot is yielded immediately; the sleep happens after each
     yield, so a consumer that breaks out of the loop never sleeps unnecessarily.
     """
     while True:
-        merged: dict[str, Status] = {}
+        merged: dict[Check | str, Status] = {}
         if statuses_url:
-            merged.update(await fetch_statuses_snapshot(client, statuses_url))
+            merged.update(
+                (Check("status", name), status)
+                for name, status in (await fetch_statuses_snapshot(client, statuses_url)).items()
+            )
         if check_runs_url:
-            merged.update(await fetch_check_runs_snapshot(client, check_runs_url))
+            merged.update(
+                (Check("check run", name), status)
+                for name, status in (await fetch_check_runs_snapshot(client, check_runs_url)).items()
+            )
         yield merged
         await asyncio.sleep(interval)
