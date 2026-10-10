@@ -58,6 +58,13 @@ class RuffChecker:
         output = await result.combined_output()
         if output.strip():
             sys.stderr.write(output)
+        exit_code = await result.exit_code()
+        if exit_code not in (0, 1):
+            raise RuntimeError(
+                f"`ruff check --fix` failed with exit code {exit_code}: "
+                "ruff reported an error (configuration, usage, or runtime). "
+                "See stderr above for ruff's output."
+            )
         before = dag.directory().with_directory(".", source)
         fixed = result.directory("/work").without_directory(".ruff_cache")
         after = dag.directory().with_directory(".", fixed)
