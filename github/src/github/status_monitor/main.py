@@ -30,6 +30,7 @@ from github.status_monitor.params import (
     ProgressInterval,
     Ref,
     Repo,
+    RetryGracePeriod,
     Timeout,
     Token,
 )
@@ -62,6 +63,7 @@ class GithubStatusMonitor:
         progress_interval: ProgressInterval = 30,
         timeout: Timeout = 1800,
         discovery_timeout: DiscoveryTimeout = 300,
+        retry_grace_period: RetryGracePeriod = 0,
         fail_fast: FailFast = False,
     ) -> str:
         """Wait until every status context in `checks` and every check-run in
@@ -76,6 +78,7 @@ class GithubStatusMonitor:
             progress_interval=progress_interval,
             timeout=timeout,
             discovery_timeout=discovery_timeout,
+            retry_grace_period=retry_grace_period,
             fail_fast=fail_fast,
         )
 
@@ -89,6 +92,7 @@ class GithubStatusMonitor:
         progress_interval: ProgressInterval = 30,
         timeout: Timeout = 1800,
         discovery_timeout: DiscoveryTimeout = 300,
+        retry_grace_period: RetryGracePeriod = 60,
         fail_fast: FailFast = False,
     ) -> str:
         """Wait for every Dagger check in the current workspace to succeed.
@@ -109,6 +113,7 @@ class GithubStatusMonitor:
             progress_interval=progress_interval,
             timeout=timeout,
             discovery_timeout=discovery_timeout,
+            retry_grace_period=retry_grace_period,
             fail_fast=fail_fast,
         )
 
@@ -124,6 +129,7 @@ class GithubStatusMonitor:
         progress_interval: int,
         timeout: int,
         discovery_timeout: int,
+        retry_grace_period: int,
         fail_fast: bool,
     ) -> str:
         console = Console(force_terminal=True)
@@ -140,6 +146,7 @@ class GithubStatusMonitor:
             fail_fast=fail_fast,
             timeout=timeout,
             discovery_timeout=discovery_timeout,
+            retry_grace_period=retry_grace_period,
             poll_interval=poll_interval,
             progress_interval=progress_interval,
             console=console,
@@ -164,7 +171,9 @@ class GithubStatusMonitor:
                     case Step.DISCOVERY_TIMEOUT:
                         raise TimeoutError(f"checks never appeared on {ref}: {watcher.missing}")
                     case Step.WALLCLOCK_TIMEOUT:
-                        raise TimeoutError(f"timed out: pending={watcher.pending} missing={watcher.missing}")
+                        raise TimeoutError(
+                            f"timed out: pending={watcher.pending} missing={watcher.missing} retrying={watcher.retrying}"
+                        )
                     case Step.CONTINUE:
                         continue
 

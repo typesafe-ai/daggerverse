@@ -49,17 +49,21 @@ class Watcher:
         fail_fast: bool = False,
         timeout: float = 1800,
         discovery_timeout: float = 300,
+        retry_grace_period: float = 0,
         poll_interval: int = 3,
         progress_interval: float = 30,
         console: Console | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        if retry_grace_period < 0:
+            raise ValueError("retry_grace_period must be non-negative")
         self.expected: list[str] = sorted(set(expected))
         self.repo: str = repo
         self.ref: str = ref
         self.fail_fast: bool = fail_fast
         self.timeout: float = timeout
         self.discovery_timeout: float = discovery_timeout
+        self.retry_grace_period: float = retry_grace_period
         self.poll_interval: int = poll_interval
         self.progress_interval: float = progress_interval
         self.console: Console = console if console is not None else _default_console()
@@ -68,6 +72,7 @@ class Watcher:
         self._clock: Callable[[], float] = clock
         self._start: float | None = None
         self._last_progress: float | None = None
+        self._error_since: dict[str, float] = {}
 
     # ---- pure state ----
 
@@ -79,10 +84,16 @@ class Watcher:
         the final table about to be rendered will summarize.
         """
         new_completions: list[Transition] = []
+        now = self._clock()
         for name in self.expected:
             previous = self.states[name]
             status = snapshot.get(name)
             next_state = MISSING if status is None else status.state
+            if next_state == "error":
+                # Repeated polls of the same error must not extend its grace.
+                self._error_since.setdefault(name, now)
+            else:
+                self._error_since.pop(name, None)
             if next_state != previous:
                 self.states[name] = next_state
                 if next_state in TERMINAL_STATES and previous not in TERMINAL_STATES:
@@ -95,13 +106,23 @@ class Watcher:
 
     @property
     def verdict(self) -> Verdict:
-        if self.fail_fast and self.failed:
+        retrying = set(self.retrying)
+        failed = [name for name in self.failed if name not in retrying]
+        if self.fail_fast and failed:
             return Verdict.FAILED
         if self.pending or self.missing:
             return Verdict.WAITING
-        if self.failed:
+        if failed:
             return Verdict.FAILED
+        if retrying:
+            return Verdict.WAITING
         return Verdict.SUCCEEDED
+
+    @property
+    def retrying(self) -> list[str]:
+        """Errored checks still within their grace period for a Cloud retry."""
+        now = self._clock()
+        return [name for name, since in self._error_since.items() if now - since < self.retry_grace_period]
 
     @property
     def missing(self) -> list[str]:
@@ -166,6 +187,7 @@ class Watcher:
             succeeded=len(self.succeeded),
             pending=len(self.pending),
             missing=len(self.missing),
+            retrying=len(self.retrying),
             total=len(self.expected),
         )
 
@@ -181,7 +203,7 @@ class Watcher:
 
     def print_wallclock_timeout(self) -> None:
         self._print_table()
-        render.wallclock_timeout(self.console, pending=self.pending, missing=self.missing)
+        render.wallclock_timeout(self.console, pending=self.pending, missing=self.missing, retrying=self.retrying)
 
     def _print_table(self) -> None:
         render.final_table(

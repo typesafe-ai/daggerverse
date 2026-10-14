@@ -363,3 +363,82 @@ def test_step_prints_header_only_once():
     # Header line ("waiting on") appears exactly once.
     assert after_first.count("waiting on") == 1
     assert after_second.count("waiting on") == 1
+
+
+@pytest.mark.parametrize("fail_fast", [False, True])
+def test_error_can_retry_and_succeed_within_grace(fail_fast):
+    w, c, clock = make_step_watcher(["a", "b"], retry_grace_period=60, fail_fast=fail_fast)
+    assert w.step({"a": Status("error"), "b": Status("success")}) is Step.CONTINUE
+    assert w.retrying == ["a"]
+    assert "retrying=1" in c.export_text(clear=False)
+    clock.t = 6
+    assert w.step({"a": Status("pending"), "b": Status("success")}) is Step.CONTINUE
+    assert w.retrying == []
+    clock.t = 300
+    assert w.step({"a": Status("success"), "b": Status("success")}) is Step.SUCCEEDED
+
+
+def test_repeated_error_polls_do_not_extend_grace():
+    w, _, clock = make_step_watcher(["a"], retry_grace_period=60)
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 59
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 60
+    assert w.step({"a": Status("error")}) is Step.FAILED
+    assert w.failed == ["a"]
+
+
+def test_new_error_after_retry_gets_new_grace():
+    w, _, clock = make_step_watcher(["a"], retry_grace_period=60)
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 6
+    assert w.step({"a": Status("pending")}) is Step.CONTINUE
+    clock.t = 400
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 459
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 460
+    assert w.step({"a": Status("error")}) is Step.FAILED
+
+
+def test_grace_is_per_check():
+    w, _, clock = make_step_watcher(["a", "b"], retry_grace_period=60, fail_fast=True)
+    assert w.step({"a": Status("error"), "b": Status("pending")}) is Step.CONTINUE
+    clock.t = 50
+    assert w.step({"a": Status("error"), "b": Status("error")}) is Step.CONTINUE
+    clock.t = 60
+    assert w.step({"a": Status("error"), "b": Status("error")}) is Step.FAILED
+    assert w.retrying == ["b"]
+
+
+@pytest.mark.parametrize("fail_fast", [False, True])
+def test_failure_is_not_delayed_by_error_grace(fail_fast):
+    w, _, _ = make_step_watcher(["a", "b"], retry_grace_period=60, fail_fast=fail_fast)
+    assert w.step({"a": Status("failure"), "b": Status("error")}) is Step.FAILED
+
+
+def test_zero_grace_preserves_immediate_error_failure():
+    w, _, _ = make_step_watcher(["a"], retry_grace_period=0)
+    assert w.step({"a": Status("error")}) is Step.FAILED
+
+
+def test_negative_grace_is_rejected():
+    with pytest.raises(ValueError, match="retry_grace_period must be non-negative"):
+        make_step_watcher(["a"], retry_grace_period=-1)
+
+
+def test_retry_grace_does_not_extend_wallclock_timeout():
+    w, c, clock = make_step_watcher(["a"], retry_grace_period=60, timeout=10)
+    assert w.step({"a": Status("pending")}) is Step.CONTINUE
+    clock.t = 9
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 11
+    assert w.step({"a": Status("error")}) is Step.WALLCLOCK_TIMEOUT
+    assert "retrying=['a']" in c.export_text(clear=False)
+
+
+def test_retry_grace_does_not_delay_discovery_timeout():
+    w, _, clock = make_step_watcher(["a", "b"], retry_grace_period=60, discovery_timeout=10)
+    assert w.step({"a": Status("error")}) is Step.CONTINUE
+    clock.t = 11
+    assert w.step({"a": Status("error")}) is Step.DISCOVERY_TIMEOUT

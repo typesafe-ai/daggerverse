@@ -94,7 +94,15 @@ dagger -m github.com/typesafe-ai/daggerverse/github call \
 | `progress-interval` | `30`                       | seconds between routine progress lines                 |
 | `timeout`           | `1800`                     | total wall-clock budget, in seconds                    |
 | `discovery-timeout` | `300`                      | how long expected statuses may take to first appear    |
+| `retry-grace-period` | `0` (`60` for Dagger checks) | seconds to allow an `error` status to be retried; `0` disables grace |
 | `fail-fast`         | `false`                    | whether to exit 1 on first check failure               |
+
+Dagger Cloud may briefly publish `error` when an engine disconnects, then
+return the check to `pending` for a retry. The grace period starts when each
+check is observed entering `error`. Repeated polls do not extend it; a new
+error after returning to `pending` gets a new grace period. `failure` statuses
+are never given retry grace, and the total `timeout` still bounds all retries.
+`fail-fast` also honors retry grace for `error` statuses.
 
 `wait-for-statuses` additionally requires:
 
