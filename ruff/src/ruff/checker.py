@@ -49,12 +49,12 @@ class RuffChecker:
         ] = None,
     ) -> dagger.Changeset:
         """Auto-fix lint violations and return a Changeset."""
-        args = ["/ruff", "check", "--fix"]
+        args = ["/ruff", "check", "--fix", "--exit-zero"]
         if extra_args:
             args.extend(extra_args)
         args.append(".")
         ctr = self._container(source)
-        result = ctr.with_exec(args, expect=dagger.ReturnType.ANY)
+        result = ctr.with_exec(args)
         output = await result.combined_output()
         if output.strip():
             sys.stderr.write(output)
