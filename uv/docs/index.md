@@ -72,8 +72,12 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     from dagger_clients.uv import uv
 
     # Build a minimal container with a package and its local dependencies installed.
-    ctr = uv(source=src).workspace(".").install(package=["my-app"])
+    ctr = uv().workspace(".").install(ws, package=["my-app"])
     ```
+
+    `ws` is the Dagger workspace the module reads. In your own module, take
+    `ws: Workspace` as a function argument and Dagger fills it in. To read a
+    directory instead, pass `directory.as_workspace()`.
 
 ??? abstract "The mental model"
 
@@ -86,7 +90,8 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
       B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
-    - **`Uv`** holds only your source directory. Ask it for a single workspace by path
+    - **`Uv`** holds no files: each operation reads only what it needs from the Dagger
+      workspace (`ws`). Ask it for a single workspace by path
       (`workspace`) or for the collection of every workspace it can find (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or

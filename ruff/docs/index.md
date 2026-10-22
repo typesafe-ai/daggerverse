@@ -39,8 +39,7 @@ $ dagger call ruff format fix
 
 ## `ruff` version detection
 
-When you pass a `--source` directory the module auto-detects the ruff version from
-(in order):
+The module detects the ruff version from the workspace root (in order):
 
 1. `uv.lock` — the pinned package version
 2. `ruff.toml` / `.ruff.toml` — `required-version`

@@ -32,7 +32,7 @@ from dagger_clients.core import (  # noqa: E402
     Changeset,
     Check,
     Container,
-    Directory,
+    Workspace,
 )
 
 _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
@@ -40,7 +40,9 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 
 
 class Ruff(_Type):
-    """ Ruff Python linter and formatter.  """
+    """ Ruff Python linter and formatter.  Runs on the Dagger workspace
+    root. To run on a directory instead, pass `directory.as_workspace()`.
+    """
 
     def check(self) -> "RuffChecker":
         """
@@ -51,6 +53,9 @@ class Ruff(_Type):
         return RuffChecker(_ctx)
 
     def ctr(self) -> Container:
+        """Container with ruff installed. Defaults to the official
+        ghcr.io/astral-sh/ruff image.
+        """
         _args: list[_Arg] = []
         _ctx = self._select("ctr", _args)
         return Container(_ctx)
@@ -91,9 +96,15 @@ class Ruff(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def version(self) -> str:
+    async def resolved_version(self, ws: Workspace) -> str:
         """
-        The resolved ruff version.
+        The ruff version `check` and `format` run.
+
+        Parameters
+        ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
 
         Returns
         -------
@@ -109,37 +120,66 @@ class Ruff(_Type):
         QueryError
             If the API returns an error.
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("Ruff.resolved_version", "ws", ws, "Workspace")
+        _args = [
+            _Arg("ws", ws),
+        ]
+        _ctx = self._select("resolvedVersion", _args)
+        return await _ctx.execute(str)
+
+    async def version(self) -> str | None:
+        """Ruff image tag. Only used when `ctr` is not provided. Defaults to the
+        version the workspace pins.
+
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
         _args: list[_Arg] = []
         _ctx = self._select("version", _args)
-        return await _ctx.execute(str)
+        return await _ctx.execute(str | None)
 
 
 class RuffChecker(_Type):
     """ Ruff linter (`ruff check`).  """
 
     def ctr(self) -> Container:
-        """Container with ruff installed."""
+        """Container with ruff installed. Defaults to the ruff image at
+        `version`.
+        """
         _args: list[_Arg] = []
         _ctx = self._select("ctr", _args)
         return Container(_ctx)
 
-    def fix(self, *, source: Directory | None = None, extra_args: list[str] | None = None,) -> Changeset:
+    def fix(self, ws: Workspace, *, extra_args: list[str] | None = None,) -> Changeset:
         """
         Auto-fix lint violations and return a Changeset.
 
         Parameters
         ----------
-        source:
-            Project source directory.
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         extra_args:
             Additional arguments to pass to `ruff check --fix`.
         """
-        if not (source is None or isinstance(source, Directory)):
-            raise _type_error("RuffChecker.fix", "source", source, "Directory | None")
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("RuffChecker.fix", "ws", ws, "Workspace")
         if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
             raise _type_error("RuffChecker.fix", "extra_args", extra_args, "list[str] | None")
         _args = [
-            _Arg("source", source, None),
+            _Arg("ws", ws),
             _Arg("extraArgs", extra_args, None),
         ]
         _ctx = self._select("fix", _args)
@@ -173,7 +213,7 @@ class RuffChecker(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def lint(self, *, source: Directory | None = None, extra_args: list[str] | None = None,) -> Check:
+    def lint(self, ws: Workspace, *, extra_args: list[str] | None = None,) -> Check:
         """
         Run `ruff check` and report violations.
 
@@ -181,49 +221,74 @@ class RuffChecker(_Type):
 
         Parameters
         ----------
-        source:
-            Project source directory.
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         extra_args:
             Additional arguments to pass to `ruff check`.
         """
-        if not (source is None or isinstance(source, Directory)):
-            raise _type_error("RuffChecker.lint", "source", source, "Directory | None")
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("RuffChecker.lint", "ws", ws, "Workspace")
         if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
             raise _type_error("RuffChecker.lint", "extra_args", extra_args, "list[str] | None")
         _args = [
-            _Arg("source", source, None),
+            _Arg("ws", ws),
             _Arg("extraArgs", extra_args, None),
         ]
         _ctx = self._select("lint", _args)
         return Check(_ctx)
+
+    async def version(self) -> str | None:
+        """Ruff image tag. Defaults to the version the workspace pins.
+
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("version", _args)
+        return await _ctx.execute(str | None)
 
 
 class RuffFormatter(_Type):
     """ Ruff formatter (`ruff format`).  """
 
     def ctr(self) -> Container:
-        """Container with ruff installed."""
+        """Container with ruff installed. Defaults to the ruff image at
+        `version`.
+        """
         _args: list[_Arg] = []
         _ctx = self._select("ctr", _args)
         return Container(_ctx)
 
-    def fix(self, *, source: Directory | None = None, extra_args: list[str] | None = None,) -> Changeset:
+    def fix(self, ws: Workspace, *, extra_args: list[str] | None = None,) -> Changeset:
         """
         Auto-format source files and return a Changeset.
 
         Parameters
         ----------
-        source:
-            Project source directory.
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         extra_args:
             Additional arguments to pass to `ruff format`.
         """
-        if not (source is None or isinstance(source, Directory)):
-            raise _type_error("RuffFormatter.fix", "source", source, "Directory | None")
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("RuffFormatter.fix", "ws", ws, "Workspace")
         if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
             raise _type_error("RuffFormatter.fix", "extra_args", extra_args, "list[str] | None")
         _args = [
-            _Arg("source", source, None),
+            _Arg("ws", ws),
             _Arg("extraArgs", extra_args, None),
         ]
         _ctx = self._select("fix", _args)
@@ -257,7 +322,7 @@ class RuffFormatter(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def lint(self, *, source: Directory | None = None, extra_args: list[str] | None = None,) -> Check:
+    def lint(self, ws: Workspace, *, extra_args: list[str] | None = None,) -> Check:
         """
         Run `ruff format --check` and report unformatted files.
 
@@ -265,46 +330,66 @@ class RuffFormatter(_Type):
 
         Parameters
         ----------
-        source:
-            Project source directory.
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         extra_args:
             Additional arguments to pass to `ruff format --check`.
         """
-        if not (source is None or isinstance(source, Directory)):
-            raise _type_error("RuffFormatter.lint", "source", source, "Directory | None")
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("RuffFormatter.lint", "ws", ws, "Workspace")
         if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
             raise _type_error("RuffFormatter.lint", "extra_args", extra_args, "list[str] | None")
         _args = [
-            _Arg("source", source, None),
+            _Arg("ws", ws),
             _Arg("extraArgs", extra_args, None),
         ]
         _ctx = self._select("lint", _args)
         return Check(_ctx)
 
+    async def version(self) -> str | None:
+        """Ruff image tag. Defaults to the version the workspace pins.
 
-def ruff(*, source: Directory | None = None, ctr: Container | None = None, version: str | None = None, session: _Session | None = None,) -> Ruff:
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("version", _args)
+        return await _ctx.execute(str | None)
+
+
+def ruff(*, ctr: Container | None = None, version: str | None = None, session: _Session | None = None,) -> Ruff:
     """
     Ruff Python linter and formatter.
 
+    Runs on the Dagger workspace root. To run on a directory instead, pass
+    `directory.as_workspace()`.
+
     Parameters
     ----------
-    source:
-        Project source directory.
     ctr:
         Container with ruff installed. Defaults to the official
         ghcr.io/astral-sh/ruff image.
     version:
-        Ruff image tag. Only used when `ctr` is not provided. Overrides
-        auto-detection from source.
+        Ruff image tag. Only used when `ctr` is not provided. Defaults to
+        the version the workspace pins.
     """
-    if not (source is None or isinstance(source, Directory)):
-        raise _type_error("ruff", "source", source, "Directory | None")
     if not (ctr is None or isinstance(ctr, Container)):
         raise _type_error("ruff", "ctr", ctr, "Container | None")
     if not (version is None or isinstance(version, str)):
         raise _type_error("ruff", "version", version, "str | None")
     _args = [
-        _Arg("source", source, None),
         _Arg("ctr", ctr, None),
         _Arg("version", version, None),
     ]

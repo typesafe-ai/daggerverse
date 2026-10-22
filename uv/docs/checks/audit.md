@@ -53,5 +53,5 @@ Select one workspace by its path (see
 === "Python SDK"
 
     ```python
-    await uv(source=src).workspace("services/api").audit().pass_()
+    await uv().workspace("services/api").audit(ws).pass_()
     ```

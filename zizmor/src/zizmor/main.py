@@ -2,8 +2,8 @@ import enum
 import sys
 from typing import Annotated
 
-from dagger import DefaultPath, Doc, check, enum_type, field, function, object_type
-from dagger_clients.core import Changeset, Container, Directory, Secret, core
+from dagger import Doc, check, enum_type, field, function, object_type
+from dagger_clients.core import Changeset, Container, Directory, Secret, Workspace, core
 
 
 @enum_type
@@ -89,11 +89,7 @@ class Zizmor:
     @function
     async def lint(
         self,
-        source: Annotated[
-            Directory,
-            Doc("The `.github` directory containing Actions workflows."),
-            DefaultPath("/.github"),
-        ],
+        ws: Workspace,
         github_token: Annotated[
             Secret | None,
             Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
@@ -123,6 +119,7 @@ class Zizmor:
 
         Exits non-zero if findings above the configured severity are found.
         """
+        source = ws.directory("/.github")
         ctr = self._container(source, github_token)
         args = self._args(
             fix=None,
@@ -137,11 +134,7 @@ class Zizmor:
     @function
     async def fix(
         self,
-        source: Annotated[
-            Directory,
-            Doc("The `.github` directory containing Actions workflows."),
-            DefaultPath("/.github"),
-        ],
+        ws: Workspace,
         mode: Annotated[
             FixMode,
             Doc("Which fixes to apply."),
@@ -171,6 +164,7 @@ class Zizmor:
 
         Returns a Changeset applied to the host.
         """
+        source = ws.directory("/.github")
         ctr = self._container(source, github_token)
         args = self._args(
             fix=mode,

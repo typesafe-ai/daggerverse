@@ -7,45 +7,45 @@ from pathlib import PurePosixPath
 from typing import Annotated
 
 import dagger
-from dagger import DefaultPath, Doc, Ignore, check, collection, field, function, get, keys, object_type
-from dagger_clients.core import Container, Directory, core
+from dagger import Doc, check, collection, field, function, get, keys, object_type
+from dagger_clients.core import Container, Workspace, core
 
 _DEFAULT_VERSION = "0.25.1"
 _DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
 _DEFAULT_IMAGE_TAG = "0.12.5-python3.13-trixie-slim"
 
 
-SourceDir = Annotated[
-    Directory,
-    Doc("Source directory."),
-    DefaultPath("/"),
-    Ignore(
-        [
-            "**/__pycache__",
-            "**/*.pyc",
-            "**/node_modules",
-            "**/.venv",
-            "**/.tox",
-            "**/.nox",
-            "**/.git",
-            "**/.mypy_cache",
-            "**/.pytest_cache",
-            "**/.ruff_cache",
-            "**/.direnv",
-            "**/.devenv",
-            "**/dist",
-            "**/build",
-            "**/*.egg-info",
-            "**/sdk",
-            "**/clients",
-        ]
-    ),
+# Never part of a project deptry scans: caches, virtualenvs, build output and
+# generated Dagger code.
+_EXCLUDE = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/node_modules",
+    "**/.venv",
+    "**/.tox",
+    "**/.nox",
+    "**/.git",
+    "**/.mypy_cache",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/.direnv",
+    "**/.devenv",
+    "**/dist",
+    "**/build",
+    "**/*.egg-info",
+    "**/sdk",
+    "**/clients",
 ]
 
 
-def _project_path(pyproject: str) -> str:
-    """Source-relative directory holding the given `pyproject.toml`."""
-    return posixpath.dirname(pyproject) or "."
+def _root_relative(cwd: str, path: str) -> str:
+    """A workspace-root-relative path for `path`, which is relative to the workspace `cwd`."""
+    return posixpath.normpath(posixpath.join(cwd.lstrip("/"), path))
+
+
+def _root_path(path: str, *names: str) -> str:
+    """The absolute workspace path of `names` under the project at `path`."""
+    return "/" + posixpath.normpath(posixpath.join(path, *names))
 
 
 def _is_excluded(path: str, patterns: list[str]) -> bool:
@@ -94,7 +94,7 @@ def _project_info(pyproject_content: str) -> tuple[bool, str | None, bool]:
     return True, module, configured
 
 
-async def _has_package_layout(project_dir: Directory, module: str | None) -> bool:
+async def _has_package_layout(workspace: Workspace, path: str, module: str | None) -> bool:
     """Whether a project has its own package source — a `src` directory or a
     flat package directory named after the project.
 
@@ -105,8 +105,11 @@ async def _has_package_layout(project_dir: Directory, module: str | None) -> boo
     letting deptry apply its own defaults and `[tool.deptry]` config (top-level
     modules, `tests`, etc.) rather than being narrowed to `src`.
     """
-    entries = {entry.rstrip("/") for entry in await project_dir.entries()}
-    return "src" in entries or (module is not None and module in entries)
+    names = ["src", module] if module is not None else ["src"]
+    for name in names:
+        if await workspace.glob(_root_path(path, name).lstrip("/")):
+            return True
+    return False
 
 
 # SGR (color) escape sequences. deptry colors its report on the live exec
@@ -140,25 +143,16 @@ def _format_failure(exc: dagger.ExecError, project: str) -> str:
 class DeptryProject:
     """One Python project that deptry checks."""
 
-    source: Annotated[
-        Directory,
-        Doc("The project directory (holding its pyproject.toml)."),
-    ] = field()
-
     path: Annotated[
         str,
-        Doc("Project path within the scanned source tree. `.` for the root."),
+        Doc("Project path, relative to the workspace root. `.` for the root."),
     ] = field()
-
-    module: Annotated[
-        str | None,
-        Doc("The project's first-party import name, passed to deptry as `--known-first-party`."),
-    ] = field(default=None)
 
     @check
     @function
     async def check(
         self,
+        ws: Workspace,
         version: Annotated[
             str,
             Doc("deptry version to use (ignored when `ctr` is set)."),
@@ -176,9 +170,14 @@ class DeptryProject:
             Doc("Additional arguments to pass to deptry (added before the project root)."),
         ] = None,
     ) -> None:
-        """Run `deptry .` in this project and fail on any dependency issue."""
+        """Run `deptry .` in this project and fail on any dependency issue.
+
+        Only this project's directory is loaded from the workspace.
+        """
+        project_dir = ws.directory(_root_path(self.path), exclude=_EXCLUDE, gitignore=True)
+        _, module, _ = _project_info(await project_dir.file("pyproject.toml").contents())
         container = ctr if ctr is not None else _container(version)
-        known = ["--known-first-party", self.module] if self.module else []
+        known = ["--known-first-party", module] if module else []
         try:
             await (
                 # `FORCE_COLOR` makes deptry colorize its report even though its
@@ -187,7 +186,7 @@ class DeptryProject:
                 # `_format_failure`). Pass `--no-ansi` via `args` to opt out.
                 container.with_env_variable("FORCE_COLOR", "1")
                 .with_workdir("/work")
-                .with_directory("/work", self.source)
+                .with_directory("/work", project_dir)
                 .with_exec(["deptry", *known, *(args or []), "."])
                 .sync()
             )
@@ -204,23 +203,16 @@ class DeptryProjects:
     that can be selected or skipped on its own.
     """
 
-    source: Annotated[
-        Directory,
-        Doc("Source tree containing the projects."),
-    ] = field()
-
     paths: Annotated[
         list[str],
-        Doc("Project paths within `source`. `.` for the root."),
+        Doc("Project paths, relative to the workspace root. `.` for the root."),
     ] = keys()
 
     @function
     @get
-    async def project(self, path: str) -> DeptryProject:
+    def project(self, path: str) -> DeptryProject:
         """The project at `path`."""
-        project_dir = self.source if path == "." else self.source.directory(path)
-        _, module, _ = _project_info(await project_dir.file("pyproject.toml").contents())
-        return DeptryProject(source=project_dir, path=path, module=module)
+        return DeptryProject(path=path)
 
 
 def _container(version: str) -> Container:
@@ -245,17 +237,19 @@ class Deptry:
     discovers every project in the source tree, and its `check` runs once per
     project, so one Dagger check covers a monorepo.
 
+    Reads the Dagger workspace it runs in, pulling only the files each operation
+    needs. To read a directory instead, pass `directory.as_workspace()`.
+
     Learn more about deptry at <https://deptry.com>.
     """
 
-    source: SourceDir = field()
     exclude: Annotated[
         list[str],
-        Doc("Glob patterns (source-relative) of project paths to leave out of projects, e.g. **/tests/_packages/**."),
+        Doc("Glob patterns of project paths to leave out of projects, e.g. **/tests/_packages/**."),
     ] = field(default=list)
 
     @function
-    async def projects(self) -> DeptryProjects:
+    async def projects(self, ws: Workspace) -> DeptryProjects:
         """Every Python project deptry checks in the source tree.
 
         One entry per `pyproject.toml` that declares dependencies (see
@@ -265,16 +259,18 @@ class Deptry:
         left out, so `deptry .` never spills over the rest of the monorepo,
         unless its `[tool.deptry]` section opts it in explicitly. Paths matching
         `exclude` are left out too.
+
+        Projects are found by walking the workspace on the host, and only their
+        pyproject.toml files are loaded.
         """
+        cwd = await ws.cwd()
+        roots = await ws.find_roots(["pyproject.toml"], start="/", exclude=[*_EXCLUDE, *self.exclude])
         paths: list[str] = []
-        for pyproject in sorted(await self.source.glob("**/pyproject.toml")):
-            checkable, module, configured = _project_info(await self.source.file(pyproject).contents())
-            if not checkable:
-                continue
-            path = _project_path(pyproject)
+        for path in sorted({_root_relative(cwd, root) for root in roots}):
             if _is_excluded(path, self.exclude):
                 continue
-            project_dir = self.source if path == "." else self.source.directory(path)
-            if configured or await _has_package_layout(project_dir, module):
+            pyproject = await ws.file(_root_path(path, "pyproject.toml")).contents()
+            checkable, module, configured = _project_info(pyproject)
+            if checkable and (configured or await _has_package_layout(ws, path, module)):
                 paths.append(path)
-        return DeptryProjects(source=self.source, paths=paths)
+        return DeptryProjects(paths=paths)

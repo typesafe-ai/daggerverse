@@ -31,7 +31,7 @@ _check_core(NAME, CORE_DIGEST, _installed_core)
 from dagger_clients.core import (  # noqa: E402
     Check,
     Container,
-    Directory,
+    Workspace,
 )
 
 _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
@@ -44,8 +44,10 @@ class Deptry(_Type):
     `pyproject.toml`) and scans that project's source for imports to find
     unused, missing, misplaced or transitive dependencies. `projects`
     discovers every project in the source tree, and its `check` runs once
-    per project, so one Dagger check covers a monorepo.  Learn more about
-    deptry at <https://deptry.com>.  """
+    per project, so one Dagger check covers a monorepo.  Reads the Dagger
+    workspace it runs in, pulling only the files each operation needs. To
+    read a directory instead, pass `directory.as_workspace()`.  Learn more
+    about deptry at <https://deptry.com>.  """
 
     async def exclude(self) -> list[str]:
         """Returns
@@ -94,7 +96,7 @@ class Deptry(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def projects(self) -> "DeptryProjects":
+    def projects(self, ws: Workspace) -> "DeptryProjects":
         """
         Every Python project deptry checks in the source tree.
 
@@ -106,26 +108,40 @@ class Deptry(_Type):
         unless its `[tool.deptry]` section opts it in explicitly. Paths
         matching
         `exclude` are left out too.
+
+        Projects are found by walking the workspace on the host, and only
+        their
+        pyproject.toml files are loaded.
+
+        Parameters
+        ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         """
-        _args: list[_Arg] = []
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("Deptry.projects", "ws", ws, "Workspace")
+        _args = [
+            _Arg("ws", ws),
+        ]
         _ctx = self._select("projects", _args)
         return DeptryProjects(_ctx)
-
-    def source(self) -> Directory:
-        _args: list[_Arg] = []
-        _ctx = self._select("source", _args)
-        return Directory(_ctx)
 
 
 class DeptryProject(_Type):
     """ One Python project that deptry checks.  """
 
-    def check(self, *, version: str = '0.25.1', ctr: Container | None = None, args: list[str] | None = None,) -> Check:
+    def check(self, ws: Workspace, *, version: str = '0.25.1', ctr: Container | None = None, args: list[str] | None = None,) -> Check:
         """
         Run `deptry .` in this project and fail on any dependency issue.
 
+        Only this project's directory is loaded from the workspace.
+
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         version:
             deptry version to use (ignored when `ctr` is set).
         ctr:
@@ -136,6 +152,8 @@ class DeptryProject(_Type):
             Additional arguments to pass to deptry (added before the project
             root).
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("DeptryProject.check", "ws", ws, "Workspace")
         if not (isinstance(version, str)):
             raise _type_error("DeptryProject.check", "version", version, "str")
         if not (ctr is None or isinstance(ctr, Container)):
@@ -143,6 +161,7 @@ class DeptryProject(_Type):
         if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
             raise _type_error("DeptryProject.check", "args", args, "list[str] | None")
         _args = [
+            _Arg("ws", ws),
             _Arg("version", version, '0.25.1'),
             _Arg("ctr", ctr, None),
             _Arg("args", args, None),
@@ -178,25 +197,6 @@ class DeptryProject(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module(self) -> str | None:
-        """Returns
-        -------
-        str | None
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("module", _args)
-        return await _ctx.execute(str | None)
-
     async def path(self) -> str:
         """Returns
         -------
@@ -215,11 +215,6 @@ class DeptryProject(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
-
-    def source(self) -> Directory:
-        _args: list[_Arg] = []
-        _ctx = self._select("source", _args)
-        return Directory(_ctx)
 
 
 class DeptryProjects(_Type):
@@ -313,7 +308,7 @@ class DeptryProjects(_Type):
 
 
 
-def deptry(*, source: Directory | None = None, exclude: list[str] | None = None, session: _Session | None = None,) -> Deptry:
+def deptry(*, exclude: list[str] | None = None, session: _Session | None = None,) -> Deptry:
     """
     Linter for Python dependency issues.
 
@@ -326,22 +321,21 @@ def deptry(*, source: Directory | None = None, exclude: list[str] | None = None,
     per
     project, so one Dagger check covers a monorepo.
 
+    Reads the Dagger workspace it runs in, pulling only the files each
+    operation
+    needs. To read a directory instead, pass `directory.as_workspace()`.
+
     Learn more about deptry at <https://deptry.com>.
 
     Parameters
     ----------
-    source:
-        Source directory.
     exclude:
-        Glob patterns (source-relative) of project paths to leave out of
-        projects, e.g. **/tests/_packages/**.
+        Glob patterns of project paths to leave out of projects, e.g.
+        **/tests/_packages/**.
     """
-    if not (source is None or isinstance(source, Directory)):
-        raise _type_error("deptry", "source", source, "Directory | None")
     if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
         raise _type_error("deptry", "exclude", exclude, "list[str] | None")
     _args = [
-        _Arg("source", source, None),
         _Arg("exclude", exclude, None),
     ]
     return _client_root(Deptry, _TARGET, "deptry", _args, session=session)

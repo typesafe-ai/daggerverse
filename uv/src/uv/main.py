@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from dagger import Doc, collection, field, function, get, keys, object_type
-from dagger_clients.core import Directory, Workspace
+from dagger_clients.core import Workspace
 
 from uv.args import SOURCE_EXCLUDE, WorkspacePath
 from uv.utils import is_excluded, root_relative
@@ -22,16 +22,11 @@ class UvWorkspaces:
         Doc("uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root."),
     ] = keys()
 
-    source: Annotated[
-        Directory | None,
-        Doc("Directory read instead of the Dagger workspace, when the caller passed one."),
-    ] = field(default=None)
-
     @function
     @get
     def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """The uv workspace rooted at `path`."""
-        return UvWorkspaceSource(path=path, source=self.source)
+        return UvWorkspaceSource(path=path)
 
 
 @object_type
@@ -42,14 +37,10 @@ class Uv:
     Use `workspace` to grab a single workspace by path or `workspaces` to get them all.
 
     Reads the Dagger workspace it runs in, pulling only the files each operation
-    needs. Pass `source` to read a directory instead.
+    needs. To read a directory instead, pass `directory.as_workspace()`.
 
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""
 
-    source: Annotated[
-        Directory | None,
-        Doc("Directory to read instead of the Dagger workspace, e.g. a source tree built in a pipeline."),
-    ] = field(default=None)
     exclude: Annotated[
         list[str],
         Doc("Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**."),
@@ -62,7 +53,7 @@ class Uv:
         The returned `UvWorkspaceSource` can `audit` its locked dependencies or
         `build` a minimal container for a package.
         """
-        return UvWorkspaceSource(path=path, source=self.source)
+        return UvWorkspaceSource(path=path)
 
     @function
     async def workspaces(self, ws: Workspace) -> UvWorkspaces:
@@ -71,8 +62,7 @@ class Uv:
         Found by walking the workspace on the host, so no files are loaded to
         discover them.
         """
-        workspace = self.source.as_workspace() if self.source is not None else ws
-        cwd = await workspace.cwd()
-        roots = await workspace.find_roots(["uv.lock"], start="/", exclude=[*SOURCE_EXCLUDE, *self.exclude])
+        cwd = await ws.cwd()
+        roots = await ws.find_roots(["uv.lock"], start="/", exclude=[*SOURCE_EXCLUDE, *self.exclude])
         paths = sorted({root_relative(cwd, root) for root in roots})
-        return UvWorkspaces(paths=[path for path in paths if not is_excluded(path, self.exclude)], source=self.source)
+        return UvWorkspaces(paths=[path for path in paths if not is_excluded(path, self.exclude)])

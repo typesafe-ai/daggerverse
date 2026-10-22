@@ -8,7 +8,7 @@ type ModuleTypes {
         .withFunction(
           function("fix", typeDef.withObject("Changeset"))
             .withDescription("Auto-fix GitHub Actions security issues found by zizmor.\n\nReturns a Changeset applied to the host.")
-            .withArg("source", typeDef.withObject("Directory"), description: "The `.github` directory containing Actions workflows.", defaultPath: "/.github")
+            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("mode", typeDef.withEnum("FixMode", description: "Which fixes to apply."), description: "Which fixes to apply.", defaultValue: ("\"SAFE\"" :: Dagger.JSON!))
             .withArg("github_token", typeDef.withOptional(true).withObject("Secret").withOptional(true), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))
@@ -20,7 +20,7 @@ type ModuleTypes {
           function("lint", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run zizmor on GitHub Actions workflow files.\n\nExits non-zero if findings above the configured severity are found.")
             .withCheck
-            .withArg("source", typeDef.withObject("Directory"), description: "The `.github` directory containing Actions workflows.", defaultPath: "/.github")
+            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("github_token", typeDef.withOptional(true).withObject("Secret").withOptional(true), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("format", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Output format: plain, json, sarif, or github.", defaultValue: ("\"plain\"" :: Dagger.JSON!))
             .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))

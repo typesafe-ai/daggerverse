@@ -17,7 +17,6 @@ from uv.utils import (
     require_package_selection,
     resolve_specifier,
     root_relative,
-    workspace_path,
 )
 from uv.workspace.index import UvIndex, merge_indices
 
@@ -72,14 +71,6 @@ class TestParseProjectName:
 
     def test_missing_project(self):
         assert parse_project_name("[tool.uv.workspace]\nmembers = []\n") is None
-
-
-class TestWorkspacePath:
-    def test_root(self):
-        assert workspace_path("uv.lock") == "."
-
-    def test_nested(self):
-        assert workspace_path("pkgs/app/uv.lock") == "pkgs/app"
 
 
 class TestIsExcluded:

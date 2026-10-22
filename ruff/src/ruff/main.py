@@ -1,55 +1,43 @@
-from __future__ import annotations
-
 from typing import Annotated
 
 from dagger import Doc, field, function, object_type
-from dagger_clients.core import Container, core
+from dagger_clients.core import Container, Workspace
 
-from ruff.args import SourceDir
+from ruff.args import ruff_container
 from ruff.checker import RuffChecker
 from ruff.formatter import RuffFormatter
-from ruff.utils import _DEFAULT_IMAGE, resolve_version
 
 
 @object_type
 class Ruff:
-    """Ruff Python linter and formatter."""
+    """Ruff Python linter and formatter.
+
+    Runs on the Dagger workspace root. To run on a directory instead, pass
+    `directory.as_workspace()`.
+    """
 
     ctr: Annotated[
-        Container,
-        Doc("Container with ruff installed."),
-    ] = field()
+        Container | None,
+        Doc("Container with ruff installed. Defaults to the official ghcr.io/astral-sh/ruff image."),
+    ] = field(default=None)
 
-    @classmethod
-    async def create(
-        cls,
-        source: SourceDir,
-        ctr: Annotated[
-            Container | None,
-            Doc("Container with ruff installed. Defaults to the official ghcr.io/astral-sh/ruff image."),
-        ] = None,
-        version: Annotated[
-            str | None,
-            Doc("Ruff image tag. Only used when `ctr` is not provided. Overrides auto-detection from source."),
-        ] = None,
-    ) -> Ruff:
-        if ctr is None:
-            if version is None:
-                version = await resolve_version(source)
-            ctr = core().container().from_(f"{_DEFAULT_IMAGE}:{version}")
-        return cls(ctr=ctr)
+    version: Annotated[
+        str | None,
+        Doc("Ruff image tag. Only used when `ctr` is not provided. Defaults to the version the workspace pins."),
+    ] = field(default=None)
 
     @function(cache="1h")
-    async def version(self) -> str:
-        """The resolved ruff version."""
-        return (await self.ctr.with_exec(["/ruff", "version"]).stdout()).strip()
+    async def resolved_version(self, ws: Workspace) -> str:
+        """The ruff version `check` and `format` run."""
+        ctr = await ruff_container(ws, self.ctr, self.version)
+        return (await ctr.with_exec(["/ruff", "version"]).stdout()).strip()
 
     @function
     def check(self) -> RuffChecker:
         """Return the ruff linter (`ruff check`)."""
-        return RuffChecker(ctr=self.ctr)
+        return RuffChecker(ctr=self.ctr, version=self.version)
 
     @function
     def format(self) -> RuffFormatter:
         """Return the ruff formatter (`ruff format`)."""
-        return RuffFormatter(ctr=self.ctr)
+        return RuffFormatter(ctr=self.ctr, version=self.version)

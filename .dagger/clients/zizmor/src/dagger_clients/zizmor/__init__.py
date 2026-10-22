@@ -32,8 +32,8 @@ from dagger_clients.core import (  # noqa: E402
     Changeset,
     Check,
     Container,
-    Directory,
     Secret,
+    Workspace,
 )
 
 _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
@@ -62,7 +62,7 @@ class Zizmor(_Type):
         _ctx = self._select("ctr", _args)
         return Container(_ctx)
 
-    def fix(self, *, source: Directory | None = None, mode: ZizmorFixMode = ZizmorFixMode.SAFE, github_token: Secret | None = None, persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, extra_args: list[str] | None = None,) -> Changeset:
+    def fix(self, ws: Workspace, *, mode: ZizmorFixMode = ZizmorFixMode.SAFE, github_token: Secret | None = None, persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, extra_args: list[str] | None = None,) -> Changeset:
         """
         Auto-fix GitHub Actions security issues found by zizmor.
 
@@ -70,8 +70,9 @@ class Zizmor(_Type):
 
         Parameters
         ----------
-        source:
-            The `.github` directory containing Actions workflows.
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         mode:
             Which fixes to apply.
         github_token:
@@ -86,8 +87,8 @@ class Zizmor(_Type):
         extra_args:
             Additional arguments to pass to zizmor.
         """
-        if not (source is None or isinstance(source, Directory)):
-            raise _type_error("Zizmor.fix", "source", source, "Directory | None")
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("Zizmor.fix", "ws", ws, "Workspace")
         if not (isinstance(mode, ZizmorFixMode)):
             raise _type_error("Zizmor.fix", "mode", mode, "ZizmorFixMode")
         if not (github_token is None or isinstance(github_token, Secret)):
@@ -101,7 +102,7 @@ class Zizmor(_Type):
         if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
             raise _type_error("Zizmor.fix", "extra_args", extra_args, "list[str] | None")
         _args = [
-            _Arg("source", source, None),
+            _Arg("ws", ws),
             _Arg("mode", mode, ZizmorFixMode.SAFE),
             _Arg("githubToken", github_token, None),
             _Arg("persona", persona, 'regular'),
@@ -140,7 +141,7 @@ class Zizmor(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def lint(self, *, source: Directory | None = None, github_token: Secret | None = None, format: str = 'plain', persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, extra_args: list[str] | None = None,) -> Check:
+    def lint(self, ws: Workspace, *, github_token: Secret | None = None, format: str = 'plain', persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, extra_args: list[str] | None = None,) -> Check:
         """
         Run zizmor on GitHub Actions workflow files.
 
@@ -148,8 +149,9 @@ class Zizmor(_Type):
 
         Parameters
         ----------
-        source:
-            The `.github` directory containing Actions workflows.
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         github_token:
             GitHub token for online audits. Without it, zizmor runs in offline
             mode.
@@ -164,8 +166,8 @@ class Zizmor(_Type):
         extra_args:
             Additional arguments to pass to zizmor.
         """
-        if not (source is None or isinstance(source, Directory)):
-            raise _type_error("Zizmor.lint", "source", source, "Directory | None")
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("Zizmor.lint", "ws", ws, "Workspace")
         if not (github_token is None or isinstance(github_token, Secret)):
             raise _type_error("Zizmor.lint", "github_token", github_token, "Secret | None")
         if not (isinstance(format, str)):
@@ -179,7 +181,7 @@ class Zizmor(_Type):
         if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
             raise _type_error("Zizmor.lint", "extra_args", extra_args, "list[str] | None")
         _args = [
-            _Arg("source", source, None),
+            _Arg("ws", ws),
             _Arg("githubToken", github_token, None),
             _Arg("format", format, 'plain'),
             _Arg("persona", persona, 'regular'),

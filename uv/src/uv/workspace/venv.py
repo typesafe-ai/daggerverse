@@ -63,7 +63,7 @@ class UvVenv:
         # install dir, derived structurally — no hardcoded location, so $UV_PYTHON_INSTALL_DIR
         # works too) so the version symlink AND the real interpreter travel together and resolve
         # when remounted — and so we never extract a symlinked path directly (which
-        # `Container.directory()` mishandles across engine versions; see the `bug` check).
+        # `Container.directory()` has mishandled across engine versions).
         home = cfg.get("home", "").rstrip("/")
         install_dir = posixpath.dirname(home)  # <store>/<impl-dir>
         python_path = posixpath.dirname(install_dir)  # <store>

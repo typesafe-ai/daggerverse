@@ -56,11 +56,6 @@ def root_relative(cwd: str, path: str) -> str:
     return posixpath.normpath(posixpath.join(cwd.lstrip("/"), path))
 
 
-def workspace_path(lockfile: str) -> str:
-    """Source-relative directory holding the given `uv.lock`."""
-    return posixpath.dirname(lockfile) or "."
-
-
 def is_excluded(path: str, patterns: list[str]) -> bool:
     """Whether a workspace path matches any of the exclude glob patterns."""
     workspace = PurePosixPath(path)

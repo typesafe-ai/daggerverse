@@ -24,7 +24,7 @@ SOURCE_EXCLUDE = [
 
 WorkspacePath: TypeAlias = Annotated[
     str,
-    Doc("Path to the workspace root (holding uv.lock and pyproject.toml) within the source directory."),
+    Doc("Path to the uv workspace root (holding uv.lock and pyproject.toml), relative to the workspace root."),
 ]
 
 Package: TypeAlias = Annotated[

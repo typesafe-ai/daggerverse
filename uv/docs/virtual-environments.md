@@ -20,9 +20,9 @@ so the subsequent `uv sync` populates that relocatable environment:
 
 ```python
 b = (
-    uv(source=src)
+    uv()
     .workspace(".")
-    .build(package=["my-app"], no_editable=True)
+    .build(ws, package=["my-app"], no_editable=True)
     .with_venv(relocatable=True)  # uv venv --relocatable
     .with_remote_dependencies()  # sync installs into the relocatable venv
 )
@@ -51,9 +51,9 @@ paths the venv expects:
 
     ```python
     runner = (
-        uv(source=src)
+        uv()
         .workspace(".")
-        .build(package=["my-app"], no_editable=True)
+        .build(ws, package=["my-app"], no_editable=True)
         .with_venv(relocatable=True)
         .with_remote_dependencies()
         .copy_venv(core().container().from_("debian:bookworm-slim"), set_env_vars=True)

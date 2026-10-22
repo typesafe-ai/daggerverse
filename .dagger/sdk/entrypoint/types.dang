@@ -4,7 +4,6 @@ type ModuleTypes {
   pub all: [TypeDef!]! {
     [
       typeDef.withObject("TypesafeDaggerverse", description: "CI checks for modules published from this repo.")
-        .withField("source", typeDef.withObject("Directory"), description: "Daggerverse repo root")
         .withFunction(
           function("all_deptry", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run all checks for the `deptry` module in parallel.")
@@ -75,10 +74,6 @@ type ModuleTypes {
           function("github_pytest", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run the github module's unit-test suite inside a freshly-built\ncontainer.")
             .withCheck
-        )
-        .withFunction(
-          function("repro_directory_symlink_roundtrip", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("Minimal repro of the Dagger v0.21.4 behavior that broke `copy_venv`.\n\nMirrors what `copy_venv` did: extract `Container.directory(<symlinked dir path>)`,\nthen mount it back into a fresh container at that same path and read it.\n`/store/link -> /store/real` stands in for uv's `cpython-<minor> -> cpython-<patch>`.\n\nObserved on v0.21.4: the destination gets the bare symlink (`link -> /store/real`,\nnow dangling) and `marker.txt` is MISSING — the round-trip drops the real contents.\n(v0.21.0 materialized the followed contents.) That dangling symlink is why the\ncopied venv's `bin/python` couldn't resolve. Workaround: export the *parent* dir so\nthe symlink and its target travel together (see `UvVenv.create`).")
         )
         .withFunction(
           function("ruff_check_fix", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -237,7 +232,6 @@ type ModuleTypes {
         .withConstructor(
           function("", typeDef.withObject("TypesafeDaggerverse"))
             .withDescription("CI checks for modules published from this repo.")
-            .withArg("source", typeDef.withObject("Directory"), description: "Daggerverse repo root", defaultPath: "/")
         ),
     ]
   }
