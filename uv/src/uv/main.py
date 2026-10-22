@@ -25,10 +25,6 @@ class Uv:
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""
 
     source: SourceDir = field()
-    exclude: Annotated[
-        list[str],
-        Doc("Glob patterns (source-relative) of workspace paths audit always skips, e.g. `**/tests/_packages/**`."),
-    ] = field(default=list)
 
     @function
     def workspace(self, path: WorkspacePath = ".") -> UvWorkspaceSource:
@@ -69,7 +65,7 @@ class Uv:
 
         Exits non-zero when any (non-excluded) workspace fails its audit.
         """
-        patterns = [*self.exclude, *(exclude or [])]
+        patterns = exclude or []
         workspaces = [ws for ws in await self.get_workspaces() if not is_excluded(ws.path, patterns)]
 
         tracer = get_tracer()

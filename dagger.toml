@@ -9,14 +9,8 @@ source = "deptry"
 [modules.ruff]
 source = "ruff"
 
-[modules.uv]
-source = "uv"
-
 [modules.zizmor]
 source = "zizmor"
 
 [modules.deptry.settings]
 exclude = ["**/tests/_packages/**", "."]
-
-[modules.uv.settings]
-exclude = ["**/tests/_packages/**"]

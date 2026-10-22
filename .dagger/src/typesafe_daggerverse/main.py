@@ -235,6 +235,12 @@ class TypesafeDaggerverse:
 
     @check
     @function
+    async def uv_audit(self) -> None:
+        """Run `uv audit` for every workspace in the repo, skipping test fixtures."""
+        await dag.uv(source=self.source).audit(exclude=["**/tests/_packages/**", "**/sdk"])
+
+    @check
+    @function
     async def all_uv(self) -> None:
         """Run all checks for the `uv` module in parallel."""
         tracer = get_tracer()
