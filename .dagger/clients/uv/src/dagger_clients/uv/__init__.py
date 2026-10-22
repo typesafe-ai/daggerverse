@@ -40,10 +40,9 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 
 
 class Uv(_Type):
-    """ Entrypoint for the `uv` module.  Hands out `UvWorkspaceSource`
-    objects — one per workspace — which expose additional functionality.
-    Use `workspace` to grab a single workspace by path or `workspaces` to
-    get them all.  Learn more in the
+    """ Entrypoint for the `uv` module.  Hands out one `UvWorkspaceSource`
+    per uv workspace. Use `workspace` to grab a single workspace by path
+    or `workspaces` to get them all.  Learn more in the
     [docs](https://daggerverse.docs.typesafe.ai/uv/).  """
 
     async def id(self) -> str:
@@ -781,7 +780,7 @@ class UvSyncPlan(_Type):
 
 class UvVenv(_Type):
     """ A relocatable uv virtual environment bundled with the uv-managed
-    Python it needs.  A venv never contains the standard library —
+    Python it needs.  A venv never contains the standard library:
     `.venv/bin/python` resolves to a base interpreter whose `lib/`
     provides it. This pairs the venv with that interpreter so the two can
     be dropped into a fresh container (one without any Python of its own)
@@ -1009,8 +1008,8 @@ class UvWorkspaceBuild(_Type):
         exceeds `max_cache_size`
         GiB, so most builds skip the prune (and never take the cache lock).
         Because
-        `uv cache prune --ci` keeps only compiled wheels — nearly a full clean
-        — one
+        `uv cache prune --ci` keeps only compiled wheels (nearly a full
+        clean), one
         prune resets the footprint. `lock_timeout` sets `UV_LOCK_TIMEOUT` for
         the
         prune so concurrent builds sharing the cache volume wait instead of
@@ -1074,14 +1073,14 @@ class UvWorkspaceBuild(_Type):
         stubs from `with_workspace_files`, then copy real source over the
         stubs last.
         Editable installs are path links, so the source goes live without a
-        re-sync —
-        meaning source-only changes don't invalidate the cached install layer.
+        re-sync
+        and source-only changes don't invalidate the cached install layer.
 
         For **non-editable** installs (`no_editable=True`), `uv sync` builds a
         wheel
         from whatever source is present and bakes it into `site-packages`, so
         the real
-        source must be copied in *before* the sync — there are no path links
+        source must be copied in *before* the sync: there are no path links
         for a
         copy-last to make live, and syncing against the stubs would bake empty
         modules.
@@ -1247,11 +1246,11 @@ class UvWorkspaceSource(_Type):
     `uv.lock`.  Carries the source tree and the workspace's path within it
     (`"."` for a root workspace), relative to the Dagger workspace root.
     From those it derives everything it needs to `audit` the locked
-    dependencies or `build` a minimal container for a package — keeping
-    the parent `Uv` a thin, container-free entrypoint.  The full `source`
-    (rather than just the sliced workspace directory) is carried so builds
-    can reach sibling path-dependencies that live *outside* the workspace
-    root (e.g. `../my-dep` in a nested workspace).  Named
+    dependencies or `build` a minimal container for a package, so the
+    parent `Uv` stays a thin, container-free entrypoint.  The full
+    `source` (rather than just the sliced workspace directory) is carried
+    so builds can reach sibling path-dependencies that live *outside* the
+    workspace root (e.g. `../my-dep` in a nested workspace).  Named
     `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with the
     top-level `Uv` constructor when composed in a parent module.  """
 
@@ -1301,8 +1300,8 @@ class UvWorkspaceSource(_Type):
         Prepare a build for this workspace without installing anything yet.
 
         Resolves the sync plan, mounts the uv cache, and copies the root
-        pyproject.toml and uv.lock into the container. Nothing is installed —
-        the returned `UvWorkspaceBuild` drives the pipeline from here:
+        pyproject.toml and uv.lock into the container. The returned
+        `UvWorkspaceBuild` drives the pipeline from here:
         `with_remote_dependencies()` to install remote deps,
         `with_workspace_files()`
         to scaffold local packages, then `with_local_dependencies()` to
@@ -1401,7 +1400,7 @@ class UvWorkspaceSource(_Type):
         The package indices configured for this workspace.
 
         Reads `[[index]]` from `uv.toml` when present, otherwise falls back
-        to `[[tool.uv.index]]` in `pyproject.toml` — matching uv's own
+        to `[[tool.uv.index]]` in `pyproject.toml`, matching uv's own
         precedence (`uv.toml` overrides the entire `[tool.uv]` section).
 
         When `include_from_members` is set, also reads `[[tool.uv.index]]`
@@ -1635,7 +1634,7 @@ class UvWorkspaceSource(_Type):
         `UvVenv`
         (the venv plus its uv-managed Python) that `.into(container, path)`
         can drop
-        into any image. Use this — rather than `install` — when copying the
+        into any image. Use this instead of `install` when copying the
         environment into another container. Pair with `no_editable=True` so
         the
         exported venv carries no dependency on the workspace source.
@@ -1811,8 +1810,7 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, session: _Session | N
     """
     Entrypoint for the `uv` module.
 
-    Hands out `UvWorkspaceSource` objects — one per workspace — which
-    expose additional functionality.
+    Hands out one `UvWorkspaceSource` per uv workspace.
     Use `workspace` to grab a single workspace by path or `workspaces` to
     get them all.
 

@@ -49,17 +49,14 @@ async def _run_check(check: Check) -> None:
 
 
 def _ws() -> Workspace:
-    """The workspace these checks run in, for module functions that read one."""
     return core().current_workspace()
 
 
 def _fixture(path: str) -> Workspace:
-    """A directory of this repo as a workspace of its own, e.g. a test fixture."""
     return _src(path).as_workspace()
 
 
 def _src(path: str) -> Directory:
-    """A directory of this repo, without caches, virtualenvs or gitignored files."""
     return _ws().directory(f"/{path}", exclude=["**/.venv", "**/__pycache__", "**/.git"], gitignore=True)
 
 
@@ -77,7 +74,6 @@ def _base() -> Container:
 
 
 def _assert_modules_script(present: list[str], absent: list[str]) -> str:
-    """Python snippet that asserts the given modules are importable (or not)."""
     return (
         "import importlib, sys\n"
         f"present = {present!r}\n"
@@ -135,7 +131,7 @@ class TypesafeDaggerverse:
         """Build a module's static docs site and return the generated `site/` dir.
 
         Built on the same base as the tests, with the module installed and its
-        `docs` uv group (which ships zensical) synced — so docs that introspect
+        `docs` uv group (which ships zensical) synced, so docs that introspect
         the codebase can import it. `build` only copies each package's `src/`, so
         the docs sources are supplied separately by `_zensical_site`.
         """
@@ -151,8 +147,8 @@ class TypesafeDaggerverse:
         """Build the landing site (served at `/`) from the `.docs` project.
 
         `.docs` is a self-contained, non-packaged uv project whose `docs` group
-        (zensical, pinned in `.docs/uv.lock`) is synced with no package — same
-        build path as the modules, just nothing to import.
+        (zensical, pinned in `.docs/uv.lock`) is synced with no package. The build
+        path is the same as for the modules, with nothing to import.
         """
         src = _src(_LANDING_PROJECT)
         ctr = await uv(src.as_workspace()).workspace(".").install(base_container=_base(), group=["docs"])
@@ -198,8 +194,8 @@ class TypesafeDaggerverse:
         """Serve the combined docs site over HTTP as a Dagger service.
 
         Uses Python's stdlib `http.server` (already in the uv base image), which
-        serves `index.html` for directory URLs — what zensical's relative links
-        expect. Run with `dagger call serve-docs up` and browse the printed URL.
+        serves `index.html` for directory URLs, as zensical's relative links
+        expect. Run with `dagger call docs-serve up` and browse the printed URL.
         """
         site = await self.docs_build()
         return (
@@ -415,12 +411,12 @@ class TypesafeDaggerverse:
         Builds standalone-app's `viz` extra into a relocatable venv, then uses
         `copy_venv` (default `.venv` resolved against the workdir, `set_env_vars`)
         to drop the venv **and the uv-managed standalone Python it bundles** into a
-        plain `debian:bookworm-slim` image — no Python, no uv, no project. We first
-        assert the base really has no Python, then run plain `python` (resolved via
+        plain `debian:bookworm-slim` image with no Python, uv, or project. We first
+        assert the base has no Python, then run plain `python` (resolved via
         the venv's `PATH`) and import the installed dep (`tabulate`).
 
-        The bundled Python matches the build base's libc — here the default Debian
-        (glibc) base, so the target is glibc (debian-slim). Building on an Alpine uv
+        The bundled Python matches the build base's libc. Here that is the default
+        Debian (glibc) base, so the target is glibc (debian-slim). Building on an Alpine uv
         base would instead produce a musl venv for alpine targets.
         """
         src = _src("uv/tests/_packages/standalone-app")
@@ -451,7 +447,7 @@ class TypesafeDaggerverse:
         Regression test for the editable-only copy-last optimization in
         `with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from
         whatever source is on disk at sync time, so real source must be copied in
-        *before* the sync — otherwise the empty scaffold stubs get baked into
+        *before* the sync. Otherwise the empty scaffold stubs get baked into
         site-packages. We export the venv into a fresh Python-less container (so
         leftover workspace source can't mask the install) and assert each local
         package's `hello()` returns its real string. Asserting the *return value*,
@@ -793,8 +789,7 @@ print("LAYER_CACHE_OK")
     @check
     @function
     async def github_pytest(self) -> None:
-        """Run the github module's unit-test suite inside a freshly-built
-        container."""
+        """Run the github module's unit-test suite inside a freshly built container."""
         ctr = (
             await uv(_fixture("github"))
             .workspace(".")
@@ -814,11 +809,11 @@ print("LAYER_CACHE_OK")
 
     @function
     async def uv_workspace_pytest_self(self) -> None:
-        """Run the uv module's own pytest suite inside a freshly-built container.
+        """Run the uv module's own pytest suite inside a freshly built container.
 
         `install()` only copies `src/` for each package (to keep layer
         granularity tight). `tests/` has to be mounted explicitly so
-        pytest can find them — without this, `pytest -q` collects nothing
+        pytest can find them. Without it, `pytest -q` collects nothing
         and exits with code 5 (NO_TESTS_COLLECTED).
         """
         ctr = await uv(_fixture("uv")).workspace(".").install(package=["uv"], base_container=_base(), all_groups=True)
@@ -828,7 +823,6 @@ print("LAYER_CACHE_OK")
         await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
 
     def _ruff_dirty_source(self) -> Directory:
-        """A directory with a deliberately messy Python file for ruff to fix."""
         return (
             core()
             .directory()
@@ -945,7 +939,6 @@ print("LAYER_CACHE_OK")
     # ---- deptry module checks ----
 
     def _deptry_project(self, pyproject: str, sources: dict[str, str]) -> Directory:
-        """A single deptry-checkable project: a pyproject.toml plus source files."""
         d = core().directory().with_new_file("pyproject.toml", pyproject)
         for path, content in sources.items():
             d = d.with_new_file(path, content)
@@ -1011,7 +1004,7 @@ print("LAYER_CACHE_OK")
     async def deptry_clean_src_layout(self) -> None:
         """A `src`-layout project passes: its own package isn't misreported as third-party.
 
-        Regression test for `--known-first-party` — a bare `deptry .` on a src
+        Regression test for `--known-first-party`: a bare `deptry .` on a src
         layout flags the project's own imports as DEP001/DEP003.
         """
         src = self._deptry_project(
@@ -1071,7 +1064,7 @@ print("LAYER_CACHE_OK")
         """A `[tool.deptry]` section opts a non-standard-layout project in.
 
         The project has neither a `src` nor a flat package directory, but
-        declares `[tool.deptry]`, so it is checked rather than skipped — here it
+        declares `[tool.deptry]`, so it is checked rather than skipped. Here it
         has an unused dependency and must fail.
         """
         src = self._deptry_project(

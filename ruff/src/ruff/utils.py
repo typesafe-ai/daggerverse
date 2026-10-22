@@ -10,8 +10,8 @@ _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
 
 
 def pinned_image(name: str) -> str:
-    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
-    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    """The image reference in this package's `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parent / "images" / name / "Dockerfile"
     for line in dockerfile.read_text().splitlines():
         if line.startswith("FROM "):
             return line.split()[1]
@@ -126,7 +126,7 @@ async def _resolve_from_pyproject(source: Directory) -> str | None:
 def resolve_specifier(value: str) -> str:
     """Concrete image tag for a configured version value (exact pin or range).
 
-    Exact pins are used verbatim; ranges resolve to their minimal compatible
+    Exact pins are used as-is, minus any leading `==`; ranges resolve to their minimal compatible
     version. Falls back to the default tag when a range has no lower bound.
     """
     if is_exact_version(value):

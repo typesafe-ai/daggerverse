@@ -25,11 +25,11 @@ type ModuleTypes {
         )
         .withFunction(
           function("deptry_clean_src_layout", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("A `src`-layout project passes: its own package isn't misreported as third-party.\n\nRegression test for `--known-first-party` — a bare `deptry .` on a src\nlayout flags the project's own imports as DEP001/DEP003.")
+            .withDescription("A `src`-layout project passes: its own package isn't misreported as third-party.\n\nRegression test for `--known-first-party`: a bare `deptry .` on a src\nlayout flags the project's own imports as DEP001/DEP003.")
         )
         .withFunction(
           function("deptry_config_opts_in_nonstandard_layout", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("A `[tool.deptry]` section opts a non-standard-layout project in.\n\nThe project has neither a `src` nor a flat package directory, but\ndeclares `[tool.deptry]`, so it is checked rather than skipped — here it\nhas an unused dependency and must fail.")
+            .withDescription("A `[tool.deptry]` section opts a non-standard-layout project in.\n\nThe project has neither a `src` nor a flat package directory, but\ndeclares `[tool.deptry]`, so it is checked rather than skipped. Here it\nhas an unused dependency and must fail.")
         )
         .withFunction(
           function("deptry_detects_issue", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -62,17 +62,17 @@ type ModuleTypes {
         )
         .withFunction(
           function("docs_serve", typeDef.withObject("Service"))
-            .withDescription("Serve the combined docs site over HTTP as a Dagger service.\n\nUses Python's stdlib `http.server` (already in the uv base image), which\nserves `index.html` for directory URLs — what zensical's relative links\nexpect. Run with `dagger call serve-docs up` and browse the printed URL.")
+            .withDescription("Serve the combined docs site over HTTP as a Dagger service.\n\nUses Python's stdlib `http.server` (already in the uv base image), which\nserves `index.html` for directory URLs, as zensical's relative links\nexpect. Run with `dagger call docs-serve up` and browse the printed URL.")
             .withArg("port", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Port to listen on", defaultValue: ("8080" :: Dagger.JSON!))
         )
         .withFunction(
           function("docs_site", typeDef.withObject("Directory"))
-            .withDescription("Build a module's static docs site and return the generated `site/` dir.\n\nBuilt on the same base as the tests, with the module installed and its\n`docs` uv group (which ships zensical) synced — so docs that introspect\nthe codebase can import it. `build` only copies each package's `src/`, so\nthe docs sources are supplied separately by `_zensical_site`.")
+            .withDescription("Build a module's static docs site and return the generated `site/` dir.\n\nBuilt on the same base as the tests, with the module installed and its\n`docs` uv group (which ships zensical) synced, so docs that introspect\nthe codebase can import it. `build` only copies each package's `src/`, so\nthe docs sources are supplied separately by `_zensical_site`.")
             .withArg("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Module directory whose docs to build (e.g. 'uv')")
         )
         .withFunction(
           function("github_pytest", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run the github module's unit-test suite inside a freshly-built\ncontainer.")
+            .withDescription("Run the github module's unit-test suite inside a freshly built container.")
             .withCheck
         )
         .withFunction(
@@ -146,11 +146,11 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_no_editable_bakes_local_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`no_editable=True` bakes real local-package *source* into site-packages.\n\nRegression test for the editable-only copy-last optimization in\n`with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from\nwhatever source is on disk at sync time, so real source must be copied in\n*before* the sync — otherwise the empty scaffold stubs get baked into\nsite-packages. We export the venv into a fresh Python-less container (so\nleftover workspace source can't mask the install) and assert each local\npackage's `hello()` returns its real string. Asserting the *return value*,\nnot just importability, is the point: an empty stub still imports fine.")
+            .withDescription("`no_editable=True` bakes real local-package *source* into site-packages.\n\nRegression test for the editable-only copy-last optimization in\n`with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from\nwhatever source is on disk at sync time, so real source must be copied in\n*before* the sync. Otherwise the empty scaffold stubs get baked into\nsite-packages. We export the venv into a fresh Python-less container (so\nleftover workspace source can't mask the install) and assert each local\npackage's `hello()` returns its real string. Asserting the *return value*,\nnot just importability, is the point: an empty stub still imports fine.")
         )
         .withFunction(
           function("uv_relocatable_venv_runs_in_fresh_container", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`copy_venv` yields a runnable env in a container that has no Python at all.\n\nBuilds standalone-app's `viz` extra into a relocatable venv, then uses\n`copy_venv` (default `.venv` resolved against the workdir, `set_env_vars`)\nto drop the venv **and the uv-managed standalone Python it bundles** into a\nplain `debian:bookworm-slim` image — no Python, no uv, no project. We first\nassert the base really has no Python, then run plain `python` (resolved via\nthe venv's `PATH`) and import the installed dep (`tabulate`).\n\nThe bundled Python matches the build base's libc — here the default Debian\n(glibc) base, so the target is glibc (debian-slim). Building on an Alpine uv\nbase would instead produce a musl venv for alpine targets.")
+            .withDescription("`copy_venv` yields a runnable env in a container that has no Python at all.\n\nBuilds standalone-app's `viz` extra into a relocatable venv, then uses\n`copy_venv` (default `.venv` resolved against the workdir, `set_env_vars`)\nto drop the venv **and the uv-managed standalone Python it bundles** into a\nplain `debian:bookworm-slim` image with no Python, uv, or project. We first\nassert the base has no Python, then run plain `python` (resolved via\nthe venv's `PATH`) and import the installed dep (`tabulate`).\n\nThe bundled Python matches the build base's libc. Here that is the default\nDebian (glibc) base, so the target is glibc (debian-slim). Building on an Alpine uv\nbase would instead produce a musl venv for alpine targets.")
         )
         .withFunction(
           function("uv_workspace_auto_install_uv", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -198,7 +198,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_workspace_pytest_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run the uv module's own pytest suite inside a freshly-built container.\n\n`install()` only copies `src/` for each package (to keep layer\ngranularity tight). `tests/` has to be mounted explicitly so\npytest can find them — without this, `pytest -q` collects nothing\nand exits with code 5 (NO_TESTS_COLLECTED).")
+            .withDescription("Run the uv module's own pytest suite inside a freshly built container.\n\n`install()` only copies `src/` for each package (to keep layer\ngranularity tight). `tests/` has to be mounted explicitly so\npytest can find them. Without it, `pytest -q` collects nothing\nand exits with code 5 (NO_TESTS_COLLECTED).")
         )
         .withFunction(
           function("uv_workspace_standalone_all_extras", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

@@ -3,12 +3,12 @@
 The Watcher owns three concerns:
 
 - the per-check state derived from successive snapshots
-- the deadlines (per-poll wall clock + a separate "discovery" deadline for
-  statuses that haven't appeared yet)
+- the deadlines (an overall wall-clock deadline plus a separate "discovery"
+  deadline for statuses that haven't appeared yet)
 - all user-visible output (delegated to :mod:`.render`)
 
-The caller's job is reduced to: fetch a snapshot, feed it to :meth:`step`,
-react to the returned :class:`Step` value.
+The caller fetches a snapshot, feeds it to :meth:`step`, and reacts to the
+returned :class:`Step` value.
 """
 
 import time
@@ -75,8 +75,8 @@ class Watcher:
         """Apply a snapshot, render any newly-terminal checks, and return them.
 
         Each terminal transition is reported exactly once. Per-transition
-        rendering is *suppressed* when the resulting verdict is terminal —
-        the final table about to be rendered will summarize.
+        rendering is suppressed when the resulting verdict is terminal,
+        because the final table summarizes it.
         """
         new_completions: list[Transition] = []
         for name in self.expected:
@@ -124,7 +124,7 @@ class Watcher:
     def step(self, snapshot: Mapping[str, Status]) -> Step:
         """Apply `snapshot`, advance deadlines, and emit progress output.
 
-        Returns the :class:`Step` outcome — :data:`Step.CONTINUE` means the
+        Returns the :class:`Step` outcome. :data:`Step.CONTINUE` means the
         caller should keep polling.
         """
         if self._start is None:

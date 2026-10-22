@@ -1,5 +1,5 @@
-"""Rich-based console output. Each function takes a Console explicitly so the
-caller (typically a Watcher) controls where output goes — including a
+"""Rich console output. Each function takes a Console explicitly so the
+caller (typically a Watcher) controls where output goes, including a
 recording Console in tests."""
 
 from rich.console import Console

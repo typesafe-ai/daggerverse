@@ -22,8 +22,8 @@ class FixMode(enum.Enum):
 
 
 def pinned_image(name: str) -> str:
-    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
-    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    """The image reference in this package's `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parent / "images" / name / "Dockerfile"
     for line in dockerfile.read_text().splitlines():
         if line.startswith("FROM "):
             return line.split()[1]
@@ -171,7 +171,7 @@ class Zizmor:
     ) -> Changeset:
         """Auto-fix GitHub Actions security issues found by zizmor.
 
-        Returns a Changeset applied to the host.
+        Returns a Changeset to apply to the host.
         """
         ctr = self._container(github_token)
         args = self._args(

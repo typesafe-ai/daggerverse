@@ -14,8 +14,8 @@ _DEFAULT_VERSION = "0.25.1"
 
 
 def pinned_image(name: str) -> str:
-    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
-    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    """The image reference in this package's `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parent / "images" / name / "Dockerfile"
     for line in dockerfile.read_text().splitlines():
         if line.startswith("FROM "):
             return line.split()[1]
@@ -56,12 +56,10 @@ def _root_relative(cwd: str, path: str) -> str:
 
 
 def _root_path(path: str, *names: str) -> str:
-    """The absolute workspace path of `names` under the project at `path`."""
     return "/" + posixpath.normpath(posixpath.join(path, *names))
 
 
 def _is_excluded(path: str, patterns: list[str]) -> bool:
-    """Whether a project path matches any of the exclude glob patterns."""
     project = PurePosixPath(path)
     return any(project.full_match(pattern) for pattern in patterns)
 
@@ -86,7 +84,7 @@ def _project_info(pyproject_content: str) -> tuple[bool, str | None, bool]:
     `module_name` is the project's first-party import name, derived from
     `[project].name`. It is passed to deptry as `--known-first-party` so the
     project's own modules aren't misreported as third-party regardless of
-    layout — deptry otherwise infers first-party modules from what sits directly
+    layout. Otherwise deptry infers first-party modules from what sits directly
     under the scanned root, which misses a `src` layout (false DEP001/DEP003).
 
     `configured` is whether the project declares a `[tool.deptry]` section: an
@@ -107,7 +105,7 @@ def _project_info(pyproject_content: str) -> tuple[bool, str | None, bool]:
 
 
 async def _has_package_layout(workspace: Workspace, path: str, module: str | None) -> bool:
-    """Whether a project has its own package source — a `src` directory or a
+    """Whether a project has its own package source: a `src` directory or a
     flat package directory named after the project.
 
     Used to decide whether deptry should run at all: a `pyproject.toml` with no
@@ -268,8 +266,8 @@ class Deptry:
     ) -> Deptry:
         """Discover the projects: one per `pyproject.toml` that declares dependencies
         (see `_project_info`) and either has its own package source or declares a
-        `[tool.deptry]` section. A project with no package of its own — e.g. a uv
-        workspace root that only aggregates members in subdirectories — is left
+        `[tool.deptry]` section. A project with no package of its own (e.g. a uv
+        workspace root that only aggregates members in subdirectories) is left
         out, so `deptry .` never spills over the rest of the monorepo, unless its
         `[tool.deptry]` section opts it in explicitly. Paths matching `exclude` are
         left out too.

@@ -8,7 +8,7 @@ type ModuleTypes {
         .withField("source", typeDef.withObject("Directory"), description: "The workspace's `.github` directory containing Actions workflows.")
         .withFunction(
           function("fix", typeDef.withObject("Changeset"))
-            .withDescription("Auto-fix GitHub Actions security issues found by zizmor.\n\nReturns a Changeset applied to the host.")
+            .withDescription("Auto-fix GitHub Actions security issues found by zizmor.\n\nReturns a Changeset to apply to the host.")
             .withArg("mode", typeDef.withEnum("FixMode", description: "Which fixes to apply."), description: "Which fixes to apply.", defaultValue: ("\"SAFE\"" :: Dagger.JSON!))
             .withArg("github_token", typeDef.withOptional(true).withObject("Secret").withOptional(true), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))

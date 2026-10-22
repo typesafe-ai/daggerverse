@@ -289,10 +289,9 @@ def deptry(ws: Workspace, *, exclude: list[str] | None = None, session: _Session
     dependencies
     (see `_project_info`) and either has its own package source or
     declares a
-    `[tool.deptry]` section. A project with no package of its own — e.g. a
+    `[tool.deptry]` section. A project with no package of its own (e.g. a
     uv
-    workspace root that only aggregates members in subdirectories — is
-    left
+    workspace root that only aggregates members in subdirectories) is left
     out, so `deptry .` never spills over the rest of the monorepo, unless
     its
     `[tool.deptry]` section opts it in explicitly. Paths matching

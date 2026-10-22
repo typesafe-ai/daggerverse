@@ -1,5 +1,3 @@
-"""Tests for uv.lock parsing and transitive dependency resolution."""
-
 import posixpath
 import tomllib
 from collections import OrderedDict
@@ -22,7 +20,7 @@ def _load_lock(path: Path) -> dict:
 
 
 def _is_flat_package(ws_root: Path, local_packages: dict[str, str], pkg: str) -> bool:
-    """Replicate the flat-package detection from UvWorkspace.build()."""
+    """Replicate the flat-package detection from UvSyncPlan.create()."""
     if pkg not in local_packages:
         return False
     toml = tomllib.loads((ws_root / local_packages[pkg] / "pyproject.toml").read_text())
@@ -94,7 +92,6 @@ class TestPartialWorkspace:
     lock_data = _load_lock(FIXTURES / "partial-workspace" / "sub-project")
 
     def test_parse_local_packages_includes_missing(self):
-        """parse_local_packages returns ALL local packages from the lock, including missing ones."""
         result = parse_local_packages(self.lock_data)
         assert result == {
             "ext-pkg": "../../gone/ext-pkg",
@@ -143,8 +140,6 @@ class TestVirtualWorkspaceRoot:
 
 
 class TestStandalone:
-    """Tests using a standalone single-package project."""
-
     lock_data = _load_lock(FIXTURES / "standalone-app")
 
     def test_parse_local_packages(self):
@@ -274,7 +269,7 @@ class TestWorkspaceFlat:
             assert "build-system" in toml, f"{name} should have build-system"
 
     def test_not_flat_package(self):
-        """No package should be detected as flat-package (no build-system)."""
+        """The project has no build-system, so no package is flat."""
         local = parse_local_packages(self.lock_data)
         for pkg in local:
             if local[pkg] == ".":
@@ -283,8 +278,6 @@ class TestWorkspaceFlat:
 
 
 class TestBuildUvSyncArgs:
-    """Tests for `uv sync` argv construction — mirrors uv CLI flags verbatim."""
-
     def _args(self, **overrides):
         defaults = {
             "packages": [],
@@ -419,8 +412,6 @@ class TestBuildUvSyncArgs:
 
 
 class TestMatchReachable:
-    """Unit tests for _match_reachable — the pure path-matching logic behind _filter_reachable."""
-
     def test_root_package_at_dot(self):
         """A package at '.' with workspace_path='.' must survive filtering.
 
@@ -471,8 +462,6 @@ class TestMatchReachable:
 
 
 class TestModuleName:
-    """_module_name maps distribution names to Python module names."""
-
     def test_standard_hyphenated(self):
         assert _module_name("my-app") == "my_app"
 
@@ -524,9 +513,9 @@ class TestNestedWorkspacePathResolution:
     package paths (including ``..``) must resolve to valid source-root-relative
     paths for both container writes and source reads.
 
-    Before the fix, the container placed ``pyproject.toml``/``uv.lock`` at
-    ``/work/`` regardless of nesting depth, so ``../../Soar`` in a lock file
-    would resolve to ``/work/../../Soar`` — escaping the filesystem root.
+    Placing ``pyproject.toml``/``uv.lock`` at ``/work/`` regardless of nesting
+    depth would resolve ``../../Soar`` in a lock file to ``/work/../../Soar``,
+    escaping the filesystem root.
     """
 
     lock_data = _load_lock(FIXTURES / "partial-workspace" / "sub-project")
@@ -540,7 +529,7 @@ class TestNestedWorkspacePathResolution:
 
     def test_deep_dep_resolves_to_source_root(self):
         """``../../gone/ext-pkg`` from ``sub-project`` should resolve to ``../gone/ext-pkg``
-        (outside source tree — filtered by _match_reachable)."""
+        (outside the source tree, so _match_reachable filters it out)."""
         local = parse_local_packages(self.lock_data)
         assert local["ext-pkg"] == "../../gone/ext-pkg"
         resolved = posixpath.normpath(posixpath.join("sub-project", "../../gone/ext-pkg"))

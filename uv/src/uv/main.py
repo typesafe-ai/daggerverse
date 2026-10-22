@@ -38,7 +38,7 @@ class UvWorkspaces:
 class Uv:
     """Entrypoint for the `uv` module.
 
-    Hands out `UvWorkspaceSource` objects — one per workspace — which expose additional functionality.
+    Hands out one `UvWorkspaceSource` per uv workspace.
     Use `workspace` to grab a single workspace by path or `workspaces` to get them all.
 
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""

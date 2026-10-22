@@ -11,7 +11,7 @@ from uv.utils import parse_pyvenv_cfg
 class UvVenv:
     """A relocatable uv virtual environment bundled with the uv-managed Python it needs.
 
-    A venv never contains the standard library — `.venv/bin/python` resolves to
+    A venv never contains the standard library: `.venv/bin/python` resolves to
     a base interpreter whose `lib/` provides it. This pairs the venv with that
     interpreter so the two can be dropped into a fresh container (one without any
     Python of its own) and run without uv.
@@ -60,9 +60,9 @@ class UvVenv:
         # <impl-dir> is a python-build-standalone install, e.g. cpython-3.14-<plat>. uv names that
         # dir with the MINOR version and symlinks it to the real cpython-<patch>-<plat> dir; the
         # venv references the minor path by absolute symlink. Export the STORE (the parent of the
-        # install dir, derived structurally — no hardcoded location, so $UV_PYTHON_INSTALL_DIR
+        # install dir, derived structurally with no hardcoded location, so $UV_PYTHON_INSTALL_DIR
         # works too) so the version symlink AND the real interpreter travel together and resolve
-        # when remounted — and so we never extract a symlinked path directly (which
+        # when remounted, and so we never extract a symlinked path directly (which
         # `Container.directory()` has mishandled across engine versions).
         home = cfg.get("home", "").rstrip("/")
         install_dir = posixpath.dirname(home)  # <store>/<impl-dir>

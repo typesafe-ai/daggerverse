@@ -1,5 +1,3 @@
-"""Dagger module: GitHub utilities for CI pipelines."""
-
 from typing import Annotated
 
 from dagger import Doc, field, function, object_type

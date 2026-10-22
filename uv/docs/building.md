@@ -6,13 +6,11 @@ description: Build a minimal container for a package in a uv monorepo, assemblin
 
 # Building containers
 
-This is the module's core feature: turning one package in a `uv` monorepo into a small,
-ready-to-run container. The hard part of building inside a workspace is **assembling the
-context** — a package usually depends on sibling packages by path, and those local
+The module builds one package from a `uv` monorepo into a container with minimal required dependencies. Inside a
+workspace, a package usually depends on sibling packages by path, and those local
 dependencies must be present and installed in the right order. The module reads
-`uv.lock`, works out exactly which local members the target needs, makes them available,
-and installs everything in a cache-friendly order — so you don't hand-curate the build
-context yourself.
+`uv.lock`, works out which local members the target needs, stages them, and installs
+everything in an order that caches well, so you don't assemble the build context by hand.
 
 !!! note
     Dependency-only workspace members are supported too, including projects with
@@ -31,20 +29,19 @@ context yourself.
     ```
 
     - **`Uv`** holds the source tree it reads from the Dagger workspace (`ws`). Ask it
-      for a single workspace by path
-      (`workspace`) or for the collection of every workspace it can find (`workspaces`).
+      for one workspace by path (`workspace`) or for the collection of every workspace
+      it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
       `install` everything in one call.
     - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
-      plan. It exposes the individual pipeline steps so you can splice your own work in
-      between them, and can export the result as a container or a [`UvVenv`](virtual-environments.md).
+      plan. It exposes the individual pipeline steps so you can run your own steps
+      between them, and exports the result as a container or a [`UvVenv`](virtual-environments.md).
 
-    You don't have to learn every type up front — the convenience methods (`audit`,
-    `install`) cover the common cases, and you reach for the pipeline only when you need
-    fine-grained control.
+    The convenience methods (`audit`, `install`) cover the common cases. Use the
+    pipeline when you need control over the individual steps.
 
-## `install` — the one-call path
+## The one-call path: `install`
 
 `install` builds a container with everything a package needs:
 
@@ -73,54 +70,54 @@ ctr = (
 )
 ```
 
-What happens at each step — each is its own layer, ordered most-stable to most-volatile
-so the expensive work is cached across builds:
+Each step is its own layer. The layers go from most stable to most volatile, so the
+expensive work stays cached across builds:
 
-1. The workspace's `uv.lock` is parsed to find the **local** packages your target
-   transitively depends on.
+1. The module parses the workspace's `uv.lock` to find the **local** packages your target
+   depends on, directly or transitively.
 2. **Remote** (third-party) dependencies are installed first. They change rarely, so
-   this layer caches well. This optionally may be followed by `uv cache prune --ci` if the cache has exceeded a configurable size.
+   this layer caches well. If the cache has grown past a configurable size,
+   `uv cache prune --ci` runs afterwards.
 3. The needed **local** members are scaffolded as stubs (their `pyproject.toml`, files
    matched by `project.license-files`, and an empty module) and installed with `uv sync`.
    License patterns are relative to each member's `pyproject.toml` and support globs
    such as `LICENSE*` and `licenses/**/*.txt`. `uv` installs workspace members as
-   *editable* by default, so this only records path links — it depends on the packages'
-   metadata, not their code, and stays cached when you only change source.
-4. The real source is copied in **last**, on top of the stubs. Because the editable
-   installs already point at these paths, the code goes live with no re-sync — so a
-   source-only change invalidates just this thin final layer, not the install above it.
+   *editable* by default, so this step only records path links. It depends on the
+   packages' metadata, not their code, and stays cached when only source changes.
+4. The real source is copied in **last**, on top of the stubs. The editable installs
+   already point at these paths, so the code goes live without a re-sync, and a
+   source-only change invalidates only this final layer.
 
-If you omit a package, the module mirrors a bare `uv sync` and installs the **current
-package** — the one declared at the workspace root. To install every member of the
+If you omit a package, the module mirrors a bare `uv sync` and installs the current
+package (the one declared at the workspace root). To install every member of the
 workspace instead, ask for all packages.
 
 !!! note
-    By default there is no `.venv` created and the system environment is used instead.
-    Set `venv=True` to create a `.venv` in the workspace root.
-    Also, see [virtual environments](./virtual-environments.md) to learn how to produce a virtual environment
-    for multi-staged builds with this module.
+    By default the module installs into the system environment and creates no `.venv`.
+    Set `venv=True` to create one in the workspace root. For multi-stage builds, see
+    [virtual environments](./virtual-environments.md).
 
 ### Choosing a base image
 
 If you don't provide a base container, the module starts from a Debian-based `uv` image
 pinned to the workspace's `uv` version, and `uv` provisions a managed Python on demand.
 Provide your own base when you need system packages, private registry auth, or a
-specific platform — for example a musl/Alpine base. Whatever you pass determines the
+specific platform, such as a musl/Alpine base. The base you pass determines the
 platform and libc of the resulting environment.
 
 !!! tip
-    If your custom base doesn't ship `uv`, the module auto-installs it from the official image (`auto_install_uv=True` by default) — or call `with_uv` explicitly in the pipeline.
+    If your custom base doesn't ship `uv`, the module installs it from the official image (`auto_install_uv=True` by default). You can also call `with_uv` yourself in the pipeline.
 
 ### Caching
 
 By default, the module mounts a Dagger cache volume at `/mnt/cache/uv` and sets
-`UV_CACHE_DIR` to point there. This means both **Python downloads** and **package
-downloads** are cached across builds — so a second `uv sync` or `uv python install` that
-hits the same versions skips the network entirely.
+`UV_CACHE_DIR` to point there. Python downloads and package downloads are both cached
+across builds, so a second `uv sync` or `uv python install` for the same versions skips
+the network.
 
 If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a directory there, the module mounts the cache volume at that path instead of the default.
 
-The cache may be recycled with `uv cache prune --ci` if grown too large. This is enabled by default and the threshold is set to 100 GiB.
+When the cache grows past 100 GiB, the module runs `uv cache prune --ci`. This is on by default.
 
 ## Supported build backends
 
@@ -131,7 +128,7 @@ Backend support here describes that staging behavior:
 | Backend or project type | Layout support |
 | --- | --- |
 | `uv_build` | Default `src/` layout, custom `module-root`, and explicit `module-name` strings or lists. |
-| Other backends, including Hatchling | Conventional single-module flat or `src/` layouts, using the existing module-name heuristic. Backend-specific package mappings and build hooks are not interpreted. |
+| Other backends, including Hatchling | Conventional single-module flat or `src/` layouts, using a module-name heuristic. Backend-specific package mappings and build hooks are not interpreted. |
 | Dependency-only projects | Their metadata and transitive local dependencies are staged; the project itself is not installed or copied as a Python package. |
 
 ### `uv_build` layouts
@@ -169,11 +166,11 @@ staged separately.
     using such settings; a full project copy after installation is too late for
     files the backend needs while building.
 
-## The pipeline — when you need control
+## Running the pipeline step by step
 
-`install` is a convenience wrapper. When you need to do something *between* the steps, drive the pipeline yourself. `build` prepares the build without
-installing anything and hands back a `UvWorkspaceBuild`; you then call the steps in
-order:
+`install` is a convenience wrapper. To run something *between* the steps, drive the
+pipeline yourself. `build` prepares the build without installing anything and returns a
+`UvWorkspaceBuild`; you then call the steps in order:
 
 ```python
 b = uv(ws).workspace(".").build(package=["my-app"])

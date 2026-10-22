@@ -67,7 +67,7 @@ class Zizmor(_Type):
         """
         Auto-fix GitHub Actions security issues found by zizmor.
 
-        Returns a Changeset applied to the host.
+        Returns a Changeset to apply to the host.
 
         Parameters
         ----------

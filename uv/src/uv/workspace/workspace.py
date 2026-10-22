@@ -45,8 +45,8 @@ class UvWorkspaceSource:
 
     Carries the source tree and the workspace's path within it (`"."` for a
     root workspace), relative to the Dagger workspace root. From those it derives everything it needs to `audit` the
-    locked dependencies or `build` a minimal container for a package — keeping
-    the parent `Uv` a thin, container-free entrypoint.
+    locked dependencies or `build` a minimal container for a package, so
+    the parent `Uv` stays a thin, container-free entrypoint.
 
     The full `source` (rather than just the sliced workspace directory) is
     carried so builds can reach sibling path-dependencies that live *outside*
@@ -67,11 +67,9 @@ class UvWorkspaceSource:
     ] = field(default=".")
 
     def _ws_dir(self) -> Directory:
-        """The workspace directory (`uv.lock`/`pyproject.toml` live here)."""
         return self.source if self.path == "." else self.source.directory(self.path)
 
     async def _uv_toml(self) -> File | None:
-        """The workspace's `uv.toml`, if one sits alongside its `uv.lock`."""
         ws = self._ws_dir()
         if "uv.toml" in await ws.entries():
             return ws.file("uv.toml")
@@ -119,7 +117,6 @@ class UvWorkspaceSource:
 
     @staticmethod
     def _member_paths_from(pyproject_data: dict, all_pyprojects: list[str]) -> list[str]:
-        """Workspace member paths from pre-parsed pyproject.toml and a glob result."""
         members_globs = pyproject_data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
         if not members_globs:
             return []
@@ -144,7 +141,7 @@ class UvWorkspaceSource:
         """The package indices configured for this workspace.
 
         Reads `[[index]]` from `uv.toml` when present, otherwise falls back
-        to `[[tool.uv.index]]` in `pyproject.toml` — matching uv's own
+        to `[[tool.uv.index]]` in `pyproject.toml`, matching uv's own
         precedence (`uv.toml` overrides the entire `[tool.uv]` section).
 
         When `include_from_members` is set, also reads `[[tool.uv.index]]`
@@ -271,7 +268,6 @@ class UvWorkspaceSource:
 
     @staticmethod
     async def _has_uv(ctr: Container) -> bool:
-        """Check whether uv is on $PATH in the given container."""
         with get_tracer().start_as_current_span("detect uv on PATH") as span:
             exit_code = await ctr.with_exec(["sh", "-c", "command -v uv"], expect=ReturnType.ANY).exit_code()
             found = exit_code == 0
@@ -317,8 +313,7 @@ class UvWorkspaceSource:
         """Prepare a build for this workspace without installing anything yet.
 
         Resolves the sync plan, mounts the uv cache, and copies the root
-        pyproject.toml and uv.lock into the container. Nothing is installed —
-        the returned `UvWorkspaceBuild` drives the pipeline from here:
+        pyproject.toml and uv.lock into the container. The returned `UvWorkspaceBuild` drives the pipeline from here:
         `with_remote_dependencies()` to install remote deps, `with_workspace_files()`
         to scaffold local packages, then `with_local_dependencies()` to install them.
         Skip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)
@@ -348,7 +343,7 @@ class UvWorkspaceSource:
             cache_dir = await ctr.env_variable("UV_CACHE_DIR")
             if cache_dir:
                 # The base already points uv at a cache dir. Mount the cache volume there
-                # unless the base actually ships a populated cache — don't shadow a warm,
+                # unless the base actually ships a populated cache: don't shadow a warm,
                 # deliberately prepared one with an empty mount. Crucially, a base built by
                 # this module carries a baked UV_CACHE_DIR but *no* directory there (Dagger
                 # mounts don't survive a push), so it gets re-mounted: without the mount,
@@ -479,7 +474,7 @@ class UvWorkspaceSource:
 
         Like `install`, but always builds a relocatable venv and returns a `UvVenv`
         (the venv plus its uv-managed Python) that `.into(container, path)` can drop
-        into any image. Use this — rather than `install` — when copying the
+        into any image. Use this instead of `install` when copying the
         environment into another container. Pair with `no_editable=True` so the
         exported venv carries no dependency on the workspace source.
         """

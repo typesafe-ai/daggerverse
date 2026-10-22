@@ -9,9 +9,8 @@ description: A Dagger module for linting and formatting Python code with Ruff.
 A [Dagger](https://dagger.io) module for linting and formatting Python code with
 [Ruff](https://docs.astral.sh/ruff/).
 
-It exposes two sub-objects — a **checker** (`ruff check`) and a **formatter**
-(`ruff format`) — each with a `lint` check and a `fix` generate function that returns a
-`Changeset`.
+It has two sub-objects, a checker (`ruff check`) and a formatter (`ruff format`).
+Each has a `lint` check and a `fix` function that returns a `Changeset`.
 
 ## Installation
 
@@ -23,7 +22,7 @@ $ dagger install github.com/typesafe-ai/daggerverse/ruff
 
 ### Checks
 
-Run the linter:
+Run the lint and format checks:
 
 ```console
 $ dagger check ruff:check
@@ -39,11 +38,11 @@ $ dagger call ruff format fix
 
 ## `ruff` version detection
 
-The module detects the ruff version from the workspace root (in order):
+The module reads the ruff version from the first of these files in the workspace root that sets one:
 
-1. `uv.lock` — the pinned package version
-2. `ruff.toml` / `.ruff.toml` — `required-version`
-3. `pyproject.toml` — `[tool.ruff].required-version`
+1. `uv.lock`: the pinned package version
+2. `ruff.toml` / `.ruff.toml`: `required-version`
+3. `pyproject.toml`: `[tool.ruff].required-version`
 
 You can override this with `--version` or supply your own `--ctr`.
 

@@ -1,6 +1,6 @@
 # deptry
 
-Dagger module for [deptry](https://github.com/fpgmaas/deptry) — a linter for Python dependency issues.
+Dagger module for [deptry](https://github.com/fpgmaas/deptry), a linter for Python dependency issues.
 
 ## Installation
 

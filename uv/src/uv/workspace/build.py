@@ -100,7 +100,7 @@ class UvWorkspaceBuild:
 
         Measures the cache dir (`uv cache dir`) and only prunes when it exceeds `max_cache_size`
         GiB, so most builds skip the prune (and never take the cache lock). Because
-        `uv cache prune --ci` keeps only compiled wheels — nearly a full clean — one
+        `uv cache prune --ci` keeps only compiled wheels (nearly a full clean), one
         prune resets the footprint. `lock_timeout` sets `UV_LOCK_TIMEOUT` for the
         prune so concurrent builds sharing the cache volume wait instead of erroring.
         Set `max_cache_size=0` to prune on every build.
@@ -300,7 +300,6 @@ class UvWorkspaceBuild:
         return UvWorkspaceBuild(container=container, plan=self.plan)
 
     def _copy_package(self, overlay: Directory, workdir: str, pkg: LocalPackage) -> Directory:
-        """Copy a single local package's real source into the container."""
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
         for module_path in pkg.source_paths:
@@ -328,7 +327,6 @@ class UvWorkspaceBuild:
             return await ctr.with_directory("/", overlay).sync()
 
     async def _sync_local(self, ctr: Container) -> Container:
-        """Run the plan's `uv sync` to install the local members, under a span."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
             # `with_exec` is lazy; sync() inside the span so it captures the actual
@@ -341,12 +339,12 @@ class UvWorkspaceBuild:
 
         For **editable** installs (the default), run `uv sync` against the package
         stubs from `with_workspace_files`, then copy real source over the stubs last.
-        Editable installs are path links, so the source goes live without a re-sync —
-        meaning source-only changes don't invalidate the cached install layer.
+        Editable installs are path links, so the source goes live without a re-sync
+        and source-only changes don't invalidate the cached install layer.
 
         For **non-editable** installs (`no_editable=True`), `uv sync` builds a wheel
         from whatever source is present and bakes it into `site-packages`, so the real
-        source must be copied in *before* the sync — there are no path links for a
+        source must be copied in *before* the sync: there are no path links for a
         copy-last to make live, and syncing against the stubs would bake empty modules.
         """
         workdir = await self.container.workdir()
@@ -355,6 +353,6 @@ class UvWorkspaceBuild:
             return await self._sync_local(ctr)
         ctr = await self._sync_local(self.container)
         # Copy real source last: the editable installs above already point at these
-        # paths, so the code goes live with no re-sync — keeping the install layer
+        # paths, so the code goes live with no re-sync, keeping the install layer
         # cached across source-only changes.
         return await self._copy_sources(ctr, workdir)

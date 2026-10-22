@@ -1,5 +1,3 @@
-"""GitHub commit-status and check-run fetching."""
-
 import asyncio
 from collections.abc import AsyncIterator, Mapping
 
@@ -48,8 +46,8 @@ def _check_run_state(run: dict) -> str:
 
 
 async def fetch_statuses_snapshot(client: httpx.AsyncClient, url: str) -> dict[str, Status]:
-    """Page through `/statuses` and return `{context: Status}` keeping the
-    newest entry per context. The API returns reverse-chronological."""
+    """Page through `/statuses` and return `{context: Status}` with the newest
+    entry per context. The API returns entries newest first."""
     latest: dict[str, Status] = {}
     page = 1
     while True:

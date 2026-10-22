@@ -1,6 +1,3 @@
-"""State-machine tests for `Watcher`. Snapshots are synthesized — no GitHub
-calls. Output is captured via a recording `rich.console.Console`."""
-
 from collections.abc import Iterable
 
 import pytest
@@ -10,7 +7,6 @@ from rich.console import Console
 
 
 def make_console() -> Console:
-    """A Console suitable for test inspection: no ANSI, captures all output."""
     return Console(record=True, width=200, force_terminal=False, force_interactive=False)
 
 
@@ -200,7 +196,7 @@ def test_pending_does_not_print():
 
 def test_short_circuits_when_verdict_becomes_terminal():
     """If a single observe() makes the verdict terminal, don't print live
-    transitions — the caller's final table will summarize."""
+    transitions; the caller's final table will summarize."""
     w, c = make_watcher(["a", "b"])
     w.observe({"a": Status("success"), "b": Status("success")})
     assert c.export_text().strip() == ""
@@ -269,8 +265,6 @@ def test_verdict_matrix(states: dict[str, str], expected_verdict: Verdict):
 
 
 class FakeClock:
-    """Manually-advanceable monotonic clock for deterministic timeout tests."""
-
     def __init__(self, t: float = 0.0) -> None:
         self.t = t
 
@@ -327,8 +321,6 @@ def test_step_discovery_does_not_fire_once_status_observed():
 
 
 def test_step_progress_is_throttled_by_progress_interval():
-    """Progress lines fire on the first step then only after `progress_interval`
-    elapses, regardless of how often `step()` is called."""
     c = make_console()
     clock = FakeClock()
     w = Watcher(

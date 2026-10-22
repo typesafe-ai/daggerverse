@@ -9,10 +9,10 @@ reaches a successful terminal state.
 
 Two entry points:
 
-- **`wait-for-statuses`** -- general-purpose; takes an explicit list of status
+- **`wait-for-statuses`**: general-purpose; takes an explicit list of status
   contexts. Use this for any GitHub Status checks (CI providers, custom
   pipelines, branch-protection contexts, etc).
-- **`wait-for-dagger-checks`** -- specific to Dagger Cloud checks. Discovers
+- **`wait-for-dagger-checks`**: specific to Dagger Cloud checks. Discovers
   the expected set from the workspace's check paths
   (`Workspace.artifacts()`); takes no `checks` argument.
 
@@ -29,8 +29,8 @@ the call in a function there. Calling it directly with `-m github` makes this
 module the main one: your checks then carry their module name and never match
 the statuses.
 
-`wait-for-statuses` doesn't rely on workspace discovery and works fine when
-called directly.
+`wait-for-statuses` doesn't rely on workspace discovery, so you can call it
+directly.
 
 In your root module (Python example):
 
@@ -76,7 +76,7 @@ class MyModule:
 ### Waiting for an explicit list of GitHub statuses
 
 `checks` takes the GitHub commit-status `context` strings exactly as they
-appear on the commit page (e.g. `build`, `test`, `lint`) -- no `owner/repo`
+appear on the commit page (e.g. `build`, `test`, `lint`), without an `owner/repo`
 prefix.
 
 ```bash

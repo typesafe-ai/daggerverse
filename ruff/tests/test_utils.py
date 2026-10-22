@@ -1,8 +1,7 @@
-"""Tests for ruff version resolution utilities (pure logic, no Dagger runtime)."""
-
 from pathlib import Path
 
 from ruff.utils import (
+    _DEFAULT_VERSION,
     is_exact_version,
     minimal_compatible_version,
     normalize_exact_version,
@@ -135,4 +134,4 @@ class TestResolveSpecifier:
         assert resolve_specifier(">=0.6.0,<0.7.0") == "0.6.0"
 
     def test_no_lower_bound_falls_back_to_default(self):
-        assert resolve_specifier("<1.0.0") == "0.16.0"
+        assert resolve_specifier("<1.0.0") == _DEFAULT_VERSION

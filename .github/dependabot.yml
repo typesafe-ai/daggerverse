@@ -1,9 +1,9 @@
 version: 2
 updates:
-  # Each module pins the images it uses by default in images/<name>/Dockerfile.
+  # Each module pins the images it uses by default in src/<package>/images/<name>/Dockerfile.
   - package-ecosystem: docker
     directories:
-      - "/*/images/*"
+      - "/*/src/*/images/*"
     schedule:
       interval: weekly
     cooldown:

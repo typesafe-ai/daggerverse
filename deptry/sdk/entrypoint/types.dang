@@ -32,7 +32,7 @@ type ModuleTypes {
         )
         .withConstructor(
           function("", typeDef.withObject("Deptry"))
-            .withDescription("Discover the projects: one per `pyproject.toml` that declares dependencies\n(see `_project_info`) and either has its own package source or declares a\n`[tool.deptry]` section. A project with no package of its own — e.g. a uv\nworkspace root that only aggregates members in subdirectories — is left\nout, so `deptry .` never spills over the rest of the monorepo, unless its\n`[tool.deptry]` section opts it in explicitly. Paths matching `exclude` are\nleft out too.\n\nThe workspace is walked on the host, and only the pyproject.toml files\nare loaded.")
+            .withDescription("Discover the projects: one per `pyproject.toml` that declares dependencies\n(see `_project_info`) and either has its own package source or declares a\n`[tool.deptry]` section. A project with no package of its own (e.g. a uv\nworkspace root that only aggregates members in subdirectories) is left\nout, so `deptry .` never spills over the rest of the monorepo, unless its\n`[tool.deptry]` section opts it in explicitly. Paths matching `exclude` are\nleft out too.\n\nThe workspace is walked on the host, and only the pyproject.toml files\nare loaded.")
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("exclude", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of project paths to leave out of projects, e.g. **/tests/_packages/**.", defaultValue: ("null" :: Dagger.JSON!))
         ),

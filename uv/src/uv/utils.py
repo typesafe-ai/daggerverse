@@ -15,8 +15,8 @@ _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
 
 
 def pinned_image(name: str) -> str:
-    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
-    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    """The image reference in this package's `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parent / "images" / name / "Dockerfile"
     for line in dockerfile.read_text().splitlines():
         if line.startswith("FROM "):
             return line.split()[1]
@@ -32,7 +32,7 @@ _DEFAULT_IMAGE, _DEFAULT_VERSION = pinned_image("uv").rsplit(":", 1)
 def image_ref(version: str) -> str:
     """The (distroless) uv image reference for a given tag/version.
 
-    `FROM scratch` — just the uv binary. Enough to run `uv audit`, but not
+    `FROM scratch` with only the uv binary. Enough to run `uv audit`, but not
     `uv sync`: with no libc/OS layer, uv can't provision a managed Python.
     """
     return f"{_DEFAULT_IMAGE}:{version}"
@@ -45,7 +45,7 @@ def debian_image_ref(version: str) -> str:
     ca-certificates, so `uv` can download a managed Python at sync time. Used as
     the default build base.
 
-    Maps to the `:<version>-debian` tag — `astral-sh/uv` publishes `-debian` for
+    Maps to the `:<version>-debian` tag. `astral-sh/uv` publishes `-debian` for
     both old and current uv releases (the `-bookworm` variant was dropped for
     recent versions).
     """
@@ -63,7 +63,6 @@ def root_relative(cwd: str, path: str) -> str:
 
 
 def is_excluded(path: str, patterns: list[str]) -> bool:
-    """Whether a workspace path matches any of the exclude glob patterns."""
     workspace = PurePosixPath(path)
     return any(workspace.full_match(pattern) for pattern in patterns)
 
@@ -124,7 +123,6 @@ def extract_indices(data: dict, *, uv_toml: bool = False) -> list[dict]:
 
 
 def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict]:
-    """Convenience wrapper: parse TOML string then extract indices."""
     return extract_indices(tomllib.loads(content), uv_toml=uv_toml)
 
 
@@ -139,13 +137,11 @@ def parse_project_name(content: str) -> str | None:
 
 
 def parse_required_version_from_pyproject(content: str) -> str | None:
-    """`[tool.uv].required-version` from pyproject.toml contents, if present."""
     data = tomllib.loads(content)
     return data.get("tool", {}).get("uv", {}).get("required-version")
 
 
 def parse_required_version_from_uv_toml(content: str) -> str | None:
-    """Top-level `required-version` from uv.toml contents, if present."""
     data = tomllib.loads(content)
     return data.get("required-version")
 
@@ -154,7 +150,7 @@ def _pad_release(version: Version) -> Version:
     """Pad a bare `X` or `X.Y` release to a concrete `X.Y.Z` image tag.
 
     Trailing zeros don't change PEP 440 ordering (`0.5` == `0.5.0`), so this
-    keeps specifier satisfaction intact while producing a tag that actually
+    keeps specifier satisfaction intact while producing a tag that
     exists in the registry (uv publishes three-component tags).
     """
     if version.epoch or version.pre or version.post or version.dev or version.local:
@@ -233,7 +229,7 @@ def require_package_selection(packages: list[str], all_packages: bool, default_p
     `uv sync` defaults to the current package; we mirror that via
     `default_package` (the workspace root's `[project].name`). A pure
     workspace root has no `[project].name`, so with no explicit selection
-    there is nothing to install — surface that as an error rather than silently
+    there is nothing to install. Surface that as an error rather than silently
     installing every member.
     """
     if packages or all_packages or default_package:
@@ -317,7 +313,6 @@ def build_uv_sync_args(
     all_packages: bool,
     no_editable: bool = False,
 ) -> list[str]:
-    """Build the `uv sync` base argv mirroring the `uv sync` CLI flags."""
     args = ["uv", "sync", "--frozen", "--link-mode", "copy"]
     if no_editable:
         args.append("--no-editable")

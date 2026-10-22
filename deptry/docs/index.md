@@ -7,7 +7,7 @@ description: A Dagger module for linting Python dependency issues with deptry.
 # deptry
 
 A [Dagger](https://dagger.io) module for linting Python dependency issues with
-[deptry](https://deptry.com) — it finds unused, missing, misplaced, and
+[deptry](https://deptry.com). It finds unused, missing, misplaced, and
 transitive dependencies.
 
 `projects` is a [collection](https://docs.dagger.io/reference/sdks/python/#collections)

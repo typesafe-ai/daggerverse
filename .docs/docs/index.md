@@ -10,7 +10,7 @@
 
     ---
 
-    Build minimal containers, relocatable virtual environments, and run audit checks for [uv](https://docs.astral.sh/uv/)-managed Python projects. Monorepo-friendly.
+    Build minimal containers and relocatable virtual environments for [uv](https://docs.astral.sh/uv/)-managed Python projects and workspaces, and audit their locked dependencies.
 
     ---
 
@@ -30,7 +30,7 @@
 
     ---
 
-    Lint Python dependency issues — unused, missing, misplaced, and transitive dependencies — with [deptry](https://deptry.com). Monorepo-friendly.
+    Find unused, missing, misplaced, and transitive Python dependencies with [deptry](https://deptry.com), one check per project.
 
     ---
 

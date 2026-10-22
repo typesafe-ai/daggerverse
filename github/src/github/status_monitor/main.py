@@ -1,14 +1,3 @@
-"""Wait for GitHub commit statuses and/or check runs to succeed.
-
-Two entry points:
-
-* :meth:`GithubStatusMonitor.wait_for_statuses` — explicit list of status
-  contexts and/or check-run names; general-purpose for any GitHub check.
-* :meth:`GithubStatusMonitor.wait_for_dagger_checks` — auto-discovers expected
-  contexts from the current workspace's checks; specific to Dagger Cloud
-  checks that publish their state as GitHub Statuses.
-"""
-
 from typing import Annotated
 from urllib.parse import parse_qs, urlsplit
 

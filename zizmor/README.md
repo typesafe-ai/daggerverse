@@ -1,6 +1,6 @@
 # zizmor
 
-Dagger module for [zizmor](https://github.com/zizmorcore/zizmor) — static analysis for GitHub Actions security.
+Dagger module for [zizmor](https://github.com/zizmorcore/zizmor), a static analyzer for GitHub Actions security issues.
 
 ## Installation
 

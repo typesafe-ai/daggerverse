@@ -1,5 +1,3 @@
-"""Tests for GitHub API helpers — check-run state mapping and snapshot parsing."""
-
 import asyncio
 
 import pytest

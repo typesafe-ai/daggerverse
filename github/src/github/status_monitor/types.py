@@ -1,5 +1,3 @@
-"""Shared value types and state constants."""
-
 from dataclasses import dataclass
 from enum import Enum
 
@@ -10,8 +8,6 @@ MISSING: str = "missing"
 
 @dataclass(frozen=True)
 class Status:
-    """A single GitHub commit status snapshot for one context."""
-
     state: str
 
 

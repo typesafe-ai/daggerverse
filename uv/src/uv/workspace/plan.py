@@ -39,14 +39,10 @@ _MODULE_NAME_OVERRIDES: dict[str, str] = {
 
 
 def _module_name(pkg_name: str) -> str:
-    """Return the Python module name for a distribution name.
-
-    Currently exists only to handle dagger-io, but ideally it should do some real work in the future."""
     return _MODULE_NAME_OVERRIDES.get(pkg_name, pkg_name.replace("-", "_"))
 
 
 def _transitive_union(lock_data: dict, packages: list[str]) -> OrderedDict[str, str]:
-    """Union of every target package's transitive local deps (sorted by name)."""
     merged: OrderedDict[str, str] = OrderedDict()
     for package in packages:
         merged.update(find_transitive_local_deps(lock_data, package))
@@ -221,7 +217,7 @@ class UvSyncPlan:
 
         # A local package with no [build-system] or with package = false is deps-only:
         # uv installs its dependencies but never builds the package itself, so its
-        # source must not be scaffolded or copied — only its pyproject.toml (for
+        # source must not be scaffolded or copied, only its pyproject.toml (for
         # dependency resolution). This holds whether the package is a build target
         # or a transitive workspace dependency (e.g. a Pulumi program whose code
         # lives at the package root, with no src/ or module dir to copy).
