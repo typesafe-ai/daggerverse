@@ -6,7 +6,7 @@ from dagger import DefaultPath, Doc, Ignore
 SourceDir = Annotated[
     dagger.Directory,
     Doc("Source directory."),
-    DefaultPath("."),
+    DefaultPath("/"),
     Ignore(
         [
             "**/__pycache__",

@@ -92,7 +92,7 @@ class Zizmor:
         source: Annotated[
             dagger.Directory,
             Doc("The `.github` directory containing Actions workflows."),
-            DefaultPath(".github"),
+            DefaultPath("/.github"),
         ],
         github_token: Annotated[
             dagger.Secret | None,
@@ -140,7 +140,7 @@ class Zizmor:
         source: Annotated[
             dagger.Directory,
             Doc("The `.github` directory containing Actions workflows."),
-            DefaultPath(".github"),
+            DefaultPath("/.github"),
         ],
         mode: Annotated[
             FixMode,

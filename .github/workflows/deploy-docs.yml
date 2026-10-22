@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DAGGER_VERSION: "0.21.7"
+  DAGGER_VERSION: "1.0.0-beta.19"
 
 jobs:
   deploy:
@@ -34,7 +34,7 @@ jobs:
         with:
           version: ${{ env.DAGGER_VERSION }}
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          dagger-flags: --cloud
+          dagger-flags: --engine=cloud
           call: docs-build export --path=./public
 
       - name: Upload Pages artifact

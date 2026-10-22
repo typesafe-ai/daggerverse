@@ -1,0 +1,22 @@
+[modules.typesafe-daggerverse]
+legacy-default-path = true
+source = ".dagger"
+entrypoint = true
+
+[modules.deptry]
+source = "deptry"
+
+[modules.ruff]
+source = "ruff"
+
+[modules.uv]
+source = "uv"
+
+[modules.zizmor]
+source = "zizmor"
+
+[modules.deptry.settings]
+exclude = ["**/tests/_packages/**", "."]
+
+[modules.uv.settings]
+exclude = ["**/tests/_packages/**"]

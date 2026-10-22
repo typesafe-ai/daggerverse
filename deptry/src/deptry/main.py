@@ -20,7 +20,7 @@ _DEFAULT_IMAGE_TAG = "0.12.5-python3.13-trixie-slim"
 SourceDir = Annotated[
     dagger.Directory,
     Doc("Source directory."),
-    DefaultPath("."),
+    DefaultPath("/"),
     Ignore(
         [
             "**/__pycache__",
@@ -151,6 +151,10 @@ class Deptry:
     """
 
     source: SourceDir = field()
+    exclude: Annotated[
+        list[str],
+        Doc("Glob patterns (source-relative) of project paths check always skips, e.g. `**/tests/_packages/**`."),
+    ] = field(default=list)
 
     @function
     async def projects(self) -> list[str]:
@@ -216,7 +220,7 @@ class Deptry:
         in explicitly. Exits non-zero when any (non-excluded) project reports
         dependency issues.
         """
-        patterns = exclude or []
+        patterns = [*self.exclude, *(exclude or [])]
         tracer = get_tracer()
 
         with tracer.start_as_current_span("discover Python projects"):
