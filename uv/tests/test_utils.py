@@ -40,15 +40,8 @@ class TestImageRef:
     def test_points_at_astral_uv(self):
         assert image_ref("0.9.6") == "ghcr.io/astral-sh/uv:0.9.6"
 
-    def test_latest(self):
-        assert image_ref("latest") == "ghcr.io/astral-sh/uv:latest"
-
 
 class TestDebianImageRef:
-    def test_latest_resolves_to_pinned_version(self):
-        # `latest` must not float — it maps to a concrete pinned version.
-        assert debian_image_ref("latest") == "ghcr.io/astral-sh/uv:0.11.19-debian"
-
     def test_version_pinned(self):
         assert debian_image_ref("0.9.6") == "ghcr.io/astral-sh/uv:0.9.6-debian"
 
@@ -374,4 +367,4 @@ class TestResolveSpecifier:
         assert resolve_specifier(">=0.4.0,<0.6.0") == "0.4.0"
 
     def test_no_lower_bound_falls_back_to_default(self):
-        assert resolve_specifier("<1.0.0") == "latest"
+        assert resolve_specifier("<1.0.0") == "0.11.19"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import posixpath
 import re
 import tomllib
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Annotated
 
 import dagger
@@ -11,8 +11,20 @@ from dagger import Doc, check, collection, field, function, get, keys, object_ty
 from dagger_clients.core import Container, Workspace, core
 
 _DEFAULT_VERSION = "0.25.1"
-_DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
-_DEFAULT_IMAGE_TAG = "0.12.5-python3.13-trixie-slim"
+
+
+def pinned_image(name: str) -> str:
+    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    for line in dockerfile.read_text().splitlines():
+        if line.startswith("FROM "):
+            return line.split()[1]
+    msg = f"no FROM line in {dockerfile}"
+    raise ValueError(msg)
+
+
+# The uv image deptry is installed into.
+_BASE_IMAGE = pinned_image("uv")
 
 
 # Never part of a project deptry scans: caches, virtualenvs, build output and
@@ -219,7 +231,7 @@ def _container(version: str) -> Container:
     return (
         core()
         .container()
-        .from_(f"{_DEFAULT_IMAGE}:{_DEFAULT_IMAGE_TAG}")
+        .from_(_BASE_IMAGE)
         .with_env_variable("UV_COMPILE_BYTECODE", "1")
         # put the `deptry` launcher on PATH so a plain `deptry` works.
         .with_env_variable("UV_TOOL_BIN_DIR", "/usr/local/bin")

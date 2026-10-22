@@ -1,14 +1,27 @@
 import re
 import tomllib
+from pathlib import Path
 
 from dagger_clients.core import Directory
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
-_DEFAULT_VERSION = "latest"
-_DEFAULT_IMAGE = "ghcr.io/astral-sh/ruff"
-
 _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
+
+
+def pinned_image(name: str) -> str:
+    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    for line in dockerfile.read_text().splitlines():
+        if line.startswith("FROM "):
+            return line.split()[1]
+    msg = f"no FROM line in {dockerfile}"
+    raise ValueError(msg)
+
+
+# The ruff image and version used when the project pins none, so checks run on
+# a pinned image.
+_DEFAULT_IMAGE, _DEFAULT_VERSION = pinned_image("ruff").rsplit(":", 1)
 
 
 def is_exact_version(value: str) -> bool:

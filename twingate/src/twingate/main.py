@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Annotated, TypeAlias
 
 from dagger import Doc, field, function, object_type
@@ -7,8 +8,19 @@ Port: TypeAlias = Annotated[int, Doc("Port the HTTP proxy listens on.")]
 
 _DEFAULT_PORT = 3170
 _DEFAULT_ALIAS = "twingate"
-_DEFAULT_IMAGE = "twingate/client"
-_DEFAULT_VERSION = "2026.106"
+
+
+def pinned_image(name: str) -> str:
+    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    for line in dockerfile.read_text().splitlines():
+        if line.startswith("FROM "):
+            return line.split()[1]
+    msg = f"no FROM line in {dockerfile}"
+    raise ValueError(msg)
+
+
+_DEFAULT_IMAGE, _DEFAULT_VERSION = pinned_image("twingate").rsplit(":", 1)
 
 
 @object_type

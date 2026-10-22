@@ -1,5 +1,6 @@
 import enum
 import sys
+from pathlib import Path
 from typing import Annotated
 
 from dagger import Doc, check, enum_type, field, function, object_type
@@ -20,8 +21,17 @@ class FixMode(enum.Enum):
     """Apply all available fixes."""
 
 
-_DEFAULT_VERSION = "1.25.2"
-_DEFAULT_IMAGE = "ghcr.io/zizmorcore/zizmor"
+def pinned_image(name: str) -> str:
+    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    for line in dockerfile.read_text().splitlines():
+        if line.startswith("FROM "):
+            return line.split()[1]
+    msg = f"no FROM line in {dockerfile}"
+    raise ValueError(msg)
+
+
+_DEFAULT_IMAGE, _DEFAULT_VERSION = pinned_image("zizmor").rsplit(":", 1)
 
 
 @object_type

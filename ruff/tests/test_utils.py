@@ -135,4 +135,4 @@ class TestResolveSpecifier:
         assert resolve_specifier(">=0.6.0,<0.7.0") == "0.6.0"
 
     def test_no_lower_bound_falls_back_to_default(self):
-        assert resolve_specifier("<1.0.0") == "latest"
+        assert resolve_specifier("<1.0.0") == "0.16.0"

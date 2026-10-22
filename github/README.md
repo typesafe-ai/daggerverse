@@ -12,20 +12,22 @@ Two entry points:
 - **`wait-for-statuses`** -- general-purpose; takes an explicit list of status
   contexts. Use this for any GitHub Status checks (CI providers, custom
   pipelines, branch-protection contexts, etc).
-- **`wait-for-dagger-checks`** -- specific to Dagger Cloud checks. Auto-discovers
-  the expected set via `dag.current_workspace().checks()`; takes no `checks`
-  argument.
+- **`wait-for-dagger-checks`** -- specific to Dagger Cloud checks. Discovers
+  the expected set from the workspace's check paths
+  (`Workspace.artifacts()`); takes no `checks` argument.
 
 The `github_api` field is configurable for GitHub Enterprise Server
 (default: `https://api.github.com`).
 
 ### Wiring
 
-`dag.current_workspace().checks()` enumerates the checks of the **primary**
-loaded module. For `wait-for-dagger-checks` to see your repo's checks, install
-this module as a dependency of your root module and wrap the call in a function
-on that module -- do not call it directly via `-m github`, which would load this
-module as primary and see zero checks.
+Dagger Cloud names each status after the check's path, which leaves out the
+module name for checks of the workspace's main module (`docs`, not
+`my-module/docs`). Discovery names them the same way only while your main module
+is the main module, so add this module as a client of your main module and wrap
+the call in a function there. Calling it directly with `-m github` makes this
+module the main one: your checks then carry their module name and never match
+the statuses.
 
 `wait-for-statuses` doesn't rely on workspace discovery and works fine when
 called directly.
@@ -34,8 +36,10 @@ In your root module (Python example):
 
 ```python
 from typing import Annotated
-import dagger
-from dagger import Doc, dag, function, object_type
+
+from dagger import Doc, function, object_type
+from dagger_clients.core import Secret
+from dagger_clients.github import github
 
 
 @object_type
@@ -45,9 +49,9 @@ class MyModule:
         self,
         repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
         ref: Annotated[str, Doc("Commit SHA to poll")],
-        token: Annotated[dagger.Secret, Doc("GitHub token")],
+        token: Annotated[Secret, Doc("GitHub token")],
     ) -> str:
-        return await dag.github().status_monitor().wait_for_dagger_checks(repo=repo, ref=ref, token=token)
+        return await github().status_monitor().wait_for_dagger_checks(repo=repo, ref=ref, token=token)
 ```
 
 ### Example: GitHub Actions
@@ -57,9 +61,11 @@ class MyModule:
   uses: dagger/dagger-for-github@v8.4.1
   with:
     version: ${{ env.DAGGER_VERSION }}
+    cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+    dagger-flags: --engine=cloud
+    # Calls the wrapper on your main module (see above).
     call: |
-      status-monitor
-        wait-for-dagger-checks
+      wait-dagger-checks
         --repo=${{ github.repository }}
         --ref=${{ github.event.pull_request.head.sha || github.sha }}
         --token=env:GITHUB_TOKEN
@@ -74,7 +80,7 @@ appear on the commit page (e.g. `build`, `test`, `lint`) -- no `owner/repo`
 prefix.
 
 ```bash
-dagger -m github.com/typesafe-ai/daggerverse/github call \
+dagger call -m github.com/typesafe-ai/daggerverse/github \
   status-monitor \
   wait-for-statuses \
   --repo=owner/name \

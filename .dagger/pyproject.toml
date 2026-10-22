@@ -35,6 +35,3 @@ dagger-clients-zizmor = "dagger_clients"
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core", "clients/github", "clients/deptry", "clients/pytest", "clients/twingate", "clients/ruff", "clients/uv", "clients/zizmor"]
-
-[tool.dagger]
-global-client = false

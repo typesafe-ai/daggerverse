@@ -4,20 +4,29 @@ import posixpath
 import re
 import tomllib
 from collections import OrderedDict, deque
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
-_DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
-_DEFAULT_VERSION = "latest"
 _UV_CACHE_DIR = "/mnt/cache/uv"
-# Pinned uv version for the default Debian build base, so a workspace that
-# doesn't declare `required-version` builds on a fixed image instead of silently
-# floating to the latest uv release. Bump deliberately.
-_DEFAULT_BASE_UV_VERSION = "0.11.19"
 
 _VERSION_SPECIFIER_RE = re.compile(r"[><=!~]")
+
+
+def pinned_image(name: str) -> str:
+    """The image reference in `images/<name>/Dockerfile`, which Dependabot keeps current."""
+    dockerfile = Path(__file__).resolve().parents[2] / "images" / name / "Dockerfile"
+    for line in dockerfile.read_text().splitlines():
+        if line.startswith("FROM "):
+            return line.split()[1]
+    msg = f"no FROM line in {dockerfile}"
+    raise ValueError(msg)
+
+
+# The uv image and version used when a workspace doesn't declare
+# `required-version`, so audits and builds run on a pinned image.
+_DEFAULT_IMAGE, _DEFAULT_VERSION = pinned_image("uv").rsplit(":", 1)
 
 
 def image_ref(version: str) -> str:
@@ -38,11 +47,8 @@ def debian_image_ref(version: str) -> str:
 
     Maps to the `:<version>-debian` tag — `astral-sh/uv` publishes `-debian` for
     both old and current uv releases (the `-bookworm` variant was dropped for
-    recent versions). `latest` resolves to a pinned default version rather than a
-    floating tag.
+    recent versions).
     """
-    if version == _DEFAULT_VERSION:
-        version = _DEFAULT_BASE_UV_VERSION
     return f"{_DEFAULT_IMAGE}:{version}-debian"
 
 

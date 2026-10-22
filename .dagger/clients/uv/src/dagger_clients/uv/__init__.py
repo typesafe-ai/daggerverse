@@ -1606,7 +1606,7 @@ class UvWorkspaceSource(_Type):
         ranges
         resolve to their minimal compatible version (no PyPI lookup). Falls
         back
-        to the default `latest` tag when unspecified.
+        to the module's pinned default when unspecified.
 
         Returns
         -------

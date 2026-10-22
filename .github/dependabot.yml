@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Each module pins the images it uses by default in images/<name>/Dockerfile.
+  - package-ecosystem: docker
+    directories:
+      - "/*/images/*"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore

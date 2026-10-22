@@ -97,7 +97,7 @@ class UvWorkspaceSource:
         Reads `required-version` (a PEP 440 specifier) from `uv.toml` or the
         `[tool.uv]` table of `pyproject.toml`. Exact pins are used as-is; ranges
         resolve to their minimal compatible version (no PyPI lookup). Falls back
-        to the default `latest` tag when unspecified.
+        to the module's pinned default when unspecified.
         """
         specifier = await self._required_version()
         if specifier is None:

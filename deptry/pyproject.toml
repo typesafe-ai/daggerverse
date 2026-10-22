@@ -31,6 +31,3 @@ docs = [
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core"]
-
-[tool.dagger]
-global-client = false

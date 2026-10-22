@@ -9,7 +9,7 @@ from dagger.telemetry import get_tracer
 from dagger_clients.core import Container, Directory, core
 
 from uv.args import LockTimeout, MaxCacheSize, PruneCache
-from uv.utils import _DEFAULT_BASE_UV_VERSION, image_ref
+from uv.utils import _DEFAULT_VERSION, image_ref
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
 
@@ -59,7 +59,7 @@ class UvWorkspaceBuild:
         Copies the static binary from the official distroless image to `/uv/uv`
         and prepends `/uv` to `$PATH`.
         """
-        v = version or _DEFAULT_BASE_UV_VERSION
+        v = version or _DEFAULT_VERSION
         with get_tracer().start_as_current_span("install uv binary") as span:
             span.set_attribute("uv.version", v)
             span.set_attribute("uv.image", image_ref(v))

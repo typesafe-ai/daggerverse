@@ -173,7 +173,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_version", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("The uv version this workspace requires, as a concrete image tag.\n\nReads `required-version` (a PEP 440 specifier) from `uv.toml` or the\n`[tool.uv]` table of `pyproject.toml`. Exact pins are used as-is; ranges\nresolve to their minimal compatible version (no PyPI lookup). Falls back\nto the default `latest` tag when unspecified.")
+            .withDescription("The uv version this workspace requires, as a concrete image tag.\n\nReads `required-version` (a PEP 440 specifier) from `uv.toml` or the\n`[tool.uv]` table of `pyproject.toml`. Exact pins are used as-is; ranges\nresolve to their minimal compatible version (no PyPI lookup). Falls back\nto the module's pinned default when unspecified.")
         )
         .withFunction(
           function("venv", typeDef.withObject("UvVenv"))
