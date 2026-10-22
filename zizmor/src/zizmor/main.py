@@ -2,8 +2,8 @@ import enum
 import sys
 from typing import Annotated
 
-import dagger
-from dagger import DefaultPath, Doc, check, dag, enum_type, field, function, object_type
+from dagger import DefaultPath, Doc, check, enum_type, field, function, object_type
+from dagger_clients.core import Changeset, Container, Directory, Secret, core
 
 
 @enum_type
@@ -29,7 +29,7 @@ class Zizmor:
     """Static analysis for GitHub Actions security."""
 
     ctr: Annotated[
-        dagger.Container,
+        Container,
         Doc("Container with zizmor installed."),
     ] = field()
 
@@ -37,7 +37,7 @@ class Zizmor:
     async def create(
         cls,
         ctr: Annotated[
-            dagger.Container | None,
+            Container | None,
             Doc("Container with zizmor installed. Defaults to the official ghcr.io/zizmorcore/zizmor image."),
         ] = None,
         version: Annotated[
@@ -46,14 +46,14 @@ class Zizmor:
         ] = _DEFAULT_VERSION,
     ) -> "Zizmor":
         if ctr is None:
-            ctr = dag.container().from_(f"{_DEFAULT_IMAGE}:{version}")
+            ctr = core().container().from_(f"{_DEFAULT_IMAGE}:{version}")
         return cls(ctr=ctr)
 
     def _container(
         self,
-        source: dagger.Directory,
-        github_token: dagger.Secret | None = None,
-    ) -> dagger.Container:
+        source: Directory,
+        github_token: Secret | None = None,
+    ) -> Container:
         ctr = self.ctr.with_workdir("/work").with_directory("/work/.github", source)
 
         if github_token is not None:
@@ -90,12 +90,12 @@ class Zizmor:
     async def lint(
         self,
         source: Annotated[
-            dagger.Directory,
+            Directory,
             Doc("The `.github` directory containing Actions workflows."),
             DefaultPath("/.github"),
         ],
         github_token: Annotated[
-            dagger.Secret | None,
+            Secret | None,
             Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
         ] = None,
         format: Annotated[
@@ -138,7 +138,7 @@ class Zizmor:
     async def fix(
         self,
         source: Annotated[
-            dagger.Directory,
+            Directory,
             Doc("The `.github` directory containing Actions workflows."),
             DefaultPath("/.github"),
         ],
@@ -147,7 +147,7 @@ class Zizmor:
             Doc("Which fixes to apply."),
         ] = FixMode.SAFE,
         github_token: Annotated[
-            dagger.Secret | None,
+            Secret | None,
             Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
         ] = None,
         persona: Annotated[
@@ -166,7 +166,7 @@ class Zizmor:
             list[str] | None,
             Doc("Additional arguments to pass to zizmor."),
         ] = None,
-    ) -> dagger.Changeset:
+    ) -> Changeset:
         """Auto-fix GitHub Actions security issues found by zizmor.
 
         Returns a Changeset applied to the host.
@@ -185,6 +185,6 @@ class Zizmor:
         if output.strip():
             sys.stderr.write(output)
         fixed = result.directory("/work/.github")
-        before = dag.directory().with_directory(".github", source)
-        after = dag.directory().with_directory(".github", fixed)
+        before = core().directory().with_directory(".github", source)
+        after = core().directory().with_directory(".github", fixed)
         return after.changes(before)

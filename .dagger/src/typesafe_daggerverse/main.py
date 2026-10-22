@@ -5,8 +5,14 @@ from typing import Annotated
 
 import anyio
 import dagger
-from dagger import DefaultPath, Doc, check, dag, field, function, object_type
+from dagger import DefaultPath, Doc, check, field, function, object_type
 from dagger.telemetry import get_tracer
+from dagger_clients.core import Changeset, Container, Directory, Secret, Service, core
+from dagger_clients.deptry import DeptryProjects, deptry
+from dagger_clients.github import github
+from dagger_clients.ruff import ruff
+from dagger_clients.twingate import twingate
+from dagger_clients.uv import UvWorkspaces, UvWorkspaceSource, uv
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
@@ -19,20 +25,21 @@ _ZENSICAL_GLOB = "*/zensical.toml"
 _LANDING_PROJECT = ".docs"
 
 
-def _pytest_otel_source() -> dagger.Directory:
-    return dag.module_source(_PYTEST_MODULE_REF, ref_pin=_PYTEST_MODULE_PIN).directory("pytest_otel")
+def _pytest_otel_source() -> Directory:
+    return core().module_source(_PYTEST_MODULE_REF, ref_pin=_PYTEST_MODULE_PIN).directory("pytest_otel")
 
 
-def _with_pytest_otel(ctr: dagger.Container) -> dagger.Container:
+def _with_pytest_otel(ctr: Container) -> Container:
     """Install pytest_otel into an existing container for OTel test spans."""
     return ctr.with_directory("/opt/pytest_otel", _pytest_otel_source()).with_exec(
         ["uv", "pip", "install", "/opt/pytest_otel"]
     )
 
 
-def _base() -> dagger.Container:
+def _base() -> Container:
     return (
-        dag.container()
+        core()
+        .container()
         .from_("ghcr.io/astral-sh/uv:python3.14-bookworm")
         .with_workdir("/workspace")
         # caller picks the project env.
@@ -64,64 +71,60 @@ class TypesafeDaggerverse:
     """CI checks for modules published from this repo."""
 
     source: Annotated[
-        dagger.Directory,
+        Directory,
         Doc("Daggerverse repo root"),
-        DefaultPath("."),
+        DefaultPath("/"),
     ] = field()
 
-    def _standalone(self) -> dagger.UvWorkspaceSource:
-        return dag.uv(source=self.source.directory("uv/tests/_packages/standalone-app")).workspace()
+    def _standalone(self) -> UvWorkspaceSource:
+        return uv(source=self.source.directory("uv/tests/_packages/standalone-app")).workspace(".")
 
-    def _workspace(self) -> dagger.UvWorkspaceSource:
-        return dag.uv(source=self.source.directory("uv/tests/_packages/workspace")).workspace()
+    def _workspace(self) -> UvWorkspaceSource:
+        return uv(source=self.source.directory("uv/tests/_packages/workspace")).workspace(".")
 
-    def _workspace_app(self) -> dagger.UvWorkspaceSource:
-        return dag.uv(source=self.source.directory("uv/tests/_packages/workspace-app")).workspace()
+    def _workspace_app(self) -> UvWorkspaceSource:
+        return uv(source=self.source.directory("uv/tests/_packages/workspace-app")).workspace(".")
 
-    def _workspace_flat(self) -> dagger.UvWorkspaceSource:
-        return dag.uv(source=self.source.directory("uv/tests/_packages/workspace-flat")).workspace()
+    def _workspace_flat(self) -> UvWorkspaceSource:
+        return uv(source=self.source.directory("uv/tests/_packages/workspace-flat")).workspace(".")
 
-    def _partial_workspace(self) -> dagger.UvWorkspaceSource:
+    def _partial_workspace(self) -> UvWorkspaceSource:
         """A workspace where one local dep in uv.lock doesn't exist in the source tree."""
-        return dag.uv(source=self.source.directory("uv/tests/_packages/partial-workspace")).workspace(
-            path="sub-project"
-        )
+        return uv(source=self.source.directory("uv/tests/_packages/partial-workspace")).workspace(path="sub-project")
 
-    def _nested_standalone(self) -> dagger.UvWorkspaceSource:
+    def _nested_standalone(self) -> UvWorkspaceSource:
         """A standalone project nested under a non-root path with a relative path dep."""
-        return dag.uv(source=self.source.directory("uv/tests/_packages/nested-standalone")).workspace(path="app")
+        return uv(source=self.source.directory("uv/tests/_packages/nested-standalone")).workspace(path="app")
 
-    def _uv_self(self) -> dagger.UvWorkspaceSource:
+    def _uv_self(self) -> UvWorkspaceSource:
         """The uv module built against its own source.
 
         uv is itself a Dagger module — `install()` detects the
         `dagger.json` and runs codegen so `sdk/` is materialized
         before `uv sync`.
         """
-        return dag.uv(source=self.source.directory("uv")).workspace()
+        return uv(source=self.source.directory("uv")).workspace(".")
 
-    def _github(self) -> dagger.UvWorkspaceSource:
-        return dag.uv(source=self.source.directory("github")).workspace()
+    def _github(self) -> UvWorkspaceSource:
+        return uv(source=self.source.directory("github")).workspace(".")
 
     @function(cache="never")
     async def wait_dagger_checks(
         self,
         repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
         ref: Annotated[str, Doc("Commit SHA to poll")],
-        token: Annotated[dagger.Secret, Doc("GitHub token with read access")],
+        token: Annotated[Secret, Doc("GitHub token with read access")],
         fail_fast: Annotated[bool, Doc("Raise as soon as any check fails instead of waiting for all.")] = False,
     ) -> str:
         """Block until every Dagger check has landed as a successful GitHub commit
         status on `ref`."""
         return (
-            await dag.github()
-            .status_monitor()
-            .wait_for_dagger_checks(repo=repo, ref=ref, token=token, fail_fast=fail_fast)
+            await github().status_monitor().wait_for_dagger_checks(repo=repo, ref=ref, token=token, fail_fast=fail_fast)
         )
 
     # ---- docs sites ----
 
-    async def _zensical_site(self, ctr: dagger.Container, source: dagger.Directory) -> dagger.Directory:
+    async def _zensical_site(self, ctr: Container, source: Directory) -> Directory:
         """Render a zensical site inside `ctr` (which must have zensical installed).
 
         `source` supplies `docs/` + `zensical.toml`; zensical writes the built
@@ -139,7 +142,7 @@ class TypesafeDaggerverse:
     async def docs_site(
         self,
         module: Annotated[str, Doc("Module directory whose docs to build (e.g. 'uv')")],
-    ) -> dagger.Directory:
+    ) -> Directory:
         """Build a module's static docs site and return the generated `site/` dir.
 
         Built on the same base as the tests, with the module installed and its
@@ -148,10 +151,10 @@ class TypesafeDaggerverse:
         the docs sources are supplied separately by `_zensical_site`.
         """
         src = self.source.directory(module)
-        ctr = await dag.uv(source=src).workspace().install(package=[module], base_container=_base(), group=["docs"])
+        ctr = await uv(source=src).workspace(".").install(package=[module], base_container=_base(), group=["docs"])
         return await self._zensical_site(ctr, src)
 
-    async def _landing(self) -> dagger.Directory:
+    async def _landing(self) -> Directory:
         """Build the landing site (served at `/`) from the `.docs` project.
 
         `.docs` is a self-contained, non-packaged uv project whose `docs` group
@@ -159,11 +162,11 @@ class TypesafeDaggerverse:
         build path as the modules, just nothing to import.
         """
         src = self.source.directory(_LANDING_PROJECT)
-        ctr = await dag.uv(source=src).workspace().install(base_container=_base(), group=["docs"], dagger_codegen=False)
+        ctr = await uv(source=src).workspace(".").install(base_container=_base(), group=["docs"], dagger_codegen=False)
         return await self._zensical_site(ctr, src)
 
     @function
-    async def docs_build(self) -> dagger.Directory:
+    async def docs_build(self) -> Directory:
         """Build the combined docs site for GitHub Pages.
 
         Discovers every top-level module with a `zensical.toml`, builds each site
@@ -179,9 +182,9 @@ class TypesafeDaggerverse:
         )
 
         # Built sites keyed by mount path; "" is the root landing page.
-        built: dict[str, dagger.Directory] = {}
+        built: dict[str, Directory] = {}
 
-        async def _build(path: str, site: Awaitable[dagger.Directory]) -> None:
+        async def _build(path: str, site: Awaitable[Directory]) -> None:
             built[path] = await site
 
         async with anyio.create_task_group() as tg:
@@ -198,7 +201,7 @@ class TypesafeDaggerverse:
     async def docs_serve(
         self,
         port: Annotated[int, Doc("Port to listen on")] = 8080,
-    ) -> dagger.Service:
+    ) -> Service:
         """Serve the combined docs site over HTTP as a Dagger service.
 
         Uses Python's stdlib `http.server` (already in the uv base image), which
@@ -222,22 +225,22 @@ class TypesafeDaggerverse:
 
     # ---- uv (audit) module checks ----
 
-    def _uv_src(self, pyproject: str, *, uv_toml: str | None = None) -> dagger.Directory:
+    def _uv_src(self, pyproject: str, *, uv_toml: str | None = None) -> Directory:
         """A single-workspace source tree for exercising the `uv` module.
 
         `uv_version`/`workspaces` only read pyproject.toml / uv.toml, so an
         empty uv.lock is enough for discovery.
         """
-        d = dag.directory().with_new_file("uv.lock", "").with_new_file("pyproject.toml", pyproject)
+        d = core().directory().with_new_file("uv.lock", "").with_new_file("pyproject.toml", pyproject)
         if uv_toml is not None:
             d = d.with_new_file("uv.toml", uv_toml)
         return d
 
-    @check
-    @function
-    async def uv_audit(self) -> None:
-        """Run `uv audit` for every workspace in the repo, skipping test fixtures."""
-        await dag.uv(source=self.source).audit(exclude=["**/tests/_packages/**", "**/sdk"])
+    @staticmethod
+    async def _uv_audit_all(workspaces: UvWorkspaces) -> None:
+        """Audit every workspace in the collection, as `dagger check` does."""
+        for workspace in await workspaces.list_():
+            await workspace.audit()
 
     @check
     @function
@@ -257,7 +260,8 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "discovers_workspaces", self.uv_discovers_workspaces)
             tg.start_soon(_run, "audit_clean", self.uv_audit_clean)
             tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
-            tg.start_soon(_run, "audit_exclude", self.uv_audit_exclude)
+            tg.start_soon(_run, "audit_subset", self.uv_audit_subset)
+            tg.start_soon(_run, "workspaces_exclude", self.uv_workspaces_exclude)
             tg.start_soon(_run, "install_venv", self.uv_install_venv)
             tg.start_soon(
                 _run, "relocatable_venv_runs_in_fresh_container", self.uv_relocatable_venv_runs_in_fresh_container
@@ -289,7 +293,7 @@ class TypesafeDaggerverse:
     async def uv_detect_version_pyproject(self) -> None:
         """`uv_version` reads `[tool.uv].required-version` from pyproject.toml."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = "==0.5.0"\n')
-        ws = (await dag.uv(source=src).get_workspaces())[0]
+        ws = (await uv(source=src).workspaces().list_())[0]
         version = await ws.uv_version()
         if version != "0.5.0":
             raise AssertionError(f"expected 0.5.0, got {version}")
@@ -301,7 +305,7 @@ class TypesafeDaggerverse:
             '[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = "==0.9.0"\n',
             uv_toml='required-version = "==0.4.0"\n',
         )
-        ws = (await dag.uv(source=src).get_workspaces())[0]
+        ws = (await uv(source=src).workspaces().list_())[0]
         version = await ws.uv_version()
         if version != "0.4.0":
             raise AssertionError(f"expected 0.4.0 (uv.toml wins), got {version}")
@@ -310,7 +314,7 @@ class TypesafeDaggerverse:
     async def uv_detect_version_range(self) -> None:
         """A range specifier resolves to its minimal compatible version (no PyPI lookup)."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n[tool.uv]\nrequired-version = ">=0.5.0,<0.5.5"\n')
-        ws = (await dag.uv(source=src).get_workspaces())[0]
+        ws = (await uv(source=src).workspaces().list_())[0]
         version = await ws.uv_version()
         if version != "0.5.0":
             raise AssertionError(f"expected 0.5.0, got {version}")
@@ -319,7 +323,7 @@ class TypesafeDaggerverse:
     async def uv_detect_version_default(self) -> None:
         """With no required-version, `uv_version` falls back to the default tag."""
         src = self._uv_src('[project]\nname = "x"\nversion = "0"\n')
-        ws = (await dag.uv(source=src).get_workspaces())[0]
+        ws = (await uv(source=src).workspaces().list_())[0]
         version = await ws.uv_version()
         if version != "latest":
             raise AssertionError(f"expected latest, got {version}")
@@ -329,46 +333,64 @@ class TypesafeDaggerverse:
         """`workspaces` finds one workspace per uv.lock in the source tree."""
         pyproject = '[project]\nname = "x"\nversion = "0"\n'
         src = (
-            dag.directory()
+            core()
+            .directory()
             .with_new_file("a/uv.lock", "")
             .with_new_file("a/pyproject.toml", pyproject)
             .with_new_file("b/c/uv.lock", "")
             .with_new_file("b/c/pyproject.toml", pyproject)
         )
-        workspaces = await dag.uv(source=src).get_workspaces()
-        if len(workspaces) != 2:
-            raise AssertionError(f"expected 2 workspaces, got {len(workspaces)}")
+        paths = await uv(source=src).workspaces().keys()
+        if paths != ["a", "b/c"]:
+            raise AssertionError(f"expected ['a', 'b/c'], got {paths}")
 
     @function
     async def uv_audit_clean(self) -> None:
         """Auditing a workspace with no vulnerable deps passes."""
         src = self.source.directory("uv/tests/_packages/clean")
-        await dag.uv(source=src).audit()
+        await self._uv_audit_all(uv(source=src).workspaces())
 
     @function
     async def uv_audit_detects_vulnerability(self) -> None:
         """Auditing a workspace with a known-vulnerable dependency fails.
 
-        (The audit report itself is folded into each workspace's trace span by
-        `Uv.audit`; the message construction is covered by the `format_audit_failure`
-        unit tests, since a check can't introspect OTel spans.)
+        (The audit report itself is folded into the check's error by
+        `UvWorkspaceSource.audit`; the message construction is covered by the
+        `format_audit_failure` unit tests.)
         """
         src = self.source.directory("uv/tests/_packages/vulnerable")
         try:
-            await dag.uv(source=src).audit()
+            await self._uv_audit_all(uv(source=src).workspaces())
         except dagger.DaggerError:
             return
         raise AssertionError("expected uv audit to fail for the vulnerable fixture")
 
     @function
-    async def uv_audit_exclude(self) -> None:
-        """`exclude` skips matching workspaces, so a vulnerable-but-excluded tree passes."""
+    async def uv_audit_subset(self) -> None:
+        """A `subset` of the workspaces audits only those, so a vulnerable-but-unselected tree passes."""
         src = (
-            dag.directory()
+            core()
+            .directory()
             .with_directory("clean", self.source.directory("uv/tests/_packages/clean"))
             .with_directory("vulnerable", self.source.directory("uv/tests/_packages/vulnerable"))
         )
-        await dag.uv(source=src).audit(exclude=["**/vulnerable"])
+        await self._uv_audit_all(uv(source=src).workspaces().subset(["clean"]))
+
+    @function
+    async def uv_workspaces_exclude(self) -> None:
+        """`exclude` leaves matching workspaces out of `workspaces`."""
+        pyproject = '[project]\nname = "x"\nversion = "0"\n'
+        src = (
+            core()
+            .directory()
+            .with_new_file("a/uv.lock", "")
+            .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("tests/_packages/b/uv.lock", "")
+            .with_new_file("tests/_packages/b/pyproject.toml", pyproject)
+        )
+        paths = await uv(source=src, exclude=["**/tests/_packages/**"]).workspaces().keys()
+        if paths != ["a"]:
+            raise AssertionError(f"expected ['a'], got {paths}")
 
     @function
     async def uv_install_venv(self) -> None:
@@ -380,8 +402,8 @@ class TypesafeDaggerverse:
         src = self.source.directory("uv/tests/_packages/workspace")
         # Object-returning module functions chain lazily; await only the terminal scalar.
         out = await (
-            dag.uv(source=src)
-            .workspace()
+            uv(source=src)
+            .workspace(".")
             .install(package=["my-app"], venv=True, venv_relocatable=True)
             .with_exec(["uv", "run", "python", "-c", "import my_app, my_core; print('VENV_OK')"])
             .stdout()
@@ -405,7 +427,7 @@ class TypesafeDaggerverse:
         base would instead produce a musl venv for alpine targets.
         """
         src = self.source.directory("uv/tests/_packages/standalone-app")
-        base = dag.container().from_("debian:bookworm-slim").with_workdir("/srv/app")
+        base = core().container().from_("debian:bookworm-slim").with_workdir("/srv/app")
         # Sanity-check the premise: the base ships no Python of its own.
         probe = await base.with_exec(["sh", "-c", "command -v python3 || command -v python || echo NO_PYTHON"]).stdout()
         if "NO_PYTHON" not in probe:
@@ -413,8 +435,8 @@ class TypesafeDaggerverse:
 
         # Object-returning module functions chain lazily; await only the terminal scalar.
         out = await (
-            dag.uv(source=src)
-            .workspace()
+            uv(source=src)
+            .workspace(".")
             .build(extra=["viz"])
             .with_venv(relocatable=True)
             .with_remote_dependencies()
@@ -439,7 +461,7 @@ class TypesafeDaggerverse:
         not just importability, is the point: an empty stub still imports fine.
         """
         src = self.source.directory("uv/tests/_packages/workspace")
-        base = dag.container().from_("debian:bookworm-slim").with_workdir("/srv/app")
+        base = core().container().from_("debian:bookworm-slim").with_workdir("/srv/app")
         script = (
             "import my_app, my_core, my_lib\n"
             "got = (my_app.hello(), my_core.hello(), my_lib.hello())\n"
@@ -449,8 +471,8 @@ class TypesafeDaggerverse:
         )
         # Object-returning module functions chain lazily; await only the terminal scalar.
         out = await (
-            dag.uv(source=src)
-            .workspace()
+            uv(source=src)
+            .workspace(".")
             .venv(package=["my-app"], no_editable=True)
             .into(base, set_env_vars=True)
             .with_exec(["python", "-c", script])
@@ -476,8 +498,8 @@ class TypesafeDaggerverse:
         for no_editable in (False, True):
             for package in (None, ["virtual-app"]):
                 await (
-                    dag.uv(source=source)
-                    .workspace()
+                    uv(source=source)
+                    .workspace(".")
                     .build(package=package, no_editable=no_editable, dagger_codegen=False)
                     .with_remote_dependencies(prune_cache=False)
                     .with_workspace_files()
@@ -487,8 +509,8 @@ class TypesafeDaggerverse:
                 )
         # Pulumi installs the entire workspace even when building one member.
         await (
-            dag.uv(source=source)
-            .workspace()
+            uv(source=source)
+            .workspace(".")
             .build(package=["flat-dist"], dagger_codegen=False)
             .with_all_workspace_members()
             .container()
@@ -517,7 +539,7 @@ class TypesafeDaggerverse:
             for path, contents in files.items():
                 src = src.with_new_file(f"{package}/{path}", contents)
             src = src.with_new_file(f"{package}/licenses/unrelated.txt", "Must not be copied\n")
-        src = dag.directory().with_directory("nested", src)
+        src = core().directory().with_directory("nested", src)
         script = (
             "from pathlib import Path\n"
             f"expected = {files!r}\n"
@@ -528,7 +550,7 @@ class TypesafeDaggerverse:
         )
         for no_editable in (False, True):
             await (
-                dag.uv(source=src)
+                uv(source=src)
                 .workspace(path="nested")
                 .build(package=["my-app"], no_editable=no_editable)
                 .with_remote_dependencies(prune_cache=False)
@@ -557,8 +579,8 @@ class TypesafeDaggerverse:
             if patterns is not None:
                 metadata = metadata.replace("[project]\n", f"[project]\nlicense-files = {patterns!r}\n")
             ctr = (
-                dag.uv(source=source.with_new_file("pyproject.toml", metadata))
-                .workspace()
+                uv(source=source.with_new_file("pyproject.toml", metadata))
+                .workspace(".")
                 .build(dagger_codegen=False)
                 .with_workspace_files()
                 .container()
@@ -589,7 +611,8 @@ class TypesafeDaggerverse:
         the symlink and its target travel together (see `UvVenv.create`).
         """
         built = (
-            dag.container()
+            core()
+            .container()
             .from_("debian:bookworm-slim")
             .with_exec(
                 [
@@ -600,7 +623,10 @@ class TypesafeDaggerverse:
             )
         )
         fresh = (
-            dag.container().from_("debian:bookworm-slim").with_directory("/store/link", built.directory("/store/link"))
+            core()
+            .container()
+            .from_("debian:bookworm-slim")
+            .with_directory("/store/link", built.directory("/store/link"))
         )
         return await fresh.with_exec(
             ["sh", "-c", "ls -la /store; echo ---; cat /store/link/marker.txt 2>&1 || echo MISSING"]
@@ -609,7 +635,7 @@ class TypesafeDaggerverse:
     @function
     async def uv_workspace_auto_install_uv(self) -> None:
         """Build with a base container that has no uv and verify auto_install_uv works."""
-        bare = dag.container().from_("debian:bookworm-slim").with_workdir("/workspace")
+        bare = core().container().from_("debian:bookworm-slim").with_workdir("/workspace")
         ctr = await self._workspace().install(package=["my-app"], base_container=bare)
         uv_path = await ctr.with_exec(["which", "uv"]).stdout()
         assert uv_path.strip() == "/uv/uv"
@@ -633,14 +659,14 @@ class TypesafeDaggerverse:
         changed = source.with_new_file("my-app/src/my_app/cache_marker.py", "CACHE_MARKER = 'changed'\n")
         base = _base()
         first = await self._workspace().install(all_packages=True, base_container=base)
-        second = await dag.uv(source=changed).workspace().install(all_packages=True, base_container=base)
+        second = await uv(source=changed).workspace(".").install(all_packages=True, base_container=base)
         marker = await second.with_exec(
             ["python", "-c", "from my_app.cache_marker import CACHE_MARKER; print(CACHE_MARKER)"]
         ).stdout()
         if marker.strip() != "changed":
             raise AssertionError(f"expected source overlay to be live, got: {marker!r}")
 
-        checker = dag.container().from_("python:3.14-slim").with_workdir("/check")
+        checker = core().container().from_("python:3.14-slim").with_workdir("/check")
         for name, image in (("base", base), ("first", first), ("second", second)):
             checker = checker.with_file(f"/check/{name}.tar", image.as_tarball())
         script = r"""
@@ -753,10 +779,10 @@ print("LAYER_CACHE_OK")
 
     @check
     @function
-    async def twingate_build(self) -> str:
+    async def twingate_build(self) -> None:
         """Build the Twingate client container (no credentials needed)."""
-        tg = dag.twingate(service_key=dag.set_secret("dummy", "{}"))
-        return await tg.ctr().with_exec(["twingated", "--version"]).stdout()
+        tg = twingate(service_key=core().set_secret("dummy", "{}"))
+        await tg.ctr().with_exec(["twingated", "--version"]).sync()
 
     @function
     async def uv_workspace_pytest_self(self) -> None:
@@ -773,14 +799,18 @@ print("LAYER_CACHE_OK")
         ctr = ctr.with_directory(f"{workdir}/tests", tests)
         await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
 
-    def _ruff_dirty_source(self) -> dagger.Directory:
+    def _ruff_dirty_source(self) -> Directory:
         """A directory with a deliberately messy Python file for ruff to fix."""
-        return dag.directory().with_new_file(
-            "dirty.py",
-            contents=("import os, sys, json\nimport os\nx=  1\ny = [1,2,3,]\nif x == True:\n    pass\n"),
+        return (
+            core()
+            .directory()
+            .with_new_file(
+                "dirty.py",
+                contents=("import os, sys, json\nimport os\nx=  1\ny = [1,2,3,]\nif x == True:\n    pass\n"),
+            )
         )
 
-    async def _assert_changeset_only_modifies(self, changeset: dagger.Changeset, expected: set[str]) -> str:
+    async def _assert_changeset_only_modifies(self, changeset: Changeset, expected: set[str]) -> str:
         added = await changeset.added_paths()
         modified = await changeset.modified_paths()
         removed = await changeset.removed_paths()
@@ -808,34 +838,42 @@ print("LAYER_CACHE_OK")
     @function
     async def ruff_check_fix(self) -> str:
         """Run ruff check --fix on a dirty file and verify only dirty.py is changed."""
-        ruff = dag.ruff()
-        changeset = ruff.check().fix(source=self._ruff_dirty_source())
+        ruff_mod = ruff()
+        changeset = ruff_mod.check().fix(source=self._ruff_dirty_source())
         return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
 
     @function
     async def ruff_format_fix(self) -> str:
         """Run ruff format on a dirty file and verify only dirty.py is changed."""
-        ruff = dag.ruff()
-        changeset = ruff.format().fix(source=self._ruff_dirty_source())
+        ruff_mod = ruff()
+        changeset = ruff_mod.format().fix(source=self._ruff_dirty_source())
         return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
 
     @function
-    async def ruff_check_lint_clean(self) -> str:
+    async def ruff_check_lint_clean(self) -> None:
         """Run ruff check on a clean file and verify it passes."""
-        clean = dag.directory().with_new_file(
-            "clean.py",
-            contents="x = 1\ny = [1, 2, 3]\n",
+        clean = (
+            core()
+            .directory()
+            .with_new_file(
+                "clean.py",
+                contents="x = 1\ny = [1, 2, 3]\n",
+            )
         )
-        return await dag.ruff().check().lint(source=clean)
+        await ruff().check().lint(source=clean)
 
     @function
-    async def ruff_format_lint_clean(self) -> str:
+    async def ruff_format_lint_clean(self) -> None:
         """Run ruff format --check on a clean file and verify it passes."""
-        clean = dag.directory().with_new_file(
-            "clean.py",
-            contents="x = 1\ny = [1, 2, 3]\n",
+        clean = (
+            core()
+            .directory()
+            .with_new_file(
+                "clean.py",
+                contents="x = 1\ny = [1, 2, 3]\n",
+            )
         )
-        return await dag.ruff().format().lint(source=clean)
+        await ruff().format().lint(source=clean)
 
     @function
     async def uv_workspace_build_partial_workspace(self) -> None:
@@ -868,12 +906,18 @@ print("LAYER_CACHE_OK")
 
     # ---- deptry module checks ----
 
-    def _deptry_project(self, pyproject: str, sources: dict[str, str]) -> dagger.Directory:
+    def _deptry_project(self, pyproject: str, sources: dict[str, str]) -> Directory:
         """A single deptry-checkable project: a pyproject.toml plus source files."""
-        d = dag.directory().with_new_file("pyproject.toml", pyproject)
+        d = core().directory().with_new_file("pyproject.toml", pyproject)
         for path, content in sources.items():
             d = d.with_new_file(path, content)
         return d
+
+    @staticmethod
+    async def _deptry_check_all(projects: DeptryProjects) -> None:
+        """Run deptry on every project in the collection, as `dagger check` does."""
+        for project in await projects.list_():
+            await project.check()
 
     @check
     @function
@@ -884,7 +928,8 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.deptry_clean_flat_layout)
             tg.start_soon(self.deptry_clean_src_layout)
             tg.start_soon(self.deptry_detects_issue)
-            tg.start_soon(self.deptry_exclude)
+            tg.start_soon(self.deptry_subset)
+            tg.start_soon(self.deptry_projects_exclude)
             tg.start_soon(self.deptry_config_opts_in_nonstandard_layout)
             tg.start_soon(self.deptry_skips_project_without_layout_or_config)
 
@@ -892,16 +937,19 @@ print("LAYER_CACHE_OK")
     async def deptry_discovers_projects(self) -> None:
         """`projects` finds one entry per pyproject.toml that declares dependencies.
 
-        A tooling-only pyproject (no `[project].dependencies`) is skipped.
+        A tooling-only pyproject (no `[project].dependencies`) is left out.
         """
         pyproject = '[project]\nname = "x"\nversion = "0"\ndependencies = []\n'
         src = (
-            dag.directory()
+            core()
+            .directory()
             .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("a/x/__init__.py", "")
             .with_new_file("b/c/pyproject.toml", pyproject)
+            .with_new_file("b/c/x/__init__.py", "")
             .with_new_file("tool/pyproject.toml", "[tool.ruff]\nline-length = 100\n")
         )
-        projects = await dag.deptry(source=src).projects()
+        projects = await deptry(source=src).projects().keys()
         if projects != ["a", "b/c"]:
             raise AssertionError(f"expected ['a', 'b/c'], got {projects}")
 
@@ -915,7 +963,7 @@ print("LAYER_CACHE_OK")
                 "flatpkg/foo.py": "",
             },
         )
-        await dag.deptry(source=src).check()
+        await self._deptry_check_all(deptry(source=src).projects())
 
     @function
     async def deptry_clean_src_layout(self) -> None:
@@ -931,7 +979,7 @@ print("LAYER_CACHE_OK")
                 "src/src_pkg/foo.py": "",
             },
         )
-        await dag.deptry(source=src).check()
+        await self._deptry_check_all(deptry(source=src).projects())
 
     @function
     async def deptry_detects_issue(self) -> None:
@@ -941,14 +989,30 @@ print("LAYER_CACHE_OK")
             {"src/badpkg/__init__.py": "x = 1\n"},
         )
         try:
-            await dag.deptry(source=src).check()
+            await self._deptry_check_all(deptry(source=src).projects())
         except dagger.DaggerError:
             return
         raise AssertionError("expected deptry to fail for an unused dependency")
 
     @function
-    async def deptry_exclude(self) -> None:
-        """`exclude` skips matching projects, so a broken-but-excluded tree passes."""
+    async def deptry_projects_exclude(self) -> None:
+        """`exclude` leaves matching projects out of `projects`."""
+        pyproject = '[project]\nname = "x"\nversion = "0"\ndependencies = []\n'
+        src = (
+            core()
+            .directory()
+            .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("a/x/__init__.py", "")
+            .with_new_file("tests/_packages/b/pyproject.toml", pyproject)
+            .with_new_file("tests/_packages/b/x/__init__.py", "")
+        )
+        projects = await deptry(source=src, exclude=["**/tests/_packages/**"]).projects().keys()
+        if projects != ["a"]:
+            raise AssertionError(f"expected ['a'], got {projects}")
+
+    @function
+    async def deptry_subset(self) -> None:
+        """A `subset` of the projects checks only those, so a broken-but-unselected tree passes."""
         good = self._deptry_project(
             '[project]\nname = "goodpkg"\nversion = "0"\ndependencies = ["requests"]\n',
             {"goodpkg/__init__.py": "import requests\n"},
@@ -957,8 +1021,8 @@ print("LAYER_CACHE_OK")
             '[project]\nname = "badpkg"\nversion = "0"\ndependencies = ["requests"]\n',
             {"badpkg/__init__.py": "x = 1\n"},
         )
-        src = dag.directory().with_directory("good", good).with_directory("bad", bad)
-        await dag.deptry(source=src).check(exclude=["bad"])
+        src = core().directory().with_directory("good", good).with_directory("bad", bad)
+        await self._deptry_check_all(deptry(source=src).projects().subset(["good"]))
 
     @function
     async def deptry_config_opts_in_nonstandard_layout(self) -> None:
@@ -973,20 +1037,18 @@ print("LAYER_CACHE_OK")
             {"run.py": "x = 1\n"},
         )
         try:
-            await dag.deptry(source=src).check()
+            await self._deptry_check_all(deptry(source=src).projects())
         except dagger.DaggerError:
             return
         raise AssertionError("expected deptry to check a [tool.deptry]-configured project and fail")
 
     @function
     async def deptry_skips_project_without_layout_or_config(self) -> None:
-        """A project with no `src`/flat layout and no `[tool.deptry]` is skipped.
-
-        The unused dependency would fail if it were checked, so passing proves
-        the project was skipped.
-        """
+        """A project with no `src`/flat layout and no `[tool.deptry]` is left out of `projects`."""
         src = self._deptry_project(
             '[project]\nname = "flatmod"\nversion = "0"\ndependencies = ["requests"]\n',
             {"run.py": "x = 1\n"},
         )
-        await dag.deptry(source=src).check()
+        projects = await deptry(source=src).projects().keys()
+        if projects:
+            raise AssertionError(f"expected no projects, got {projects}")

@@ -2,20 +2,23 @@
 name = "deptry"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io", "anyio", "opentelemetry-api"]
+dependencies = ["dagger-io", "anyio", "opentelemetry-api", "dagger-clients-core"]
 
 [build-system]
 requires = ["uv_build>=0.8.4,<0.9.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-dagger-io = { path = "sdk", editable = true }
+dagger-io = { workspace = true }
+dagger-clients-core = { workspace = true }
 
 # Map distributions to the import packages they ship, so deptry doesn't flag
-# those imports as missing/unused: `dagger-io` ships `dagger`, and
-# `opentelemetry-api` ships the `opentelemetry` namespace.
+# those imports as missing/unused: `dagger-io` ships `dagger`, the
+# generated `dagger-clients-*` distributions ship the `dagger_clients`
+# namespace, and `opentelemetry-api` ships the `opentelemetry` namespace.
 [tool.deptry.package_module_name_map]
 dagger-io = "dagger"
+dagger-clients-core = "dagger_clients"
 opentelemetry-api = "opentelemetry"
 
 [dependency-groups]
@@ -27,3 +30,9 @@ docs = [
     "pymdown-extensions>=11.0.1",
     "zensical>=0.0.44",
 ]
+
+[tool.uv.workspace]
+members = ["sdk", "clients/core"]
+
+[tool.dagger]
+global-client = false

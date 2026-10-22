@@ -1,0 +1,5 @@
+name = "twingate"
+
+[entrypoint]
+  kind = "dang"
+  source = "./sdk/entrypoint"

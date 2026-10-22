@@ -1,9 +1,9 @@
 import asyncio
 from typing import Annotated
 
-import dagger
 from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
+from dagger_clients.core import Directory
 
 from uv.utils import parse_indices
 from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_workspace_indices
@@ -19,7 +19,7 @@ class UvPackageSource:
     """
 
     source: Annotated[
-        dagger.Directory,
+        Directory,
         Doc("Source tree containing the workspace."),
     ] = field()
 
@@ -33,10 +33,10 @@ class UvPackageSource:
         Doc("Package path relative to the workspace root."),
     ] = field()
 
-    def _ws_dir(self) -> dagger.Directory:
+    def _ws_dir(self) -> Directory:
         return self.source if self.workspace_path == "." else self.source.directory(self.workspace_path)
 
-    def _pkg_dir(self) -> dagger.Directory:
+    def _pkg_dir(self) -> Directory:
         ws = self._ws_dir()
         return ws if self.package_path == "." else ws.directory(self.package_path)
 

@@ -1,7 +1,6 @@
 [modules.typesafe-daggerverse]
-legacy-default-path = true
 source = ".dagger"
-entrypoint = true
+main = true
 
 [modules.deptry]
 source = "deptry"
@@ -9,8 +8,44 @@ source = "deptry"
 [modules.ruff]
 source = "ruff"
 
+[modules.uv]
+source = "uv"
+
 [modules.zizmor]
 source = "zizmor"
 
+# Test fixtures under uv/tests/_packages are deliberately broken or vulnerable;
+# the .dagger checks exercise them directly.
 [modules.deptry.settings]
-exclude = ["**/tests/_packages/**", "."]
+exclude = ["**/tests/_packages/**"]
+
+[modules.uv.settings]
+exclude = ["**/tests/_packages/**"]
+
+[modules.python-sdk]
+source = "github.com/dagger/python-sdk"
+
+[sdks.python]
+module = "python-sdk"
+
+[sdks.python.scopes.deptry]
+is-module = true
+
+[sdks.python.scopes.github]
+is-module = true
+
+[sdks.python.scopes.ruff]
+is-module = true
+
+[sdks.python.scopes.twingate]
+is-module = true
+
+[sdks.python.scopes.uv]
+is-module = true
+
+[sdks.python.scopes.zizmor]
+is-module = true
+
+[sdks.python.scopes.".dagger"]
+clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor"]
+is-module = true

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import dagger
-from dagger import Doc, dag, field, function, object_type
+from dagger import Doc, field, function, object_type
+from dagger_clients.core import Container, core
 
 from ruff.args import SourceDir
 from ruff.checker import RuffChecker
@@ -16,7 +16,7 @@ class Ruff:
     """Ruff Python linter and formatter."""
 
     ctr: Annotated[
-        dagger.Container,
+        Container,
         Doc("Container with ruff installed."),
     ] = field()
 
@@ -25,7 +25,7 @@ class Ruff:
         cls,
         source: SourceDir,
         ctr: Annotated[
-            dagger.Container | None,
+            Container | None,
             Doc("Container with ruff installed. Defaults to the official ghcr.io/astral-sh/ruff image."),
         ] = None,
         version: Annotated[
@@ -36,7 +36,7 @@ class Ruff:
         if ctr is None:
             if version is None:
                 version = await resolve_version(source)
-            ctr = dag.container().from_(f"{_DEFAULT_IMAGE}:{version}")
+            ctr = core().container().from_(f"{_DEFAULT_IMAGE}:{version}")
         return cls(ctr=ctr)
 
     @function(cache="1h")

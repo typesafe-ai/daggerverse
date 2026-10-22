@@ -1,0 +1,5 @@
+name = "ruff"
+
+[entrypoint]
+  kind = "dang"
+  source = "./sdk/entrypoint"

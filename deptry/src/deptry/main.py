@@ -6,11 +6,9 @@ import tomllib
 from pathlib import PurePosixPath
 from typing import Annotated
 
-import anyio
 import dagger
-from dagger import DefaultPath, Doc, Ignore, check, dag, field, function, object_type
-from dagger.telemetry import get_tracer
-from opentelemetry.trace import Status, StatusCode
+from dagger import DefaultPath, Doc, Ignore, check, collection, field, function, get, keys, object_type
+from dagger_clients.core import Container, Directory, core
 
 _DEFAULT_VERSION = "0.25.1"
 _DEFAULT_IMAGE = "ghcr.io/astral-sh/uv"
@@ -18,7 +16,7 @@ _DEFAULT_IMAGE_TAG = "0.12.5-python3.13-trixie-slim"
 
 
 SourceDir = Annotated[
-    dagger.Directory,
+    Directory,
     Doc("Source directory."),
     DefaultPath("/"),
     Ignore(
@@ -39,6 +37,7 @@ SourceDir = Annotated[
             "**/build",
             "**/*.egg-info",
             "**/sdk",
+            "**/clients",
         ]
     ),
 ]
@@ -95,7 +94,7 @@ def _project_info(pyproject_content: str) -> tuple[bool, str | None, bool]:
     return True, module, configured
 
 
-async def _has_package_layout(project_dir: dagger.Directory, module: str | None) -> bool:
+async def _has_package_layout(project_dir: Directory, module: str | None) -> bool:
     """Whether a project has its own package source — a `src` directory or a
     flat package directory named after the project.
 
@@ -112,8 +111,8 @@ async def _has_package_layout(project_dir: dagger.Directory, module: str | None)
 
 # SGR (color) escape sequences. deptry colors its report on the live exec
 # stream (which Dagger renders as a terminal), but the same bytes become `[1m`
-# noise when folded into a span's plain-text status description — so strip them
-# there, not at the source.
+# noise when folded into the plain-text error message, so strip them there, not
+# at the source.
 _ANSI_SGR_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -123,9 +122,9 @@ def _format_failure(exc: dagger.ExecError, project: str) -> str:
     deptry writes its report to stdout/stderr, but the raised
     :class:`dagger.ExecError` stringifies to only a terse "exit code N".
     Folding the captured output (and the project path) into the message keeps
-    the findings in the trace/span error instead of solely in Dagger's logs.
-    Color codes are stripped here since the span description is rendered as
-    plain text (the live exec output keeps its color).
+    the findings in the check's error instead of solely in Dagger's logs.
+    Color codes are stripped here since the error is rendered as plain text
+    (the live exec output keeps its color).
     """
     seen: list[str] = []
     for stream in (exc.stdout, exc.stderr):
@@ -138,52 +137,23 @@ def _format_failure(exc: dagger.ExecError, project: str) -> str:
 
 
 @object_type
-class Deptry:
-    """Linter for Python dependency issues.
+class DeptryProject:
+    """One Python project that deptry checks."""
 
-    deptry checks a single Python project: it reads the declared dependencies
-    (from a `pyproject.toml`) and scans that project's source for imports to
-    find unused, missing, misplaced or transitive dependencies. The `check`
-    function runs it once per project across the whole source tree, so a single
-    Dagger check covers a monorepo.
+    source: Annotated[
+        Directory,
+        Doc("The project directory (holding its pyproject.toml)."),
+    ] = field()
 
-    Learn more about deptry at <https://deptry.com>.
-    """
+    path: Annotated[
+        str,
+        Doc("Project path within the scanned source tree. `.` for the root."),
+    ] = field()
 
-    source: SourceDir = field()
-    exclude: Annotated[
-        list[str],
-        Doc("Glob patterns (source-relative) of project paths check always skips, e.g. `**/tests/_packages/**`."),
-    ] = field(default=list)
-
-    @function
-    async def projects(self) -> list[str]:
-        """Every checkable Python project in the source tree.
-
-        One entry per `pyproject.toml` that declares dependencies (see
-        `_project_info`).
-        """
-        return [path for path, _, _ in await self._discover()]
-
-    async def _discover(self) -> list[tuple[str, str | None, bool]]:
-        """`(path, module_name, configured)` for every checkable project, sorted by path."""
-        pyprojects = sorted(await self.source.glob("**/pyproject.toml"))
-        discovered: list[tuple[str, str | None, bool]] = []
-        for pyproject in pyprojects:
-            checkable, module, configured = _project_info(await self.source.file(pyproject).contents())
-            if checkable:
-                discovered.append((_project_path(pyproject), module, configured))
-        return discovered
-
-    def _container(self, version: str) -> dagger.Container:
-        return (
-            dag.container()
-            .from_(f"{_DEFAULT_IMAGE}:{_DEFAULT_IMAGE_TAG}")
-            .with_env_variable("UV_COMPILE_BYTECODE", "1")
-            # put the `deptry` launcher on PATH so a plain `deptry` works.
-            .with_env_variable("UV_TOOL_BIN_DIR", "/usr/local/bin")
-            .with_exec(["uv", "tool", "install", f"deptry=={version}"])
-        )
+    module: Annotated[
+        str | None,
+        Doc("The project's first-party import name, passed to deptry as `--known-first-party`."),
+    ] = field(default=None)
 
     @check
     @function
@@ -194,7 +164,7 @@ class Deptry:
             Doc("deptry version to use (ignored when `ctr` is set)."),
         ] = _DEFAULT_VERSION,
         ctr: Annotated[
-            dagger.Container | None,
+            Container | None,
             Doc(
                 "Container with deptry installed. Defaults to the official "
                 "ghcr.io/astral-sh/uv image with deptry installed as a uv tool. "
@@ -205,77 +175,106 @@ class Deptry:
             list[str] | None,
             Doc("Additional arguments to pass to deptry (added before the project root)."),
         ] = None,
-        exclude: Annotated[
-            list[str] | None,
-            Doc("Glob patterns (source-relative) of project paths to skip, e.g. `**/tests/_packages/**`."),
-        ] = None,
     ) -> None:
-        """Run `deptry` for every Python project in the source tree, in parallel.
+        """Run `deptry .` in this project and fail on any dependency issue."""
+        container = ctr if ctr is not None else _container(version)
+        known = ["--known-first-party", self.module] if self.module else []
+        try:
+            await (
+                # `FORCE_COLOR` makes deptry colorize its report even though its
+                # stdout is a pipe, so Dagger's rendered exec logs show color. The
+                # copy folded into the raised error has the codes stripped (see
+                # `_format_failure`). Pass `--no-ansi` via `args` to opt out.
+                container.with_env_variable("FORCE_COLOR", "1")
+                .with_workdir("/work")
+                .with_directory("/work", self.source)
+                .with_exec(["deptry", *known, *(args or []), "."])
+                .sync()
+            )
+        except dagger.ExecError as exc:
+            raise RuntimeError(_format_failure(exc, self.path)) from exc
 
-        Discovers projects by scanning for `pyproject.toml` files that declare
-        dependencies and runs `deptry .` in each. A project with no package of
-        its own — e.g. a uv workspace root that only aggregates members in
-        subdirectories — is skipped (so the scan never spills over the rest of
-        the monorepo) unless it declares a `[tool.deptry]` section, which opts it
-        in explicitly. Exits non-zero when any (non-excluded) project reports
-        dependency issues.
+
+@object_type
+@collection
+class DeptryProjects:
+    """Every Python project deptry checks in the source tree, keyed by its path.
+
+    `check` runs once per selected project, so each project is its own check
+    that can be selected or skipped on its own.
+    """
+
+    source: Annotated[
+        Directory,
+        Doc("Source tree containing the projects."),
+    ] = field()
+
+    paths: Annotated[
+        list[str],
+        Doc("Project paths within `source`. `.` for the root."),
+    ] = keys()
+
+    @function
+    @get
+    async def project(self, path: str) -> DeptryProject:
+        """The project at `path`."""
+        project_dir = self.source if path == "." else self.source.directory(path)
+        _, module, _ = _project_info(await project_dir.file("pyproject.toml").contents())
+        return DeptryProject(source=project_dir, path=path, module=module)
+
+
+def _container(version: str) -> Container:
+    return (
+        core()
+        .container()
+        .from_(f"{_DEFAULT_IMAGE}:{_DEFAULT_IMAGE_TAG}")
+        .with_env_variable("UV_COMPILE_BYTECODE", "1")
+        # put the `deptry` launcher on PATH so a plain `deptry` works.
+        .with_env_variable("UV_TOOL_BIN_DIR", "/usr/local/bin")
+        .with_exec(["uv", "tool", "install", f"deptry=={version}"])
+    )
+
+
+@object_type
+class Deptry:
+    """Linter for Python dependency issues.
+
+    deptry checks a single Python project: it reads the declared dependencies
+    (from a `pyproject.toml`) and scans that project's source for imports to
+    find unused, missing, misplaced or transitive dependencies. `projects`
+    discovers every project in the source tree, and its `check` runs once per
+    project, so one Dagger check covers a monorepo.
+
+    Learn more about deptry at <https://deptry.com>.
+    """
+
+    source: SourceDir = field()
+    exclude: Annotated[
+        list[str],
+        Doc("Glob patterns (source-relative) of project paths to leave out of projects, e.g. **/tests/_packages/**."),
+    ] = field(default=list)
+
+    @function
+    async def projects(self) -> DeptryProjects:
+        """Every Python project deptry checks in the source tree.
+
+        One entry per `pyproject.toml` that declares dependencies (see
+        `_project_info`) and either has its own package source or declares a
+        `[tool.deptry]` section. A project with no package of its own — e.g. a
+        uv workspace root that only aggregates members in subdirectories — is
+        left out, so `deptry .` never spills over the rest of the monorepo,
+        unless its `[tool.deptry]` section opts it in explicitly. Paths matching
+        `exclude` are left out too.
         """
-        patterns = [*self.exclude, *(exclude or [])]
-        tracer = get_tracer()
-
-        with tracer.start_as_current_span("discover Python projects"):
-            projects = [t for t in await self._discover() if not _is_excluded(t[0], patterns)]
-
-        with tracer.start_as_current_span("build deptry container"):
-            container = ctr if ctr is not None else self._container(version)
-
-        failed: list[str] = []
-        checked: list[str] = []
-
-        async def _run(project: str, module: str | None, configured: bool) -> None:
-            # Each deptry run is wrapped in its own OpenTelemetry span so it
-            # shows up as a distinct node in the trace, and failures are captured
-            # per-project so one failure can't cancel the sibling runs — every
-            # project is always checked to completion.
-            with tracer.start_as_current_span(f"deptry: {project}") as span:
-                # Run when the project has a recognized layout, or when it
-                # declares `[tool.deptry]` config (an explicit opt-in that also
-                # covers non-standard layouts). Otherwise skip, so an aggregator
-                # like a uv workspace root doesn't scan the whole monorepo.
-                if not configured and not await _has_package_layout(self.source.directory(project), module):
-                    # A description on a non-ERROR Status is dropped by OTel with a
-                    # warning, so record the skip reason as an attribute instead.
-                    span.set_attribute("deptry.skipped", "no src/flat layout and no [tool.deptry] config")
-                    return
-                checked.append(project)
-                try:
-                    known = ["--known-first-party", module] if module else []
-                    await (
-                        # `FORCE_COLOR` makes deptry colorize its report even
-                        # though its stdout is a pipe, so Dagger's rendered exec
-                        # logs show color. The captured copy folded into the span
-                        # has the codes stripped (see `_format_failure`). Pass
-                        # `--no-ansi` via `args` to opt out.
-                        container.with_env_variable("FORCE_COLOR", "1")
-                        .with_workdir("/work")
-                        .with_directory("/work", self.source.directory(project))
-                        .with_exec(["deptry", *known, *(args or []), "."])
-                        .sync()
-                    )
-                except dagger.ExecError as exc:
-                    message = _format_failure(exc, project)
-                    span.set_status(Status(StatusCode.ERROR, message))
-                    span.record_exception(exc)
-                    failed.append(project)
-                except Exception as exc:  # noqa: BLE001
-                    span.set_status(Status(StatusCode.ERROR, str(exc)))
-                    span.record_exception(exc)
-                    failed.append(project)
-
-        async with anyio.create_task_group() as tg:
-            for project, module, configured in projects:
-                tg.start_soon(_run, project, module, configured)
-
-        if failed:
-            msg = f"deptry found issues in {len(failed)} of {len(checked)} project(s): {', '.join(sorted(failed))}"
-            raise RuntimeError(msg)
+        paths: list[str] = []
+        for pyproject in sorted(await self.source.glob("**/pyproject.toml")):
+            checkable, module, configured = _project_info(await self.source.file(pyproject).contents())
+            if not checkable:
+                continue
+            path = _project_path(pyproject)
+            if _is_excluded(path, self.exclude):
+                continue
+            project_dir = self.source if path == "." else self.source.directory(path)
+            if configured or await _has_package_layout(project_dir, module):
+                paths.append(path)
+        return DeptryProjects(source=self.source, paths=paths)

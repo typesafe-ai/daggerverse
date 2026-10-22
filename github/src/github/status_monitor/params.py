@@ -2,14 +2,14 @@
 
 from typing import Annotated, TypeAlias
 
-import dagger
 from dagger import Doc
+from dagger_clients.core import Secret
 
 Repo: TypeAlias = Annotated[str, Doc("GitHub repo as 'owner/name'")]
 
 Ref: TypeAlias = Annotated[str, Doc("Commit SHA to poll")]
 
-Token: TypeAlias = Annotated[dagger.Secret, Doc("GitHub token with read access")]
+Token: TypeAlias = Annotated[Secret, Doc("GitHub token with read access")]
 
 PollInterval: TypeAlias = Annotated[int, Doc("Seconds between GitHub polls")]
 

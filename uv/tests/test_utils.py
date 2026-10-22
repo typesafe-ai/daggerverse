@@ -6,7 +6,6 @@ from uv.utils import (
     format_audit_failure,
     image_ref,
     is_exact_version,
-    is_excluded,
     minimal_compatible_version,
     normalize_exact_version,
     parse_indices,
@@ -79,23 +78,6 @@ class TestWorkspacePath:
 
     def test_nested(self):
         assert workspace_path("pkgs/app/uv.lock") == "pkgs/app"
-
-
-class TestIsExcluded:
-    def test_no_patterns(self):
-        assert is_excluded("uv-workspace", []) is False
-
-    def test_exact_match(self):
-        assert is_excluded(".dagger", [".dagger"]) is True
-
-    def test_globstar_match(self):
-        assert is_excluded("uv-workspace/tests/_packages/app", ["**/tests/_packages/**"]) is True
-
-    def test_no_match(self):
-        assert is_excluded("uv-workspace", ["**/tests/**"]) is False
-
-    def test_any_of_several(self):
-        assert is_excluded("a/b", ["x/*", "a/*"]) is True
 
 
 class TestIsExactVersion:

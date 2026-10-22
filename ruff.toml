@@ -1,4 +1,8 @@
 line-length = 120
+# Generated Dagger SDK and client code. `force-exclude` keeps it excluded when a
+# hook passes these files explicitly.
+extend-exclude = ["**/sdk", "**/clients"]
+force-exclude = true
 
 [lint]
 ignore = [

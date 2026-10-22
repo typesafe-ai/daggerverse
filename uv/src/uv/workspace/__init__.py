@@ -1,4 +1,3 @@
-from uv.workspace.audit import Audit as Audit
 from uv.workspace.build import UvWorkspaceBuild as UvWorkspaceBuild
 from uv.workspace.index import UvIndex as UvIndex
 from uv.workspace.package import UvPackageSource as UvPackageSource

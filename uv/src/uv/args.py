@@ -1,10 +1,10 @@
 from typing import Annotated, TypeAlias
 
-import dagger
 from dagger import DefaultPath, Doc, Ignore
+from dagger_clients.core import Directory
 
 SourceDir = Annotated[
-    dagger.Directory,
+    Directory,
     Doc("Source directory."),
     DefaultPath("/"),
     Ignore(
@@ -24,7 +24,6 @@ SourceDir = Annotated[
             "**/dist",
             "**/build",
             "**/*.egg-info",
-            "**/sdk",
         ]
     ),
 ]

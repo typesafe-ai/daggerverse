@@ -2,7 +2,13 @@
 # Any Dagger command may update this file; always commit it with your changes.
 # Run `dagger lock update` to refresh the pinned versions.
 [["version","2"]]
+["","git-latest",["github.com/dagger/python-sdk",["tagPrefix","runtime"],["version","v1.2.0"]],"refs/tags/v1.2.0"]
+["","git-latest",["github.com/dagger/python-sdk"],"refs/tags/v1.2.0"]
+["","git-latest",["github.com/dagger/sdk-helpers",["version","v1.0.6"]],"refs/tags/v1.0.6"]
+["","git-sha",["github.com/dagger/python-sdk","refs/tags/v1.2.0"],"eb9c4aa175054d8d27109afec8ab4cc9818cf2e5"]
+["","git-sha",["github.com/dagger/sdk-helpers","refs/tags/v1.0.6"],"16e5bf2837eb1dc840a1c9ad7d6dba385f0038d3"]
 ["","oci-sha",["docker.io/library/debian:bookworm-slim"],"sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8"]
+["","oci-sha",["docker.io/library/golang:1.25-alpine"],"sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59"]
 ["","oci-sha",["docker.io/library/python:3.13-slim"],"sha256:57b29a7c050c4e679e4bea572e14b3965cf4b5839de2da49d55e49ffc4024f39"]
 ["","oci-sha",["docker.io/library/python:3.14-slim"],"sha256:0514bc76712d64f8bb48adcb95b1ab0d88c69fee95d62fe4c18ee948bee9b1e1"]
 ["","oci-sha",["docker.io/twingate/client:2026.106"],"sha256:7b02325a9911b7476f8c91c246c961c14ee6f3452aa2e9ef1c56e143f9313229"]

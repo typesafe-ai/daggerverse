@@ -4,9 +4,9 @@ import posixpath
 import tomllib
 from typing import Annotated
 
-import dagger
-from dagger import Doc, dag, field, function, object_type
+from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
+from dagger_clients.core import Container, Directory, core
 
 from uv.args import LockTimeout, MaxCacheSize, PruneCache
 from uv.utils import _DEFAULT_BASE_UV_VERSION, image_ref
@@ -24,7 +24,7 @@ class UvWorkspaceBuild:
     """
 
     container: Annotated[
-        dagger.Container,
+        Container,
         Doc("Container carrying the workspace's pyproject.toml and uv.lock"),
     ] = field()
 
@@ -63,7 +63,7 @@ class UvWorkspaceBuild:
         with get_tracer().start_as_current_span("install uv binary") as span:
             span.set_attribute("uv.version", v)
             span.set_attribute("uv.image", image_ref(v))
-            uv_bin = dag.container().from_(image_ref(v)).file("/uv")
+            uv_bin = core().container().from_(image_ref(v)).file("/uv")
             ctr = await (
                 self.container.with_file("/uv/uv", uv_bin).with_env_variable("PATH", "/uv:${PATH}", expand=True).sync()
             )
@@ -207,7 +207,7 @@ class UvWorkspaceBuild:
     @function
     async def copy_venv(
         self,
-        container: Annotated[dagger.Container, Doc("Container to copy the venv and its Python into.")],
+        container: Annotated[Container, Doc("Container to copy the venv and its Python into.")],
         path: Annotated[
             str,
             Doc(
@@ -218,7 +218,7 @@ class UvWorkspaceBuild:
             bool,
             Doc("Also set the standard activation env vars (`VIRTUAL_ENV` and a `PATH` with the venv's `bin/` first)."),
         ] = False,
-    ) -> dagger.Container:
+    ) -> Container:
         """Copy this build's venv (and the uv-managed Python it needs) into `container`.
 
         Convenience over `venv().into(...)`: mounts the relocatable venv at `path`
@@ -227,7 +227,7 @@ class UvWorkspaceBuild:
         """
         return await (await self.venv()).into(container, path, set_env_vars)
 
-    def _scaffold_package(self, overlay: dagger.Directory, workdir: str, pkg: LocalPackage) -> dagger.Directory:
+    def _scaffold_package(self, overlay: Directory, workdir: str, pkg: LocalPackage) -> Directory:
         """Scaffold a single package stub (pyproject.toml + README + empty module)."""
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
         overlay = overlay.with_new_file(
@@ -258,14 +258,14 @@ class UvWorkspaceBuild:
         packages: list[LocalPackage],
         workdir: str,
         span_name: str,
-    ) -> dagger.Container:
+    ) -> Container:
         """Scaffold package stubs (pyproject.toml + README + empty module) for `packages`.
 
         The per-package `with_new_file` calls are lazy, so the span
         forces evaluation with `sync()` before closing; otherwise it would capture
         only Python graph-building and report ~zero duration.
         """
-        overlay = dag.directory()
+        overlay = core().directory()
         with get_tracer().start_as_current_span(span_name) as span:
             span.set_attribute("packages.count", len(packages))
             span.set_attribute("packages.names", [pkg.name for pkg in packages])
@@ -292,14 +292,14 @@ class UvWorkspaceBuild:
     def with_container(
         self,
         container: Annotated[
-            dagger.Container,
+            Container,
             Doc("Replacement container (e.g. after installing non-Python packages)"),
         ],
     ) -> UvWorkspaceBuild:
         """Return a new UvWorkspaceBuild with a different container but the same plan."""
         return UvWorkspaceBuild(container=container, plan=self.plan)
 
-    def _copy_package(self, overlay: dagger.Directory, workdir: str, pkg: LocalPackage) -> dagger.Directory:
+    def _copy_package(self, overlay: Directory, workdir: str, pkg: LocalPackage) -> Directory:
         """Copy a single local package's real source into the container."""
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
@@ -310,14 +310,14 @@ class UvWorkspaceBuild:
             )
         return overlay
 
-    async def _copy_sources(self, ctr: dagger.Container, workdir: str) -> dagger.Container:
+    async def _copy_sources(self, ctr: Container, workdir: str) -> Container:
         """Copy real source for each needed local package into `ctr`.
 
         The per-package `with_directory` calls are lazy, so the span forces
         evaluation with `sync()` before closing; otherwise it would capture only
         Python graph-building and report ~zero duration.
         """
-        overlay = dag.directory()
+        overlay = core().directory()
         with get_tracer().start_as_current_span("copy local dependency sources") as span:
             span.set_attribute("packages.count", len(self.plan.needed_local))
             span.set_attribute("packages.names", [pkg.name for pkg in self.plan.needed_local])
@@ -327,7 +327,7 @@ class UvWorkspaceBuild:
                 overlay = self._copy_package(overlay, workdir, pkg)
             return await ctr.with_directory("/", overlay).sync()
 
-    async def _sync_local(self, ctr: dagger.Container) -> dagger.Container:
+    async def _sync_local(self, ctr: Container) -> Container:
         """Run the plan's `uv sync` to install the local members, under a span."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
@@ -336,7 +336,7 @@ class UvWorkspaceBuild:
             return await ctr.with_exec(self.plan.uv_sync_args).sync()
 
     @function
-    async def with_local_dependencies(self) -> dagger.Container:
+    async def with_local_dependencies(self) -> Container:
         """Install the scaffolded local packages, copying their real source at the right time.
 
         For **editable** installs (the default), run `uv sync` against the package

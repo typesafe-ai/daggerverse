@@ -5,15 +5,15 @@ Two entry points:
 * :meth:`GithubStatusMonitor.wait_for_statuses` — explicit list of status
   contexts and/or check-run names; general-purpose for any GitHub check.
 * :meth:`GithubStatusMonitor.wait_for_dagger_checks` — auto-discovers expected
-  contexts from `dag.current_workspace().checks()`; specific to Dagger
+  contexts from `core().current_workspace().checks()`; specific to Dagger
   Cloud checks that publish their state as GitHub Statuses.
 """
 
 from typing import Annotated
 
-import dagger
 import httpx
-from dagger import Doc, dag, field, function, object_type
+from dagger import Doc, field, function, object_type
+from dagger_clients.core import Secret, core
 from rich.console import Console
 
 from github.status_monitor import render
@@ -94,10 +94,10 @@ class GithubStatusMonitor:
         """Wait for every Dagger check in the current workspace to succeed.
 
         The expected status set is enumerated via
-        `dag.current_workspace().checks()` — Dagger check names are assumed
+        `core().current_workspace().checks()` — Dagger check names are assumed
         to match the GitHub status `context` strings published by Dagger Cloud.
         """
-        discovered = await dag.current_workspace().checks().list_()
+        discovered = await core().current_workspace().checks().list_()
         expected = sorted({await c.name() for c in discovered})
         return await self._wait(
             repo=repo,
@@ -117,7 +117,7 @@ class GithubStatusMonitor:
         *,
         repo: str,
         ref: str,
-        token: dagger.Secret,
+        token: Secret,
         status_names: list[str],
         check_run_names: list[str],
         poll_interval: int,

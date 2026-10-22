@@ -1,0 +1,5 @@
+name = "deptry"
+
+[entrypoint]
+  kind = "dang"
+  source = "./sdk/entrypoint"

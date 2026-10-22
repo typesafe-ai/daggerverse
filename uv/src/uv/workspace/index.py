@@ -1,7 +1,7 @@
 from typing import Annotated
 
-import dagger
 from dagger import Doc, field, object_type
+from dagger_clients.core import Directory
 
 from uv.utils import parse_indices
 
@@ -52,7 +52,7 @@ def merge_indices(
     return dicts_to_indices(merged)
 
 
-async def read_workspace_indices(ws_dir: dagger.Directory) -> list[dict]:
+async def read_workspace_indices(ws_dir: Directory) -> list[dict]:
     """Read raw index dicts from workspace-level config (uv.toml or pyproject.toml)."""
     if "uv.toml" in await ws_dir.entries():
         return parse_indices(await ws_dir.file("uv.toml").contents(), uv_toml=True)

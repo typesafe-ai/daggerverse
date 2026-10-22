@@ -2,16 +2,39 @@
 name = "typesafe-daggerverse"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io", "anyio"]
+dependencies = ["dagger-io", "anyio", "dagger-clients-core", "dagger-clients-github", "dagger-clients-deptry", "dagger-clients-pytest", "dagger-clients-twingate", "dagger-clients-ruff", "dagger-clients-uv", "dagger-clients-zizmor"]
 
 [build-system]
 requires = ["uv_build>=0.8.4,<0.9.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-dagger-io = { path = "sdk", editable = true }
+dagger-io = { workspace = true }
+dagger-clients-core = { workspace = true }
+dagger-clients-github = { workspace = true }
+dagger-clients-deptry = { workspace = true }
+dagger-clients-pytest = { workspace = true }
+dagger-clients-twingate = { workspace = true }
+dagger-clients-ruff = { workspace = true }
+dagger-clients-uv = { workspace = true }
+dagger-clients-zizmor = { workspace = true }
 
-# The `dagger-io` distribution ships the `dagger` import package; map it so
-# deptry doesn't flag `import dagger` as a missing/unused dependency.
+# Map distributions to the import packages they ship, so deptry doesn't flag
+# those imports as missing/unused: `dagger-io` ships `dagger`, and the
+# generated `dagger-clients-*` distributions ship the `dagger_clients` namespace.
 [tool.deptry.package_module_name_map]
 dagger-io = "dagger"
+dagger-clients-core = "dagger_clients"
+dagger-clients-github = "dagger_clients"
+dagger-clients-deptry = "dagger_clients"
+dagger-clients-pytest = "dagger_clients"
+dagger-clients-twingate = "dagger_clients"
+dagger-clients-ruff = "dagger_clients"
+dagger-clients-uv = "dagger_clients"
+dagger-clients-zizmor = "dagger_clients"
+
+[tool.uv.workspace]
+members = ["sdk", "clients/core", "clients/github", "clients/deptry", "clients/pytest", "clients/twingate", "clients/ruff", "clients/uv", "clients/zizmor"]
+
+[tool.dagger]
+global-client = false

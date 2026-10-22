@@ -3,9 +3,9 @@ import tomllib
 from collections import OrderedDict
 from typing import Annotated, Self
 
-import dagger
 from dagger import Doc, field, object_type
 from dagger.telemetry import get_tracer
+from dagger_clients.core import Directory
 
 from uv.utils import (
     build_uv_sync_args,
@@ -60,8 +60,8 @@ async def _discover_local_packages(
     all_packages: bool,
     default_package: str | None,
     workspace_path: str,
-    source_dir: dagger.Directory,
-    ws_dir: dagger.Directory,
+    source_dir: Directory,
+    ws_dir: Directory,
 ) -> tuple[OrderedDict[str, str], OrderedDict[str, str], dict[str, bool]]:
     """Find reachable local packages and detect each one's layout (flat vs src).
 
@@ -152,12 +152,12 @@ class UvSyncPlan:
     """Resolved build configuration for a uv workspace sync."""
 
     ws_dir: Annotated[
-        dagger.Directory,
+        Directory,
         Doc("Resolved workspace directory (with codegen overlay if applicable)"),
     ] = field()
 
     source_dir: Annotated[
-        dagger.Directory,
+        Directory,
         Doc("Full source directory (with codegen overlay if applicable)"),
     ] = field()
 
@@ -194,7 +194,7 @@ class UvSyncPlan:
     @classmethod
     async def create(
         cls,
-        source_dir: dagger.Directory,
+        source_dir: Directory,
         workspace_path: str = ".",
         package: list[str] | None = None,
         extra: list[str] | None = None,

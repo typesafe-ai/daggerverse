@@ -1,7 +1,7 @@
 from typing import Annotated, TypeAlias
 
-import dagger
-from dagger import Doc, dag, field, function, object_type
+from dagger import Doc, field, function, object_type
+from dagger_clients.core import Container, Secret, Service, core
 
 Port: TypeAlias = Annotated[int, Doc("Port the HTTP proxy listens on.")]
 
@@ -16,12 +16,12 @@ class Twingate:
     """Twingate HTTP CONNECT proxy as a Dagger service."""
 
     service_key: Annotated[
-        dagger.Secret,
+        Secret,
         Doc("Twingate service key JSON for headless authentication."),
     ] = field()
 
     ctr: Annotated[
-        dagger.Container,
+        Container,
         Doc("Container with the Twingate client installed."),
     ] = field()
 
@@ -29,7 +29,7 @@ class Twingate:
     async def create(
         cls,
         service_key: Annotated[
-            dagger.Secret,
+            Secret,
             Doc("Twingate service key JSON for headless authentication."),
         ],
         version: Annotated[
@@ -37,14 +37,14 @@ class Twingate:
             Doc("twingate/client image tag."),
         ] = _DEFAULT_VERSION,
     ) -> "Twingate":
-        ctr = dag.container().from_(f"{_DEFAULT_IMAGE}:{version}")
+        ctr = core().container().from_(f"{_DEFAULT_IMAGE}:{version}")
         return cls(service_key=service_key, ctr=ctr)
 
     @function
     def service(
         self,
         port: Port = _DEFAULT_PORT,
-    ) -> dagger.Service:
+    ) -> Service:
         """Start the Twingate client as an HTTP proxy service (userspace mode).
 
         Returns a long-running service listening on the given port.
@@ -72,7 +72,7 @@ class Twingate:
     def bind_proxy(
         self,
         ctr: Annotated[
-            dagger.Container,
+            Container,
             Doc("Container to attach the Twingate proxy to."),
         ],
         alias: Annotated[
@@ -81,7 +81,7 @@ class Twingate:
         ] = _DEFAULT_ALIAS,
         port: Port = _DEFAULT_PORT,
         set_proxy_env_vars: bool = True,
-    ) -> dagger.Container:
+    ) -> Container:
         """Bind the Twingate proxy to a container.
 
         If `set_proxy_env_vars` is True, it also sets common env vars

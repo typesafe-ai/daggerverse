@@ -1,0 +1,5 @@
+name = "github"
+
+[entrypoint]
+  kind = "dang"
+  source = "./sdk/entrypoint"

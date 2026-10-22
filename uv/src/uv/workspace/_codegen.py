@@ -1,9 +1,8 @@
 import posixpath
 import tomllib
 
-import dagger
-from dagger import dag
 from dagger.telemetry import get_tracer
+from dagger_clients.core import Directory, core
 
 
 def _needs_dagger_codegen(pyproject_contents: str) -> bool:
@@ -13,7 +12,7 @@ def _needs_dagger_codegen(pyproject_contents: str) -> bool:
     return isinstance(dagger_src, dict) and dagger_src.get("path") == "sdk"
 
 
-async def dagger_codegen(ws_dir: dagger.Directory, codegen_path: str) -> dagger.Directory:
+async def dagger_codegen(ws_dir: Directory, codegen_path: str) -> Directory:
     """Run Dagger codegen and overlay the generated SDK.
 
     No-op unless *both* ``dagger.json`` and a ``pyproject.toml`` with
@@ -43,7 +42,8 @@ async def dagger_codegen(ws_dir: dagger.Directory, codegen_path: str) -> dagger.
     with tracer.start_as_current_span("run dagger codegen") as span:
         span.set_attribute("codegen.path", codegen_path)
         generated = (
-            dag.directory()
+            core()
+            .directory()
             .with_new_file("dagger.json", dagger_json_contents)
             .as_module_source()
             .generated_context_directory()

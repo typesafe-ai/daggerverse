@@ -1,8 +1,8 @@
 import posixpath
 from typing import Annotated, Self
 
-import dagger
 from dagger import Doc, field, function, object_type
+from dagger_clients.core import Container, Directory
 
 from uv.utils import parse_pyvenv_cfg
 
@@ -28,9 +28,9 @@ class UvVenv:
     an Alpine (musl) base to musl/alpine targets.
     """
 
-    venv: Annotated[dagger.Directory, Doc("The relocatable `.venv` directory.")] = field()
+    venv: Annotated[Directory, Doc("The relocatable `.venv` directory.")] = field()
     python: Annotated[
-        dagger.Directory,
+        Directory,
         Doc("uv's managed-Python store (the interpreter the venv links against, plus uv's version symlinks)."),
     ] = field()
     python_path: Annotated[
@@ -41,7 +41,7 @@ class UvVenv:
     @classmethod
     async def create(
         cls,
-        container: Annotated[dagger.Container, Doc("Container holding the populated venv.")],
+        container: Annotated[Container, Doc("Container holding the populated venv.")],
         venv_path: Annotated[str, Doc("Absolute path to the `.venv` within `container`.")],
     ) -> Self:
         """Build a `UvVenv` from a container holding a populated venv at `venv_path`.
@@ -83,7 +83,7 @@ class UvVenv:
     @function
     async def into(
         self,
-        container: Annotated[dagger.Container, Doc("Container to add the venv and its Python to.")],
+        container: Annotated[Container, Doc("Container to add the venv and its Python to.")],
         path: Annotated[
             str,
             Doc(
@@ -94,7 +94,7 @@ class UvVenv:
             bool,
             Doc("Also set the standard activation env vars (`VIRTUAL_ENV` and a `PATH` with the venv's `bin/` first)."),
         ] = False,
-    ) -> dagger.Container:
+    ) -> Container:
         """Mount the venv (at `path`) and its Python (at `python_path`) into `container`.
 
         With `set_env_vars`, exports `VIRTUAL_ENV` and prepends the venv's `bin/`

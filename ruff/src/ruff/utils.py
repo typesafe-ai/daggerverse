@@ -1,7 +1,7 @@
 import re
 import tomllib
 
-import dagger
+from dagger_clients.core import Directory
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -85,14 +85,14 @@ def minimal_compatible_version(specifier: str) -> str | None:
     return str(feasible[0]) if feasible else None
 
 
-async def _resolve_from_uv_lock(source: dagger.Directory) -> str | None:
+async def _resolve_from_uv_lock(source: Directory) -> str | None:
     if not await source.glob("uv.lock"):
         return None
     content = await source.file("uv.lock").contents()
     return parse_version_from_uv_lock(content)
 
 
-async def _resolve_from_ruff_toml(source: dagger.Directory) -> str | None:
+async def _resolve_from_ruff_toml(source: Directory) -> str | None:
     for name in ("ruff.toml", ".ruff.toml"):
         if not await source.glob(name):
             continue
@@ -103,7 +103,7 @@ async def _resolve_from_ruff_toml(source: dagger.Directory) -> str | None:
     return None
 
 
-async def _resolve_from_pyproject(source: dagger.Directory) -> str | None:
+async def _resolve_from_pyproject(source: Directory) -> str | None:
     if not await source.glob("pyproject.toml"):
         return None
     content = await source.file("pyproject.toml").contents()
@@ -121,7 +121,7 @@ def resolve_specifier(value: str) -> str:
     return minimal_compatible_version(value) or _DEFAULT_VERSION
 
 
-async def resolve_version(source: dagger.Directory) -> str:
+async def resolve_version(source: Directory) -> str:
     for resolver in (
         _resolve_from_uv_lock,
         _resolve_from_ruff_toml,
