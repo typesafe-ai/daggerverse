@@ -7,9 +7,10 @@ from typing import Annotated
 import dagger
 from dagger import Doc, check, field, function, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Container, Directory, File, ReturnType, core
+from dagger_clients.core import Container, Directory, File, ReturnType, Workspace, core
 
 from uv.args import (
+    SOURCE_EXCLUDE,
     AllExtras,
     AllGroups,
     AllPackages,
@@ -44,55 +45,71 @@ from uv.workspace.venv import UvVenv
 class UvWorkspaceSource:
     """A self-contained uv workspace: the source files rooted at a `uv.lock`.
 
-    Carries the source tree and the workspace's path within it (`"."` for a
-    root workspace). From those it derives everything it needs to `audit` the
+    Carries the uv workspace's path (`"."` for a root workspace) and, when the
+    caller passed one, the `source` directory to read instead of the Dagger
+    workspace. From those it derives everything it needs to `audit` the
     locked dependencies or `build` a minimal container for a package — keeping
     the parent `Uv` a thin, container-free entrypoint.
 
-    The full `source` (rather than just the sliced workspace directory) is
-    carried so builds can reach sibling path-dependencies that live *outside*
-    the workspace root (e.g. `../my-dep` in a nested workspace).
+    Each operation takes the Dagger workspace (filled in by Dagger) and pulls
+    only the files it needs: an audit pulls uv.lock, uv.toml and the
+    pyproject.toml files; a build pulls the whole tree (less `SOURCE_EXCLUDE` and gitignored files)
+    so it can reach sibling path-dependencies that live *outside* the uv
+    workspace root (e.g. `../my-dep` in a nested workspace).
 
     Named `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with
     the top-level `Uv` constructor when composed in a parent module.
     """
 
-    source: Annotated[
-        Directory,
-        Doc("Source tree containing the workspace (and any sibling path-dependencies)."),
-    ] = field()
-
     path: Annotated[
         str,
-        Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
+        Doc("uv workspace root path (holding uv.lock/pyproject.toml), relative to the workspace root."),
     ] = field(default=".")
 
-    def _ws_dir(self) -> Directory:
-        """The workspace directory (`uv.lock`/`pyproject.toml` live here)."""
-        return self.source if self.path == "." else self.source.directory(self.path)
+    source: Annotated[
+        Directory | None,
+        Doc("Directory read instead of the Dagger workspace, when the caller passed one."),
+    ] = field(default=None)
 
-    async def _uv_toml(self) -> File | None:
-        """The workspace's `uv.toml`, if one sits alongside its `uv.lock`."""
-        ws = self._ws_dir()
-        if "uv.toml" in await ws.entries():
-            return ws.file("uv.toml")
-        return None
+    def _ws(self, ws: Workspace) -> Workspace:
+        """The workspace to read: `source` when set, otherwise the Dagger workspace."""
+        return self.source.as_workspace() if self.source is not None else ws
 
-    async def _required_version(self) -> str | None:
+    def _file_path(self, name: str) -> str:
+        """Workspace-root path of a file in the uv workspace directory."""
+        return "/" + posixpath.normpath(posixpath.join(self.path, name))
+
+    def _source(self, ws: Workspace) -> Directory:
+        """The whole tree a build may read, less `SOURCE_EXCLUDE` and gitignored files."""
+        return self._ws(ws).directory("/", exclude=SOURCE_EXCLUDE, gitignore=True)
+
+    def _ws_dir(self, ws: Workspace, include: list[str] | None = None) -> Directory:
+        """The uv workspace directory (`uv.lock`/`pyproject.toml` live here)."""
+        return self._ws(ws).directory(self._file_path("."), include=include, exclude=SOURCE_EXCLUDE, gitignore=True)
+
+    async def _optional_file(self, ws: Workspace, name: str) -> File | None:
+        """A file in the uv workspace directory, or None when it doesn't exist."""
+        workspace = self._ws(ws)
+        path = self._file_path(name)
+        if not await workspace.glob(path.lstrip("/")):
+            return None
+        return workspace.file(path)
+
+    async def _required_version(self, ws: Workspace) -> str | None:
         """The `required-version` specifier declared by the workspace, if any.
 
         Prefers `uv.toml` (top-level) over `[tool.uv]` in `pyproject.toml`.
         """
-        uv_toml = await self._uv_toml()
+        uv_toml = await self._optional_file(ws, "uv.toml")
         if uv_toml is not None:
             value = parse_required_version_from_uv_toml(await uv_toml.contents())
             if value is not None:
                 return value
-        pyproject = self._ws_dir().file("pyproject.toml")
+        pyproject = self._ws(ws).file(self._file_path("pyproject.toml"))
         return parse_required_version_from_pyproject(await pyproject.contents())
 
     @function
-    async def uv_version(self) -> str:
+    async def uv_version(self, ws: Workspace) -> str:
         """The uv version this workspace requires, as a concrete image tag.
 
         Reads `required-version` (a PEP 440 specifier) from `uv.toml` or the
@@ -100,23 +117,23 @@ class UvWorkspaceSource:
         resolve to their minimal compatible version (no PyPI lookup). Falls back
         to the default `latest` tag when unspecified.
         """
-        specifier = await self._required_version()
+        specifier = await self._required_version(ws)
         if specifier is None:
             return _DEFAULT_VERSION
         return resolve_specifier(specifier)
 
     @function
-    async def python_version(self) -> str | None:
+    async def python_version(self, ws: Workspace) -> str | None:
         """The Python version pinned by the workspace's `.python-version`, if any.
 
         Returns its contents (e.g. `3.13.7`), or `None` when the file is absent.
         `build` stages this pin so `uv venv`/`uv sync` select the exact interpreter
         instead of resolving `requires-python`.
         """
-        ws = self._ws_dir()
-        if ".python-version" not in await ws.entries():
+        pin = await self._optional_file(ws, ".python-version")
+        if pin is None:
             return None
-        return (await ws.file(".python-version").contents()).strip()
+        return (await pin.contents()).strip()
 
     @staticmethod
     def _member_paths_from(pyproject_data: dict, all_pyprojects: list[str]) -> list[str]:
@@ -133,6 +150,7 @@ class UvWorkspaceSource:
     @function
     async def indices(
         self,
+        ws: Workspace,
         include_from_members: Annotated[
             bool,
             Doc(
@@ -153,10 +171,10 @@ class UvWorkspaceSource:
         (member entries take precedence on name collision).
         """
         tracer = get_tracer()
-        ws = self._ws_dir()
+        ws_dir = self._ws_dir(ws, include=["uv.toml", "**/pyproject.toml"])
 
-        uv_toml = await self._uv_toml()
-        pyproject_data = tomllib.loads(await ws.file("pyproject.toml").contents())
+        uv_toml = await self._optional_file(ws, "uv.toml")
+        pyproject_data = tomllib.loads(await ws_dir.file("pyproject.toml").contents())
 
         with tracer.start_as_current_span("read workspace indices") as ws_span:
             ws_span.set_attribute("workspace.path", self.path)
@@ -170,11 +188,11 @@ class UvWorkspaceSource:
         if not include_from_members:
             return dicts_to_indices(ws_raw)
 
-        member_paths = self._member_paths_from(pyproject_data, await ws.glob("**/pyproject.toml"))
+        member_paths = self._member_paths_from(pyproject_data, await ws_dir.glob("**/pyproject.toml"))
 
         async def _read_member(member_path: str) -> list[dict]:
             with tracer.start_as_current_span(f"read member indices ({member_path})") as m_span:
-                content = await ws.directory(member_path).file("pyproject.toml").contents()
+                content = await ws_dir.directory(member_path).file("pyproject.toml").contents()
                 raw = parse_indices(content)
                 m_span.set_attribute("member.path", member_path)
                 m_span.set_attribute("indices.count", len(raw))
@@ -195,6 +213,7 @@ class UvWorkspaceSource:
     @function
     def package(
         self,
+        ws: Workspace,
         path: Annotated[
             str,
             Doc("Member package path relative to the workspace root."),
@@ -202,7 +221,7 @@ class UvWorkspaceSource:
     ) -> UvPackageSource:
         """A single member package within this workspace."""
         return UvPackageSource(
-            source=self.source,
+            source=self._source(ws),
             workspace_path=self.path,
             package_path=path,
         )
@@ -211,6 +230,7 @@ class UvWorkspaceSource:
     @function
     async def audit(
         self,
+        ws: Workspace,
         uv_version: Annotated[
             str | None,
             Doc(
@@ -234,7 +254,7 @@ class UvWorkspaceSource:
         The image is resolved here: explicit `image` > `image_ref(uv_version)` >
         the version detected from the workspace.
         """
-        resolved = image if image is not None else image_ref(uv_version or await self.uv_version())
+        resolved = image if image is not None else image_ref(uv_version or await self.uv_version(ws))
         ctr = (
             core()
             .container()
@@ -242,7 +262,7 @@ class UvWorkspaceSource:
             # the bare astral image ships uv at /uv (not on PATH); prepending /
             # makes a plain `uv` work for both it and images with uv on PATH.
             .with_env_variable("PATH", "/:${PATH}", expand=True)
-            .with_directory("/work", self._ws_dir(), include=["uv.lock", "uv.toml", "**/pyproject.toml"])
+            .with_directory("/work", self._ws_dir(ws, include=["uv.lock", "uv.toml", "**/pyproject.toml"]))
             .with_workdir("/work")
         )
         try:
@@ -274,7 +294,7 @@ class UvWorkspaceSource:
             span.set_attribute("uv.found", found)
             return found
 
-    async def _default_base_container(self) -> Container:
+    async def _default_base_container(self, ws: Workspace) -> Container:
         """A Debian-based uv image pinned to this workspace's uv version.
 
         Uses the Debian variant rather than the distroless `uv:<version>` image
@@ -283,11 +303,12 @@ class UvWorkspaceSource:
         ca-certificates are already present. Pass an explicit `base_container` to
         build on your own auth/system-package layers.
         """
-        return core().container().from_(debian_image_ref(await self.uv_version())).with_workdir("/work")
+        return core().container().from_(debian_image_ref(await self.uv_version(ws))).with_workdir("/work")
 
     @function
     async def build(
         self,
+        ws: Workspace,
         base_container: Annotated[
             Container | None,
             Doc(
@@ -327,7 +348,7 @@ class UvWorkspaceSource:
             span.set_attribute("build.default_base_container", base_container is None)
 
             plan = await UvSyncPlan.create(
-                source_dir=self.source,
+                source_dir=self._source(ws),
                 workspace_path=self.path,
                 package=package,
                 extra=extra,
@@ -340,7 +361,7 @@ class UvWorkspaceSource:
             span.set_attribute("uv.sync_args", plan.uv_sync_args)
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
 
-            ctr = base_container if base_container is not None else await self._default_base_container()
+            ctr = base_container if base_container is not None else await self._default_base_container(ws)
             cache_dir = await ctr.env_variable("UV_CACHE_DIR")
             if cache_dir:
                 # The base already points uv at a cache dir. Mount the cache volume there
@@ -370,7 +391,7 @@ class UvWorkspaceSource:
                 posixpath.join(ws_ctr_path, "uv.lock"), uv_lock_contents
             )
 
-            python_version = await self.python_version()
+            python_version = await self.python_version(ws)
             if python_version:
                 ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, ".python-version"), python_version)
 
@@ -380,13 +401,14 @@ class UvWorkspaceSource:
             build = UvWorkspaceBuild(container=ctr, plan=plan)
 
             if auto_install_uv and not await self._has_uv(ctr):
-                build = await build.with_uv(await self.uv_version())
+                build = await build.with_uv(await self.uv_version(ws))
 
             return build
 
     @function
     async def install(
         self,
+        ws: Workspace,
         base_container: Annotated[
             Container | None,
             Doc(
@@ -428,6 +450,7 @@ class UvWorkspaceSource:
         `pulumi install` between remote deps and local source), call them individually.
         """
         b = await self.build(
+            ws,
             base_container,
             package=package,
             extra=extra,
@@ -449,6 +472,7 @@ class UvWorkspaceSource:
     @function
     async def venv(
         self,
+        ws: Workspace,
         base_container: Annotated[
             Container | None,
             Doc("Container to build on; defaults to a Debian-based uv image at the workspace's uv version."),
@@ -480,6 +504,7 @@ class UvWorkspaceSource:
         exported venv carries no dependency on the workspace source.
         """
         b = await self.build(
+            ws,
             base_container,
             package=package,
             extra=extra,

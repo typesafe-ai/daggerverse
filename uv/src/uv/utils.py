@@ -46,6 +46,16 @@ def debian_image_ref(version: str) -> str:
     return f"{_DEFAULT_IMAGE}:{version}-debian"
 
 
+def root_relative(cwd: str, path: str) -> str:
+    """A workspace-root-relative path for `path`, which is relative to the workspace `cwd`.
+
+    `Workspace.find_roots` answers relative to the cwd (`.` for the cwd itself,
+    `../x` for a sibling); collection keys are relative to the workspace root so
+    they don't depend on where `dagger` runs.
+    """
+    return posixpath.normpath(posixpath.join(cwd.lstrip("/"), path))
+
+
 def workspace_path(lockfile: str) -> str:
     """Source-relative directory holding the given `uv.lock`."""
     return posixpath.dirname(lockfile) or "."

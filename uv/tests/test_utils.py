@@ -16,6 +16,7 @@ from uv.utils import (
     parse_required_version_from_uv_toml,
     require_package_selection,
     resolve_specifier,
+    root_relative,
     workspace_path,
 )
 from uv.workspace.index import UvIndex, merge_indices
@@ -96,6 +97,23 @@ class TestIsExcluded:
 
     def test_any_of_several(self):
         assert is_excluded("a/b", ["x/*", "a/*"]) is True
+
+
+class TestRootRelative:
+    def test_root_cwd(self):
+        assert root_relative("/", ".") == "."
+
+    def test_root_cwd_child(self):
+        assert root_relative("/", "a/b") == "a/b"
+
+    def test_subdir_cwd(self):
+        assert root_relative("/uv", ".") == "uv"
+
+    def test_subdir_cwd_sibling(self):
+        assert root_relative("/uv", "../deptry") == "deptry"
+
+    def test_subdir_cwd_parent(self):
+        assert root_relative("/uv/tests", "..") == "uv"
 
 
 class TestIsExactVersion:

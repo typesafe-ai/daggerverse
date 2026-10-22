@@ -1,31 +1,24 @@
 from typing import Annotated, TypeAlias
 
-from dagger import DefaultPath, Doc, Ignore
-from dagger_clients.core import Directory
+from dagger import Doc
 
-SourceDir = Annotated[
-    Directory,
-    Doc("Source directory."),
-    DefaultPath("/"),
-    Ignore(
-        [
-            "**/__pycache__",
-            "**/*.pyc",
-            "**/node_modules",
-            "**/.venv",
-            "**/.tox",
-            "**/.nox",
-            "**/.git",
-            "**/.mypy_cache",
-            "**/.pytest_cache",
-            "**/.ruff_cache",
-            "**/.direnv",
-            "**/.devenv",
-            "**/dist",
-            "**/build",
-            "**/*.egg-info",
-        ]
-    ),
+# Never part of a uv build's input: caches, virtualenvs and build output.
+SOURCE_EXCLUDE = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/node_modules",
+    "**/.venv",
+    "**/.tox",
+    "**/.nox",
+    "**/.git",
+    "**/.mypy_cache",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/.direnv",
+    "**/.devenv",
+    "**/dist",
+    "**/build",
+    "**/*.egg-info",
 ]
 
 

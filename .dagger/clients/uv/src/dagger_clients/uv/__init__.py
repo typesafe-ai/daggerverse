@@ -32,6 +32,7 @@ from dagger_clients.core import (  # noqa: E402
     Check,
     Container,
     Directory,
+    Workspace,
 )
 
 _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
@@ -42,12 +43,14 @@ class Uv(_Type):
     """ Entrypoint for the `uv` module.  Hands out `UvWorkspaceSource`
     objects — one per workspace — which expose additional functionality.
     Use `workspace` to grab a single workspace by path or `workspaces` to
-    get them all.  Learn more in the
-    [docs](https://daggerverse.docs.typesafe.ai/uv/).  """
+    get them all.  Reads the Dagger workspace it runs in, pulling only the
+    files each operation needs. Pass `source` to read a directory instead.
+    Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).
+    """
 
     async def exclude(self) -> list[str]:
-        """Glob patterns (source-relative) of workspace paths to leave out of
-        workspaces, e.g. **/tests/_packages/**.
+        """Glob patterns of workspace paths to leave out of workspaces, e.g.
+        **/tests/_packages/**.
 
         Returns
         -------
@@ -96,14 +99,16 @@ class Uv(_Type):
         return await _ctx.execute(str)
 
     def source(self) -> Directory:
-        """Source directory."""
+        """Directory to read instead of the Dagger workspace, e.g. a source tree
+        built in a pipeline.
+        """
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
     def workspace(self, path: str) -> "UvWorkspaceSource":
         """
-        A single uv workspace at `path` within the source tree.
+        A single uv workspace at `path`, relative to the workspace root.
 
         The returned `UvWorkspaceSource` can `audit` its locked dependencies
         or
@@ -123,12 +128,25 @@ class Uv(_Type):
         _ctx = self._select("workspace", _args)
         return UvWorkspaceSource(_ctx)
 
-    def workspaces(self) -> "UvWorkspaces":
+    def workspaces(self, ws: Workspace) -> "UvWorkspaces":
         """
         Every uv workspace in the source tree (one per uv.lock), less those
         matching `exclude`.
+
+        Found by walking the workspace on the host, so no files are loaded to
+        discover them.
+
+        Parameters
+        ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         """
-        _args: list[_Arg] = []
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("Uv.workspaces", "ws", ws, "Workspace")
+        _args = [
+            _Arg("ws", ws),
+        ]
         _ctx = self._select("workspaces", _args)
         return UvWorkspaces(_ctx)
 
@@ -1241,18 +1259,21 @@ class UvWorkspaceBuild(_Type):
 
 class UvWorkspaceSource(_Type):
     """ A self-contained uv workspace: the source files rooted at a
-    `uv.lock`.  Carries the source tree and the workspace's path within it
-    (`"."` for a root workspace). From those it derives everything it
-    needs to `audit` the locked dependencies or `build` a minimal
+    `uv.lock`.  Carries the uv workspace's path (`"."` for a root
+    workspace) and, when the caller passed one, the `source` directory to
+    read instead of the Dagger workspace. From those it derives everything
+    it needs to `audit` the locked dependencies or `build` a minimal
     container for a package — keeping the parent `Uv` a thin, container-
-    free entrypoint.  The full `source` (rather than just the sliced
-    workspace directory) is carried so builds can reach sibling path-
-    dependencies that live *outside* the workspace root (e.g. `../my-dep`
-    in a nested workspace).  Named `UvWorkspaceSource` (not `UvWorkspace`)
-    to avoid colliding with the top-level `Uv` constructor when composed
-    in a parent module.  """
+    free entrypoint.  Each operation takes the Dagger workspace (filled in
+    by Dagger) and pulls only the files it needs: an audit pulls uv.lock,
+    uv.toml and the pyproject.toml files; a build pulls the whole tree
+    (less `SOURCE_EXCLUDE` and gitignored files) so it can reach sibling
+    path-dependencies that live *outside* the uv workspace root (e.g.
+    `../my-dep` in a nested workspace).  Named `UvWorkspaceSource` (not
+    `UvWorkspace`) to avoid colliding with the top-level `Uv` constructor
+    when composed in a parent module.  """
 
-    def audit(self, *, uv_version: str | None = None, image: str | None = None,) -> Check:
+    def audit(self, ws: Workspace, *, uv_version: str | None = None, image: str | None = None,) -> Check:
         """
         Run `uv audit --frozen` on this workspace's locked dependencies.
 
@@ -1269,24 +1290,30 @@ class UvWorkspaceSource(_Type):
 
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         uv_version:
             uv version (image tag) to audit with. Defaults to the version
             detected from the workspace; ignored when `image` is set.
         image:
             Full uv image reference to audit with. Overrides `uv_version`.
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.audit", "ws", ws, "Workspace")
         if not (uv_version is None or isinstance(uv_version, str)):
             raise _type_error("UvWorkspaceSource.audit", "uv_version", uv_version, "str | None")
         if not (image is None or isinstance(image, str)):
             raise _type_error("UvWorkspaceSource.audit", "image", image, "str | None")
         _args = [
+            _Arg("ws", ws),
             _Arg("uvVersion", uv_version, None),
             _Arg("image", image, None),
         ]
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def build(self, ws: Workspace, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
         """
         Prepare a build for this workspace without installing anything yet.
 
@@ -1303,6 +1330,9 @@ class UvWorkspaceSource(_Type):
 
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         base_container:
             Container to build on top of (auth, system packages, etc.).
             Defaults to a Debian-based uv image at the workspace's uv version
@@ -1326,6 +1356,8 @@ class UvWorkspaceSource(_Type):
             Automatically install the uv binary if it is not already on $PATH.
             Set to False if your base_container already ships uv.
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.build", "ws", ws, "Workspace")
         if not (base_container is None or isinstance(base_container, Container)):
             raise _type_error("UvWorkspaceSource.build", "base_container", base_container, "Container | None")
         if not (package is None or (isinstance(package, list) and all(isinstance(_v0, str) for _v0 in package))):
@@ -1345,6 +1377,7 @@ class UvWorkspaceSource(_Type):
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.build", "auto_install_uv", auto_install_uv, "bool")
         _args = [
+            _Arg("ws", ws),
             _Arg("baseContainer", base_container, None),
             _Arg("package", package, None),
             _Arg("extra", extra, None),
@@ -1386,7 +1419,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def indices(self, *, include_from_members: bool = False,) -> list[UvIndex]:
+    async def indices(self, ws: Workspace, *, include_from_members: bool = False,) -> list[UvIndex]:
         """
         The package indices configured for this workspace.
 
@@ -1400,20 +1433,26 @@ class UvWorkspaceSource(_Type):
 
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         include_from_members:
             Merge indices from all workspace members' pyproject.toml files.
             When True, member-level indices are included alongside workspace-
             level indices (member entries win on name collision).
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.indices", "ws", ws, "Workspace")
         if not (isinstance(include_from_members, bool)):
             raise _type_error("UvWorkspaceSource.indices", "include_from_members", include_from_members, "bool")
         _args = [
+            _Arg("ws", ws),
             _Arg("includeFromMembers", include_from_members, False),
         ]
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
+    def install(self, ws: Workspace, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
         """
         Build a minimal container with deps installed for the given
         package(s).
@@ -1426,6 +1465,9 @@ class UvWorkspaceSource(_Type):
 
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         base_container:
             Container to build on (auth, system packages, etc.). Defaults to a
             Debian-based uv image at the workspace's uv version (uv provisions
@@ -1464,6 +1506,8 @@ class UvWorkspaceSource(_Type):
             Automatically install the uv binary if it is not already on $PATH.
             Set to False if your base_container already ships uv.
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.install", "ws", ws, "Workspace")
         if not (base_container is None or isinstance(base_container, Container)):
             raise _type_error("UvWorkspaceSource.install", "base_container", base_container, "Container | None")
         if not (package is None or (isinstance(package, list) and all(isinstance(_v0, str) for _v0 in package))):
@@ -1493,6 +1537,7 @@ class UvWorkspaceSource(_Type):
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.install", "auto_install_uv", auto_install_uv, "bool")
         _args = [
+            _Arg("ws", ws),
             _Arg("baseContainer", base_container, None),
             _Arg("package", package, None),
             _Arg("extra", extra, None),
@@ -1511,26 +1556,32 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("install", _args)
         return Container(_ctx)
 
-    def package(self, path: str) -> UvPackageSource:
+    def package(self, ws: Workspace, path: str) -> UvPackageSource:
         """
         A single member package within this workspace.
 
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         path:
             Member package path relative to the workspace root.
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.package", "ws", ws, "Workspace")
         if not (isinstance(path, str)):
             raise _type_error("UvWorkspaceSource.package", "path", path, "str")
         _args = [
+            _Arg("ws", ws),
             _Arg("path", path),
         ]
         _ctx = self._select("package", _args)
         return UvPackageSource(_ctx)
 
     async def path(self) -> str:
-        """Workspace root path (holding uv.lock/pyproject.toml) within `source`.
-        `.` for a root workspace.
+        """uv workspace root path (holding uv.lock/pyproject.toml), relative to
+        the workspace root.
 
         Returns
         -------
@@ -1550,7 +1601,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
 
-    async def python_version(self) -> str | None:
+    async def python_version(self, ws: Workspace) -> str | None:
         """
         The Python version pinned by the workspace's `.python-version`, if
         any.
@@ -1560,6 +1611,12 @@ class UvWorkspaceSource(_Type):
         `build` stages this pin so `uv venv`/`uv sync` select the exact
         interpreter
         instead of resolving `requires-python`.
+
+        Parameters
+        ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
 
         Returns
         -------
@@ -1575,19 +1632,23 @@ class UvWorkspaceSource(_Type):
         QueryError
             If the API returns an error.
         """
-        _args: list[_Arg] = []
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.python_version", "ws", ws, "Workspace")
+        _args = [
+            _Arg("ws", ws),
+        ]
         _ctx = self._select("pythonVersion", _args)
         return await _ctx.execute(str | None)
 
     def source(self) -> Directory:
-        """Source tree containing the workspace (and any sibling path-
-        dependencies).
+        """Directory read instead of the Dagger workspace, when the caller passed
+        one.
         """
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
-    async def uv_version(self) -> str:
+    async def uv_version(self, ws: Workspace) -> str:
         """
         The uv version this workspace requires, as a concrete image tag.
 
@@ -1597,6 +1658,12 @@ class UvWorkspaceSource(_Type):
         resolve to their minimal compatible version (no PyPI lookup). Falls
         back
         to the default `latest` tag when unspecified.
+
+        Parameters
+        ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
 
         Returns
         -------
@@ -1612,11 +1679,15 @@ class UvWorkspaceSource(_Type):
         QueryError
             If the API returns an error.
         """
-        _args: list[_Arg] = []
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.uv_version", "ws", ws, "Workspace")
+        _args = [
+            _Arg("ws", ws),
+        ]
         _ctx = self._select("uvVersion", _args)
         return await _ctx.execute(str)
 
-    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
+    def venv(self, ws: Workspace, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
         """
         Install into a relocatable venv and export it with the Python it links
         against.
@@ -1632,6 +1703,9 @@ class UvWorkspaceSource(_Type):
 
         Parameters
         ----------
+        ws:
+            A Dagger workspace detected from the current working directory or
+            constructed from a Directory.
         base_container:
             Container to build on; defaults to a Debian-based uv image at the
             workspace's uv version.
@@ -1664,6 +1738,8 @@ class UvWorkspaceSource(_Type):
             Automatically install the uv binary if it is not already on $PATH.
             Set to False if your base_container already ships uv.
         """
+        if not (isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.venv", "ws", ws, "Workspace")
         if not (base_container is None or isinstance(base_container, Container)):
             raise _type_error("UvWorkspaceSource.venv", "base_container", base_container, "Container | None")
         if not (package is None or (isinstance(package, list) and all(isinstance(_v0, str) for _v0 in package))):
@@ -1689,6 +1765,7 @@ class UvWorkspaceSource(_Type):
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.venv", "auto_install_uv", auto_install_uv, "bool")
         _args = [
+            _Arg("ws", ws),
             _Arg("baseContainer", base_container, None),
             _Arg("package", package, None),
             _Arg("extra", extra, None),
@@ -1806,15 +1883,20 @@ def uv(*, source: Directory | None = None, exclude: list[str] | None = None, ses
     Use `workspace` to grab a single workspace by path or `workspaces` to
     get them all.
 
+    Reads the Dagger workspace it runs in, pulling only the files each
+    operation
+    needs. Pass `source` to read a directory instead.
+
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).
 
     Parameters
     ----------
     source:
-        Source directory.
+        Directory to read instead of the Dagger workspace, e.g. a source
+        tree built in a pipeline.
     exclude:
-        Glob patterns (source-relative) of workspace paths to leave out of
-        workspaces, e.g. **/tests/_packages/**.
+        Glob patterns of workspace paths to leave out of workspaces, e.g.
+        **/tests/_packages/**.
     """
     if not (source is None or isinstance(source, Directory)):
         raise _type_error("uv", "source", source, "Directory | None")
