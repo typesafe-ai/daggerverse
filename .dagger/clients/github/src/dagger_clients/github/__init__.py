@@ -152,10 +152,9 @@ class GithubStatusMonitor(_Type):
         """
         Wait for every Dagger check in the current workspace to succeed.
 
-        The expected status set is enumerated via
-        `core().current_workspace().checks()` — Dagger check names are assumed
-        to match the GitHub status `context` strings published by Dagger
-        Cloud.
+        The expected status set is the workspace's check paths: Dagger Cloud
+        publishes one GitHub status per path (a collection's check is one
+        path, not one per item), with the path as the status `context`.
 
         Parameters
         ----------

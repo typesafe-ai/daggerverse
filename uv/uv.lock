@@ -697,10 +697,8 @@ name = "uv"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "anyio" },
     { name = "dagger-clients-core" },
     { name = "dagger-io" },
-    { name = "opentelemetry-api" },
     { name = "packaging" },
 ]
 
@@ -715,10 +713,8 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anyio" },
     { name = "dagger-clients-core", editable = "clients/core" },
     { name = "dagger-io", editable = "sdk" },
-    { name = "opentelemetry-api" },
     { name = "packaging" },
 ]
 

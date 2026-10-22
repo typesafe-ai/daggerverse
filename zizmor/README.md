@@ -4,15 +4,15 @@ Dagger module for [zizmor](https://github.com/zizmorcore/zizmor) — static anal
 
 ## Installation
 
-Install as a [toolchain](https://docs.dagger.io/core-concepts/checks#checks-from-toolchains) to add `zizmor:lint` to `dagger check`:
+Install into your workspace to add `zizmor:lint` to `dagger check`:
 
 ```sh
-dagger toolchain install github.com/typesafe-ai/daggerverse/zizmor
+dagger install github.com/typesafe-ai/daggerverse/zizmor
 ```
 
 ## Usage
 
-Lint workflows (defaults to `.github` in the current directory):
+Lint workflows (defaults to `.github` at the workspace root):
 
 ```sh
 dagger check zizmor

@@ -37,17 +37,17 @@ On top of that it can:
 
 ## Installation
 
-Add it as a dependency of your own Dagger module:
+Install it into your workspace, which makes its checks (one `audit` per uv workspace)
+available to `dagger check`:
 
 ```console
 $ dagger install github.com/typesafe-ai/daggerverse/uv
 ```
 
-Or install it as a toolchain, which makes its checks (such as `uv:audit`) available
-directly:
+Or add it as a client of your own Dagger module:
 
 ```console
-$ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
+$ dagger module client add github.com/typesafe-ai/daggerverse/uv
 ```
 
 ## Quickstart
@@ -57,33 +57,29 @@ $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
     Build a minimal container with a package and its local dependencies installed:
 
     ```console
-    $ dagger call uv workspace install --package my-app
+    $ dagger call uv workspace --path . install --package my-app
     ```
 
-    Audit every workspace in the current directory:
+    Audit every workspace in the source tree:
 
     ```console
-    $ dagger check uv:audit
+    $ dagger check --uv
     ```
 
 === "Python SDK"
 
     ```python
-    from dagger import dag
+    from dagger_clients.uv import uv
 
     # Build a minimal container with a package and its local dependencies installed.
-    ctr = dag.uv(source=src).workspace().install(package=["my-app"])
-
-    # Audit every workspace's locked dependencies.
-    await dag.uv(source=src).audit()
+    ctr = uv(source=src).workspace(".").install(package=["my-app"])
     ```
 
 ??? abstract "The mental model"
 
     ```mermaid
     graph LR
-      Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / get_workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
-      WS -->|audit| A["Audit"]
+      Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
       WS -->|build| B["UvWorkspaceBuild<br/><i>(container + sync plan)</i>"]
       WS -->|install| C1["Container"]
       B -->|with_local_dependencies / copy_venv| C2["Container"]
@@ -91,10 +87,9 @@ $ dagger toolchain install github.com/typesafe-ai/daggerverse/uv
     ```
 
     - **`Uv`** holds only your source directory. Ask it for a single workspace by path
-      (`workspace`) or for every workspace it can find (`get_workspaces`), and run the
-      aggregate `audit` check across all of them.
+      (`workspace`) or for the collection of every workspace it can find (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it, `build` a container step by step, or
+      you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
       `install` everything in one call.
     - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
       plan. It exposes the individual pipeline steps so you can splice your own work in

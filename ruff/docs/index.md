@@ -16,7 +16,7 @@ It exposes two sub-objects — a **checker** (`ruff check`) and a **formatter**
 ## Installation
 
 ```console
-$ dagger toolchain install github.com/typesafe-ai/daggerverse/ruff
+$ dagger install github.com/typesafe-ai/daggerverse/ruff
 ```
 
 ## Usage

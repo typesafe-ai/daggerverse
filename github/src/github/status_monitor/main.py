@@ -5,11 +5,12 @@ Two entry points:
 * :meth:`GithubStatusMonitor.wait_for_statuses` — explicit list of status
   contexts and/or check-run names; general-purpose for any GitHub check.
 * :meth:`GithubStatusMonitor.wait_for_dagger_checks` — auto-discovers expected
-  contexts from `core().current_workspace().checks()`; specific to Dagger
-  Cloud checks that publish their state as GitHub Statuses.
+  contexts from the current workspace's checks; specific to Dagger Cloud
+  checks that publish their state as GitHub Statuses.
 """
 
 from typing import Annotated
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 from dagger import Doc, field, function, object_type
@@ -35,6 +36,12 @@ from github.status_monitor.params import (
 )
 from github.status_monitor.types import Step
 from github.status_monitor.watcher import Watcher
+
+
+def check_path(uri: str) -> str:
+    """The check path in a check link, e.g. `uv/workspaces/audit` in
+    `dag://?check=uv/workspaces/audit`."""
+    return parse_qs(urlsplit(uri).query)["check"][0]
 
 
 @object_type
@@ -93,12 +100,12 @@ class GithubStatusMonitor:
     ) -> str:
         """Wait for every Dagger check in the current workspace to succeed.
 
-        The expected status set is enumerated via
-        `core().current_workspace().checks()` — Dagger check names are assumed
-        to match the GitHub status `context` strings published by Dagger Cloud.
+        The expected status set is the workspace's check paths: Dagger Cloud
+        publishes one GitHub status per path (a collection's check is one
+        path, not one per item), with the path as the status `context`.
         """
-        discovered = await core().current_workspace().checks().list_()
-        expected = sorted({await c.name() for c in discovered})
+        paths = await core().current_workspace().artifacts().filter_types(["Check"]).path_definitions()
+        expected = sorted({check_path(await path.uri()) for path in paths})
         return await self._wait(
             repo=repo,
             ref=ref,

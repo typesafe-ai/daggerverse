@@ -722,7 +722,7 @@ class UvSyncPlan(_Type):
         return await _ctx.execute(bool)
 
     def source_dir(self) -> Directory:
-        """Full source directory (with codegen overlay if applicable)"""
+        """Full source directory"""
         _args: list[_Arg] = []
         _ctx = self._select("sourceDir", _args)
         return Directory(_ctx)
@@ -770,7 +770,7 @@ class UvSyncPlan(_Type):
         return await _ctx.execute(str)
 
     def ws_dir(self) -> Directory:
-        """Resolved workspace directory (with codegen overlay if applicable)"""
+        """Resolved workspace directory"""
         _args: list[_Arg] = []
         _ctx = self._select("wsDir", _args)
         return Directory(_ctx)
@@ -1286,7 +1286,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, dagger_codegen: bool = True, no_editable: bool = False, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
         """
         Prepare a build for this workspace without installing anything yet.
 
@@ -1316,10 +1316,6 @@ class UvWorkspaceSource(_Type):
             Install every dependency group; maps to `uv sync --all-groups`
         all_packages:
             Install every workspace member; maps to `uv sync --all-packages`
-        dagger_codegen:
-            If True (default), and the package being built has a
-            `dagger.json`, run Dagger codegen and overlay the generated SDK
-            before `uv sync`. No-op for non-Dagger projects.
         no_editable:
             Install local/workspace packages non-editable (`uv sync --no-
             editable`), baking their source into site-packages instead of
@@ -1344,8 +1340,6 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.build", "all_groups", all_groups, "bool")
         if not (isinstance(all_packages, bool)):
             raise _type_error("UvWorkspaceSource.build", "all_packages", all_packages, "bool")
-        if not (isinstance(dagger_codegen, bool)):
-            raise _type_error("UvWorkspaceSource.build", "dagger_codegen", dagger_codegen, "bool")
         if not (isinstance(no_editable, bool)):
             raise _type_error("UvWorkspaceSource.build", "no_editable", no_editable, "bool")
         if not (isinstance(auto_install_uv, bool)):
@@ -1358,7 +1352,6 @@ class UvWorkspaceSource(_Type):
             _Arg("allExtras", all_extras, False),
             _Arg("allGroups", all_groups, False),
             _Arg("allPackages", all_packages, False),
-            _Arg("daggerCodegen", dagger_codegen, True),
             _Arg("noEditable", no_editable, False),
             _Arg("autoInstallUv", auto_install_uv, True),
         ]
@@ -1420,7 +1413,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, dagger_codegen: bool = True, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
+    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
         """
         Build a minimal container with deps installed for the given
         package(s).
@@ -1446,10 +1439,6 @@ class UvWorkspaceSource(_Type):
             Install every dependency group; maps to `uv sync --all-groups`
         all_packages:
             Install every workspace member; maps to `uv sync --all-packages`
-        dagger_codegen:
-            If True (default), and the package being built has a
-            `dagger.json`, run Dagger codegen and overlay the generated SDK
-            before `uv sync`. No-op for non-Dagger projects.
         no_editable:
             Install local/workspace packages non-editable (`uv sync --no-
             editable`), baking their source into site-packages instead of
@@ -1489,8 +1478,6 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.install", "all_groups", all_groups, "bool")
         if not (isinstance(all_packages, bool)):
             raise _type_error("UvWorkspaceSource.install", "all_packages", all_packages, "bool")
-        if not (isinstance(dagger_codegen, bool)):
-            raise _type_error("UvWorkspaceSource.install", "dagger_codegen", dagger_codegen, "bool")
         if not (isinstance(no_editable, bool)):
             raise _type_error("UvWorkspaceSource.install", "no_editable", no_editable, "bool")
         if not (isinstance(prune_cache, bool)):
@@ -1513,7 +1500,6 @@ class UvWorkspaceSource(_Type):
             _Arg("allExtras", all_extras, False),
             _Arg("allGroups", all_groups, False),
             _Arg("allPackages", all_packages, False),
-            _Arg("daggerCodegen", dagger_codegen, True),
             _Arg("noEditable", no_editable, False),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
@@ -1630,7 +1616,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("uvVersion", _args)
         return await _ctx.execute(str)
 
-    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, dagger_codegen: bool = True, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
+    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
         """
         Install into a relocatable venv and export it with the Python it links
         against.
@@ -1658,10 +1644,6 @@ class UvWorkspaceSource(_Type):
             Install every dependency group; maps to `uv sync --all-groups`
         all_packages:
             Install every workspace member; maps to `uv sync --all-packages`
-        dagger_codegen:
-            If True (default), and the package being built has a
-            `dagger.json`, run Dagger codegen and overlay the generated SDK
-            before `uv sync`. No-op for non-Dagger projects.
         no_editable:
             Install local/workspace packages non-editable (`uv sync --no-
             editable`), baking their source into site-packages instead of
@@ -1696,8 +1678,6 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.venv", "all_groups", all_groups, "bool")
         if not (isinstance(all_packages, bool)):
             raise _type_error("UvWorkspaceSource.venv", "all_packages", all_packages, "bool")
-        if not (isinstance(dagger_codegen, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "dagger_codegen", dagger_codegen, "bool")
         if not (isinstance(no_editable, bool)):
             raise _type_error("UvWorkspaceSource.venv", "no_editable", no_editable, "bool")
         if not (isinstance(prune_cache, bool)):
@@ -1716,7 +1696,6 @@ class UvWorkspaceSource(_Type):
             _Arg("allExtras", all_extras, False),
             _Arg("allGroups", all_groups, False),
             _Arg("allPackages", all_packages, False),
-            _Arg("daggerCodegen", dagger_codegen, True),
             _Arg("noEditable", no_editable, False),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),

@@ -10,27 +10,47 @@ A [Dagger](https://dagger.io) module for linting Python dependency issues with
 [deptry](https://deptry.com) — it finds unused, missing, misplaced, and
 transitive dependencies.
 
-This check runs `deptry` for each `pyproject.toml` discovered in the source tree, in parallel.
+`projects` is a [collection](https://docs.dagger.io/reference/sdks/python/#collections)
+of the Python projects in the source tree, keyed by path. `check` runs `deptry` on
+each one, so every project is its own check.
 
 ## Installation
 
 ```console
-$ dagger toolchain install github.com/typesafe-ai/daggerverse/deptry
+$ dagger install github.com/typesafe-ai/daggerverse/deptry
 ```
 
 ## Usage
 
-Run the check over the current source tree:
+Run the checks over the current source tree:
 
 ```console
-$ dagger check deptry
+$ dagger check --deptry
 ```
 
-the check runs `deptry` over projects that either:
+A project is in `projects` when its `pyproject.toml` declares dependencies and it
+either:
 
-- have a `src/` layout matching `[project].name`
-- have a directory matching `[project].name`
-- declare a `[tool.deptry]` section in their `pyproject.toml`
+- has a `src/` layout matching `[project].name`
+- has a directory matching `[project].name`
+- declares a `[tool.deptry]` section in its `pyproject.toml`
+
+Check a single project by its path (see
+[Select collection items](https://docs.dagger.io/using/checking/#select-collection-items)):
+
+```console
+$ dagger check --deptry --deptry-project=services/api
+```
+
+### Skipping projects
+
+The `exclude` setting takes glob patterns, matched against each project's
+source-relative path, and leaves matching projects out of `projects`:
+
+```toml title="dagger.toml"
+[modules.deptry.settings]
+exclude = ["**/tests/_packages/**"]
+```
 
 ## Where to go next
 

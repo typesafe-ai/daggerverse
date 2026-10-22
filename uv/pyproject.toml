@@ -2,7 +2,7 @@
 name = "uv"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io", "anyio", "opentelemetry-api", "packaging", "dagger-clients-core"]
+dependencies = ["dagger-io", "packaging", "dagger-clients-core"]
 
 [build-system]
 requires = ["uv_build>=0.8.4,<0.9.0"]
@@ -13,13 +13,11 @@ dagger-io = { workspace = true }
 dagger-clients-core = { workspace = true }
 
 # Map distributions to the import packages they ship, so deptry doesn't flag
-# those imports as missing/unused: `dagger-io` ships `dagger`, the
-# generated `dagger-clients-*` distributions ship the `dagger_clients`
-# namespace, and `opentelemetry-api` ships the `opentelemetry` namespace.
+# those imports as missing/unused: `dagger-io` ships `dagger`, and the
+# generated `dagger-clients-*` distributions ship the `dagger_clients` namespace.
 [tool.deptry.package_module_name_map]
 dagger-io = "dagger"
 dagger-clients-core = "dagger_clients"
-opentelemetry-api = "opentelemetry"
 
 [dependency-groups]
 dev = [

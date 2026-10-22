@@ -6,61 +6,52 @@ description: Audit the locked dependencies of every uv workspace in a source tre
 
 # Auditing dependencies
 
-`audit` runs `uv audit --frozen` against your locked dependencies and reports known
-vulnerabilities, for all `uv.lock` files found in the source tree, in parallel.
+`audit` runs `uv audit --frozen` against a workspace's `uv.lock` and reports known
+vulnerabilities. It reads the lockfile as committed, without re-resolving against
+package indexes, so it needs no index credentials.
 
 ## Auditing a whole source tree
 
-The top-level `audit` is a **check**: it discovers every workspace in your source
-(one per `uv.lock`) and audits them all in parallel. It exits non-zero if any
-workspace has a finding, and each workspace's report shows up as its own node in the
-Dagger trace, so a failure points you straight at the offending lockfile.
+`workspaces` is a [collection](https://docs.dagger.io/reference/sdks/python/#collections)
+with one item per `uv.lock` in the source tree, keyed by the workspace's path.
 
-=== "CLI"
+Install the module into your workspace, then run its checks:
 
-    Installing the module as a toolchain surfaces the check as `uv:audit`, so you run it
-    directly alongside your other Dagger checks:
+```console
+$ dagger install github.com/typesafe-ai/daggerverse/uv
+$ dagger check --uv
+```
 
-    ```console
-    $ dagger check uv:audit
-    ```
+List the workspaces it found:
 
-=== "Python SDK"
-
-    ```python
-    await dag.uv(source=src).audit()
-    ```
+```console
+$ dagger check -l -a --uv
+```
 
 ### Skipping workspaces
 
-Test fixtures and intentionally-vulnerable sample projects shouldn't fail your build.
-Pass glob patterns (matched against each workspace's source-relative path) to exclude
-them:
+Test fixtures and intentionally vulnerable sample projects shouldn't fail your build.
+The `exclude` setting takes glob patterns, matched against each workspace's
+source-relative path, and leaves matching workspaces out of `workspaces`:
 
-=== "CLI"
-
-    ```console
-    $ dagger call uv audit --exclude '**/tests/_packages/**'
-    ```
-
-=== "Python SDK"
-
-    ```python
-    await dag.uv(source=src).audit(exclude=["**/tests/_packages/**"])
-    ```
+```toml title="dagger.toml"
+[modules.uv.settings]
+exclude = ["**/tests/_packages/**"]
+```
 
 ## Auditing a single workspace
 
-To audit a specific workspace, specify it by path:
+Select one workspace by its path (see
+[Select collection items](https://docs.dagger.io/using/checking/#select-collection-items)):
 
 === "CLI"
 
     ```console
-    $ dagger call uv workspace --path services/api audit run
+    $ dagger check --uv --uv-workspace-source=services/api
     ```
 
 === "Python SDK"
 
     ```python
-    await dag.uv(source=src).workspace(path="services/api").audit().run()
+    await uv(source=src).workspace("services/api").audit().pass_()
     ```

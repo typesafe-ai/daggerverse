@@ -4,10 +4,9 @@ from collections.abc import Awaitable
 from typing import Annotated
 
 import anyio
-import dagger
 from dagger import DefaultPath, Doc, check, field, function, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Changeset, Container, Directory, Secret, Service, core
+from dagger_clients.core import Changeset, Check, Container, Directory, Secret, Service, core
 from dagger_clients.deptry import DeptryProjects, deptry
 from dagger_clients.github import github
 from dagger_clients.ruff import ruff
@@ -34,6 +33,19 @@ def _with_pytest_otel(ctr: Container) -> Container:
     return ctr.with_directory("/opt/pytest_otel", _pytest_otel_source()).with_exec(
         ["uv", "pip", "install", "/opt/pytest_otel"]
     )
+
+
+class CheckFailedError(Exception):
+    """A dependency's check ran and failed."""
+
+
+async def _run_check(check: Check) -> None:
+    """Run a check returned by a dependency's client, raising when it fails.
+
+    A check called through a client comes back unrun; reading `pass_` runs it.
+    """
+    if not await check.pass_():
+        raise CheckFailedError(await check.error().message())
 
 
 def _base() -> Container:
@@ -99,9 +111,8 @@ class TypesafeDaggerverse:
     def _uv_self(self) -> UvWorkspaceSource:
         """The uv module built against its own source.
 
-        uv is itself a Dagger module — `install()` detects the
-        `dagger.json` and runs codegen so `sdk/` is materialized
-        before `uv sync`.
+        uv is itself a Dagger module; its generated `sdk/` is committed and is
+        a uv workspace member like any other.
         """
         return uv(source=self.source.directory("uv")).workspace(".")
 
@@ -162,7 +173,7 @@ class TypesafeDaggerverse:
         build path as the modules, just nothing to import.
         """
         src = self.source.directory(_LANDING_PROJECT)
-        ctr = await uv(source=src).workspace(".").install(base_container=_base(), group=["docs"], dagger_codegen=False)
+        ctr = await uv(source=src).workspace(".").install(base_container=_base(), group=["docs"])
         return await self._zensical_site(ctr, src)
 
     @function
@@ -240,7 +251,7 @@ class TypesafeDaggerverse:
     async def _uv_audit_all(workspaces: UvWorkspaces) -> None:
         """Audit every workspace in the collection, as `dagger check` does."""
         for workspace in await workspaces.list_():
-            await workspace.audit()
+            await _run_check(workspace.audit())
 
     @check
     @function
@@ -361,7 +372,7 @@ class TypesafeDaggerverse:
         src = self.source.directory("uv/tests/_packages/vulnerable")
         try:
             await self._uv_audit_all(uv(source=src).workspaces())
-        except dagger.DaggerError:
+        except CheckFailedError:
             return
         raise AssertionError("expected uv audit to fail for the vulnerable fixture")
 
@@ -500,7 +511,7 @@ class TypesafeDaggerverse:
                 await (
                     uv(source=source)
                     .workspace(".")
-                    .build(package=package, no_editable=no_editable, dagger_codegen=False)
+                    .build(package=package, no_editable=no_editable)
                     .with_remote_dependencies(prune_cache=False)
                     .with_workspace_files()
                     .with_local_dependencies()
@@ -511,7 +522,7 @@ class TypesafeDaggerverse:
         await (
             uv(source=source)
             .workspace(".")
-            .build(package=["flat-dist"], dagger_codegen=False)
+            .build(package=["flat-dist"])
             .with_all_workspace_members()
             .container()
             .with_exec(["uv", "sync", "--frozen", "--all-packages"])
@@ -581,7 +592,7 @@ class TypesafeDaggerverse:
             ctr = (
                 uv(source=source.with_new_file("pyproject.toml", metadata))
                 .workspace(".")
-                .build(dagger_codegen=False)
+                .build()
                 .with_workspace_files()
                 .container()
             )
@@ -860,7 +871,7 @@ print("LAYER_CACHE_OK")
                 contents="x = 1\ny = [1, 2, 3]\n",
             )
         )
-        await ruff().check().lint(source=clean)
+        await _run_check(ruff().check().lint(source=clean))
 
     @function
     async def ruff_format_lint_clean(self) -> None:
@@ -873,7 +884,7 @@ print("LAYER_CACHE_OK")
                 contents="x = 1\ny = [1, 2, 3]\n",
             )
         )
-        await ruff().format().lint(source=clean)
+        await _run_check(ruff().format().lint(source=clean))
 
     @function
     async def uv_workspace_build_partial_workspace(self) -> None:
@@ -917,7 +928,7 @@ print("LAYER_CACHE_OK")
     async def _deptry_check_all(projects: DeptryProjects) -> None:
         """Run deptry on every project in the collection, as `dagger check` does."""
         for project in await projects.list_():
-            await project.check()
+            await _run_check(project.check())
 
     @check
     @function
@@ -990,7 +1001,7 @@ print("LAYER_CACHE_OK")
         )
         try:
             await self._deptry_check_all(deptry(source=src).projects())
-        except dagger.DaggerError:
+        except CheckFailedError:
             return
         raise AssertionError("expected deptry to fail for an unused dependency")
 
@@ -1038,7 +1049,7 @@ print("LAYER_CACHE_OK")
         )
         try:
             await self._deptry_check_all(deptry(source=src).projects())
-        except dagger.DaggerError:
+        except CheckFailedError:
             return
         raise AssertionError("expected deptry to check a [tool.deptry]-configured project and fail")
 

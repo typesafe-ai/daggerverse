@@ -20,8 +20,8 @@ so the subsequent `uv sync` populates that relocatable environment:
 
 ```python
 b = (
-    dag.uv(source=src)
-    .workspace()
+    uv(source=src)
+    .workspace(".")
     .build(package=["my-app"], no_editable=True)
     .with_venv(relocatable=True)  # uv venv --relocatable
     .with_remote_dependencies()  # sync installs into the relocatable venv
@@ -41,7 +41,7 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger call uv workspace build --package my-app --no-editable \
+    $ dagger call uv workspace --path . build --package my-app --no-editable \
         with-venv --relocatable \
         with-remote-dependencies \
         copy-venv --container alpine --set-env-vars
@@ -51,12 +51,12 @@ paths the venv expects:
 
     ```python
     runner = (
-        dag.uv(source=src)
-        .workspace()
+        uv(source=src)
+        .workspace(".")
         .build(package=["my-app"], no_editable=True)
         .with_venv(relocatable=True)
         .with_remote_dependencies()
-        .copy_venv(dag.container().from_("debian:bookworm-slim"), set_env_vars=True)
+        .copy_venv(core().container().from_("debian:bookworm-slim"), set_env_vars=True)
     )
     ```
 

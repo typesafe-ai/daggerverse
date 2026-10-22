@@ -23,8 +23,7 @@ context yourself.
 
     ```mermaid
     graph LR
-      Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / get_workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
-      WS -->|audit| A["Audit"]
+      Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
       WS -->|build| B["UvWorkspaceBuild<br/><i>(container + sync plan)</i>"]
       WS -->|install| C1["Container"]
       B -->|with_local_dependencies / copy_venv| C2["Container"]
@@ -32,10 +31,9 @@ context yourself.
     ```
 
     - **`Uv`** holds only your source directory. Ask it for a single workspace by path
-      (`workspace`) or for every workspace it can find (`get_workspaces`), and run the
-      aggregate `audit` check across all of them.
+      (`workspace`) or for the collection of every workspace it can find (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it, `build` a container step by step, or
+      you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
       `install` everything in one call.
     - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
       plan. It exposes the individual pipeline steps so you can splice your own work in
@@ -52,21 +50,21 @@ context yourself.
 === "CLI"
 
     ```console
-    $ dagger call uv workspace install
+    $ dagger call uv workspace --path . install
     ```
 
 === "Python SDK"
 
     ```python
-    ctr = dag.uv(source=src).workspace().install()
+    ctr = uv(source=src).workspace(".").install()
     ```
 
 Under the hood this is equivalent to:
 
 ```python
 ctr = (
-    dag.uv(source=src)
-    .workspace()
+    uv(source=src)
+    .workspace(".")
     .build()
     .with_remote_dependencies()  # uv sync --no-install-local
     .with_workspace_files()  # scaffold local package stubs
@@ -177,7 +175,7 @@ installing anything and hands back a `UvWorkspaceBuild`; you then call the steps
 order:
 
 ```python
-b = dag.uv(source=src).workspace().build(package=["my-app"])
+b = uv(source=src).workspace(".").build(package=["my-app"])
 b = b.with_remote_dependencies()  # uv sync --no-install-local
 # ... run your own step here, e.g. `pulumi install` ...
 b = b.with_workspace_files()  # scaffold local package stubs
@@ -187,10 +185,3 @@ ctr = b.with_local_dependencies()  # editable-install from stubs, then copy real
 Each step returns a new `UvWorkspaceBuild` (or, at the end, a `Container`), so the
 chain reads top to bottom. You can also swap in a different container mid-pipeline
 (for instance after installing OS packages) and keep the same resolved plan.
-
-## Dagger modules as dependencies
-
-If a package you're building is itself a Dagger module (it has a `dagger.json`), the
-module runs Dagger codegen and overlays the generated SDK before installing, so the
-generated `dagger-io` package is present even when the SDK directory is gitignored in
-CI. This is on by default and is a no-op for non-Dagger projects.

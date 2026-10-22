@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from github.status_monitor.api import _check_run_state, fetch_check_runs_snapshot
+from github.status_monitor.main import check_path
 from github.status_monitor.types import Status
 
 # ---- _check_run_state mapping ----
@@ -88,3 +89,18 @@ def test_fetch_check_runs_snapshot_keeps_first_per_name():
     client = FakeClient([page])
     result = asyncio.run(fetch_check_runs_snapshot(client, "https://api.github.com/test"))
     assert result == {"a": Status(state="success")}
+
+
+# ---- check_path ----
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("dag://?check=docs", "docs"),
+        ("dag://?check=uv/workspaces/audit", "uv/workspaces/audit"),
+        ("dag://?check=audit&uv-workspace-source=uv", "audit"),
+    ],
+)
+def test_check_path(uri, expected):
+    assert check_path(uri) == expected

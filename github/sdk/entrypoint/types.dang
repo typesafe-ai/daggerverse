@@ -7,7 +7,7 @@ type ModuleTypes {
         .withField("github_api", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Base URL of the GitHub REST API.")
         .withFunction(
           function("wait_for_dagger_checks", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("Wait for every Dagger check in the current workspace to succeed.\n\nThe expected status set is enumerated via\n`core().current_workspace().checks()` — Dagger check names are assumed\nto match the GitHub status `context` strings published by Dagger Cloud.")
+            .withDescription("Wait for every Dagger check in the current workspace to succeed.\n\nThe expected status set is the workspace's check paths: Dagger Cloud\npublishes one GitHub status per path (a collection's check is one\npath, not one per item), with the path as the status `context`.")
             .withCachePolicy(FunctionCachePolicy.Never)
             .withArg("repo", typeDef.withKind(TypeDefKind.STRING_KIND), description: "GitHub repo as 'owner/name'")
             .withArg("ref", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Commit SHA to poll")

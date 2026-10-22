@@ -13,7 +13,6 @@ from uv.args import (
     AllExtras,
     AllGroups,
     AllPackages,
-    DaggerCodegen,
     Extra,
     Group,
     LockTimeout,
@@ -302,7 +301,6 @@ class UvWorkspaceSource:
         all_extras: AllExtras = False,
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
-        dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
         auto_install_uv: Annotated[
             bool,
@@ -337,7 +335,6 @@ class UvWorkspaceSource:
                 all_extras=all_extras,
                 all_groups=all_groups,
                 all_packages=all_packages,
-                dagger_codegen=dagger_codegen,
                 no_editable=no_editable,
             )
             span.set_attribute("uv.sync_args", plan.uv_sync_args)
@@ -403,7 +400,6 @@ class UvWorkspaceSource:
         all_extras: AllExtras = False,
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
-        dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
@@ -439,7 +435,6 @@ class UvWorkspaceSource:
             all_extras=all_extras,
             all_groups=all_groups,
             all_packages=all_packages,
-            dagger_codegen=dagger_codegen,
             no_editable=no_editable,
             auto_install_uv=auto_install_uv,
         )
@@ -464,7 +459,6 @@ class UvWorkspaceSource:
         all_extras: AllExtras = False,
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
-        dagger_codegen: DaggerCodegen = True,
         no_editable: NoEditable = False,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
@@ -493,7 +487,6 @@ class UvWorkspaceSource:
             all_extras=all_extras,
             all_groups=all_groups,
             all_packages=all_packages,
-            dagger_codegen=dagger_codegen,
             no_editable=no_editable,
             auto_install_uv=auto_install_uv,
         )

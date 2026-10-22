@@ -4,18 +4,18 @@ Dagger module for [deptry](https://github.com/fpgmaas/deptry) — a linter for P
 
 ## Installation
 
-Install as a [toolchain](https://docs.dagger.io/core-concepts/checks#checks-from-toolchains) to add `deptry:check` to `dagger check`:
+Install into your workspace to add one `check` per Python project to `dagger check`:
 
 ```sh
-dagger toolchain install github.com/typesafe-ai/daggerverse/deptry
+dagger install github.com/typesafe-ai/daggerverse/deptry
 ```
 
 ## Usage
 
-Check the current project:
+Check every project in the workspace:
 
 ```sh
-dagger check deptry
+dagger check --deptry
 ```
 
 Learn more in [docs](https://daggerverse.docs.typesafe.ai/deptry).
