@@ -12,6 +12,7 @@ $ dagger install github.com/typesafe-ai/daggerverse/github
 $ dagger install github.com/typesafe-ai/daggerverse/twingate
 $ dagger install github.com/typesafe-ai/daggerverse/zizmor
 $ dagger install github.com/typesafe-ai/daggerverse/deptry
+$ dagger install github.com/typesafe-ai/daggerverse/k3s
 ```
 
 ## Modules
@@ -25,3 +26,4 @@ $ dagger install github.com/typesafe-ai/daggerverse/deptry
 | [`twingate`](./twingate) | Twingate HTTP CONNECT proxy as a Dagger service. Runs the client in userspace networking mode (`--tun off`) so no root or `NET_ADMIN` is required. Authenticate with a service key, then bind the proxy to any container via `bind_proxy`. |
 | [`zizmor`](./zizmor) | Static analysis of GitHub Actions for security issues using [zizmor](https://github.com/woodruffw/zizmor). Detects template injection, credential leaks, excessive permissions, and more. Runs offline by default; pass a GitHub token for online audits. |
 | [`deptry`](./deptry) | Find unused, missing, misplaced, and transitive Python dependencies with [deptry](https://deptry.com). Each Python project (`pyproject.toml`) in the source tree is its own check, and the checks run in parallel. |
+| [`k3s`](./k3s) | Run an isolated K3s Kubernetes API as a Dagger service and return its kubeconfig. |

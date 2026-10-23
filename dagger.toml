@@ -58,3 +58,14 @@ source = "pyproject"
 [sdks.python.scopes.pyproject]
 is-module = true
 name = "pyproject"
+
+[sdks.python.scopes.k3s]
+is-module = true
+name = "k3s"
+
+[sdks.python.scopes.k3s.settings]
+pythonVersion = "3.13"
+template = "empty"
+
+[modules.k3s]
+source = "k3s"

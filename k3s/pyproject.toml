@@ -1,0 +1,21 @@
+[build-system]
+build-backend = 'uv_build'
+requires = ['uv_build>=0.8.4,<0.14.0']
+
+[project]
+dependencies = ['dagger-io', 'dagger-clients-core']
+name = 'k3s'
+requires-python = '>=3.13'
+version = '0.1.0'
+
+[tool]
+[tool.uv]
+[tool.uv.sources]
+[tool.uv.sources.dagger-clients-core]
+workspace = true
+
+[tool.uv.sources.dagger-io]
+workspace = true
+
+[tool.uv.workspace]
+members = ['sdk', 'clients/core']
