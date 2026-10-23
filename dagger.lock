@@ -5,7 +5,7 @@
 ["","git-latest",["github.com/dagger/python-sdk",["tagPrefix","runtime"],["version","v1.2.0"]],"refs/tags/v1.2.0"]
 ["","git-latest",["github.com/dagger/python-sdk"],"refs/tags/v1.2.0"]
 ["","git-latest",["github.com/dagger/sdk-helpers",["version","v1.0.6"]],"refs/tags/v1.0.6"]
-["","git-sha",["github.com/dagger/python-sdk","main"],"58e0a72f73af5c5f8611aa6e63880ebde0f31654"]
+["","git-sha",["github.com/dagger/python-sdk","main"],"dfb188732b665097c3976dfb38437ebde191f9f3"]
 ["","git-sha",["github.com/dagger/python-sdk","refs/tags/v1.2.0"],"eb9c4aa175054d8d27109afec8ab4cc9818cf2e5"]
 ["","git-sha",["github.com/dagger/sdk-helpers","refs/tags/v1.0.6"],"16e5bf2837eb1dc840a1c9ad7d6dba385f0038d3"]
 ["","oci-sha",["docker.io/library/debian:bookworm-slim"],"sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8"]
