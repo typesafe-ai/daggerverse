@@ -17,5 +17,9 @@ workspace = true
 [tool.uv.sources.dagger-io]
 workspace = true
 
+[tool.deptry.package_module_name_map]
+dagger-io = "dagger"
+dagger-clients-core = "dagger_clients"
+
 [tool.uv.workspace]
 members = ['sdk', 'clients/core']
