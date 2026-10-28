@@ -603,7 +603,8 @@ class TypesafeDaggerverse:
         """Build the pinned open-source projects in `uv/tests/real-world.yaml`.
 
         Each project is cloned at its pinned commit and installed both editable
-        and non-editable, then its declared modules must import.
+        and non-editable (plus any extra `install` options), then its declared
+        modules must import.
         """
         projects = yaml.safe_load(await _src("uv/tests").file(_REAL_WORLD_PROJECTS).contents())
         if repo is not None:
@@ -619,7 +620,11 @@ class TypesafeDaggerverse:
                     tomllib.loads(await source.file(f"{path}/pyproject.toml").contents())["project"]["name"]
                     for path in project["packages"]
                 ]
-                ctr = await uv(source.as_workspace()).workspace(".").install(package=names, no_editable=no_editable)
+                ctr = await (
+                    uv(source.as_workspace())
+                    .workspace(".")
+                    .install(package=names, no_editable=no_editable, **project.get("install", {}))
+                )
                 script = "".join(f"import {module}\n" for module in project["imports"])
                 await ctr.with_exec(["uv", "run", "--no-sync", "python", "-c", script]).sync()
 

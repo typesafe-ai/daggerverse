@@ -302,6 +302,16 @@ class TestBuildUvSyncArgs:
             "--no-editable",
         ]
 
+    def test_no_default_groups_flag(self):
+        assert self._args(no_default_groups=True) == [
+            "uv",
+            "sync",
+            "--frozen",
+            "--link-mode",
+            "copy",
+            "--no-default-groups",
+        ]
+
     def test_all_extras_flag(self):
         assert self._args(all_extras=True) == [
             "uv",
@@ -555,3 +565,39 @@ class TestNestedWorkspacePathResolution:
         for path in local.values():
             resolved = posixpath.normpath(posixpath.join(".", path))
             assert resolved == path
+
+
+_GROUPS_LOCK = {
+    "package": [
+        {
+            "name": "app",
+            "source": {"editable": "app"},
+            "dependencies": [{"name": "lib"}],
+            "dev-dependencies": {"dev": [{"name": "dev-tool"}], "docs": [{"name": "docs-tool"}]},
+        },
+        {
+            "name": "lib",
+            "source": {"editable": "lib"},
+            "dev-dependencies": {"dev": [{"name": "lib-test-helper"}]},
+        },
+        {"name": "dev-tool", "source": {"editable": "dev-tool"}},
+        {"name": "docs-tool", "source": {"editable": "docs-tool"}},
+        {"name": "lib-test-helper", "source": {"editable": "lib-test-helper"}},
+    ]
+}
+
+
+class TestGroupSelection:
+    """Like `uv sync`, only the target's own groups are followed, and only the selected ones."""
+
+    def test_all_groups_of_the_target_only(self):
+        assert set(find_transitive_local_deps(_GROUPS_LOCK, "app")) == {"app", "lib", "dev-tool", "docs-tool"}
+
+    def test_selected_groups(self):
+        assert set(find_transitive_local_deps(_GROUPS_LOCK, "app", {"docs"})) == {"app", "lib", "docs-tool"}
+
+    def test_no_groups(self):
+        assert set(find_transitive_local_deps(_GROUPS_LOCK, "app", set())) == {"app", "lib"}
+
+    def test_dependency_groups_apply_to_the_target(self):
+        assert set(find_transitive_local_deps(_GROUPS_LOCK, "lib", {"dev"})) == {"lib", "lib-test-helper"}

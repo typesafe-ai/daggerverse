@@ -20,6 +20,7 @@ nav = [
     { "uv_build" = "build-backends/uv-build.md" },
     { "Hatchling" = "build-backends/hatchling.md" },
     { "pdm-backend" = "build-backends/pdm-backend.md" },
+    { "flit_core" = "build-backends/flit.md" },
   ] },
 ]
 

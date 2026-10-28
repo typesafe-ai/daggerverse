@@ -5,6 +5,7 @@
 #   rev:      commit SHA (release tag in the comment)
 #   packages: package directories (relative to the repo root) to install
 #   imports:  modules that must import after the build
+#   install:  extra `install` options (optional)
 
 # pdm-backend, flat layout, version read from the module (`[tool.pdm] version`).
 - repo: fastapi/fastapi
@@ -24,3 +25,14 @@
   rev: 23a6be4b8ab346609babc1337b445e4ee658137d # v3.40.0
   packages: [.]
   imports: [openai]
+
+# One member of a ~130-member workspace. Its runtime closure mixes flit_core
+# providers (dotted `[tool.flit.module]` names under `src/`), hatchling wheel
+# `packages`, and a `bypass-selection` root; `_shared` modules are symlinks into
+# sibling directories. The default `dev` group pulls in most of the workspace.
+- repo: apache/airflow
+  rev: aa19d2dbb9ed187ec01957a92848d9b005e9ba9d # 3.3.2
+  packages: [airflow-core]
+  imports: [airflow]
+  install:
+    no_default_groups: true

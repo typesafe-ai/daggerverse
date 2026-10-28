@@ -86,7 +86,9 @@ expensive work stays cached across builds:
    only source changes.
 4. The real source is copied in **last**, on top of the stubs. The editable installs
    already point at these paths, so the code goes live without a re-sync, and a
-   source-only change invalidates only this final layer.
+   source-only change invalidates only this final layer. Symlinks in the copied
+   source that point elsewhere in the source tree, such as modules shared from a
+   sibling directory, are replaced with the content they point to.
 
 If you omit a package, the module mirrors a bare `uv sync` and installs the current
 package (the one declared at the workspace root). To install every member of the
@@ -121,7 +123,7 @@ When the cache grows past 100 GiB, the module runs `uv cache prune --ci`. This i
 
 ## Supported build backends
 
-The module supports Python build backends such as `uv_build`, `hatchling`, or `pdm-backend`.
+The module supports Python build backends such as `uv_build`, `hatchling`, `pdm-backend`, or `flit_core`.
 See the full list [here](build-backends/index.md).
 
 The module parses their native configuration files and copies files required to build the package before installing it, ensuring optimal caching.

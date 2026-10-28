@@ -3,6 +3,7 @@
 import re
 import tomllib
 from collections import OrderedDict, deque
+from collections.abc import Collection
 from pathlib import Path
 
 from packaging.specifiers import SpecifierSet
@@ -118,6 +119,23 @@ def parse_project_name(content: str) -> str | None:
     """
     data = tomllib.loads(content)
     return data.get("project", {}).get("name")
+
+
+def selected_groups(content: str, groups: list[str], all_groups: bool, no_default_groups: bool) -> set[str] | None:
+    """The dependency groups `uv sync` installs, or None for all of them.
+
+    `content` is the workspace root's pyproject.toml, whose `[tool.uv]
+    default-groups` (`["dev"]` unless set, or `"all"`) is added unless
+    `no_default_groups` is set.
+    """
+    if all_groups:
+        return None
+    default = tomllib.loads(content).get("tool", {}).get("uv", {}).get("default-groups", ["dev"])
+    if no_default_groups:
+        default = []
+    elif default == "all":
+        return None
+    return set(groups) | set(default)
 
 
 def parse_required_version_from_pyproject(content: str) -> str | None:
@@ -245,12 +263,18 @@ def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
     return OrderedDict(sorted(result.items()))
 
 
-def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str, str]:
+def find_transitive_local_deps(
+    lock_data: dict, project: str, groups: Collection[str] | None = None
+) -> OrderedDict[str, str]:
     """Find all local packages that `project` transitively depends on (including itself).
 
     Results are sorted by package name for deterministic build order.
     The *project* name is PEP 503-normalised so callers can pass the raw
     `[project].name` from `pyproject.toml` (which may use underscores).
+
+    Like `uv sync`, dependency groups apply only to `project` itself, never to
+    its dependencies: `groups` selects which of its groups are followed (None
+    follows all of them).
 
     Virtual roots and members participate in traversal just like installable
     packages, including dependencies reached through a virtual member.
@@ -262,8 +286,10 @@ def find_transitive_local_deps(lock_data: dict, project: str) -> OrderedDict[str
     for pkg in lock_data.get("package", []):
         name = pkg["name"]
         deps = {d["name"] for d in pkg.get("dependencies", [])}
-        for group_deps in pkg.get("dev-dependencies", {}).values():
-            deps |= {d["name"] for d in group_deps}
+        if name == project:
+            for group, group_deps in pkg.get("dev-dependencies", {}).items():
+                if groups is None or group in groups:
+                    deps |= {d["name"] for d in group_deps}
         dep_graph[name] = sorted(deps)
 
     needed: dict[str, str] = {}
@@ -296,10 +322,13 @@ def build_uv_sync_args(
     all_groups: bool,
     all_packages: bool,
     no_editable: bool = False,
+    no_default_groups: bool = False,
 ) -> list[str]:
     args = ["uv", "sync", "--frozen", "--link-mode", "copy"]
     if no_editable:
         args.append("--no-editable")
+    if no_default_groups:
+        args.append("--no-default-groups")
     if all_extras:
         args.append("--all-extras")
     for extra in extras:

@@ -36,6 +36,14 @@ AllGroups: TypeAlias = Annotated[
     Doc("Install every dependency group; maps to `uv sync --all-groups`"),
 ]
 
+NoDefaultGroups: TypeAlias = Annotated[
+    bool,
+    Doc(
+        "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); "
+        "maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed."
+    ),
+]
+
 AllPackages: TypeAlias = Annotated[
     bool,
     Doc("Install every workspace member; maps to `uv sync --all-packages`"),

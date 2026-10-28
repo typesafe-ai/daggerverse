@@ -2,6 +2,7 @@
 
 import pytest
 from uv.workspace.build_backends import BuildBackend, BuildBackendKind
+from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
 from uv.workspace.build_backends.pdm import PdmSettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
@@ -30,6 +31,7 @@ def _pdm(pdm: dict, name: str = "example") -> BuildBackend:
         ("uv_build", BuildBackendKind.UV_BUILD, UvBuildSettings),
         ("hatchling.build", BuildBackendKind.HATCHLING, HatchlingSettings),
         ("pdm.backend", BuildBackendKind.PDM, PdmSettings),
+        ("flit_core.buildapi", BuildBackendKind.FLIT, FlitSettings),
         ("setuptools.build_meta", BuildBackendKind.OTHER, type(None)),
         (None, BuildBackendKind.OTHER, type(None)),
     ],
@@ -240,3 +242,41 @@ def test_pdm_includes_ignore_globs_and_split_modules_from_files():
 
 def test_pdm_custom_hook_path():
     assert _pdm({"build": {"custom-hook": "build/hook.py"}}).build_inputs == ["build/hook.py"]
+
+
+# ---- flit_core ----
+
+
+def _flit(flit: dict, project: dict | None = None, name: str = "example-dist") -> BuildBackend:
+    return _system("flit_core.buildapi", {"flit": flit}, project, name=name)
+
+
+def test_flit_default_module_name_uses_the_generic_layout():
+    backend = _flit({})
+    assert backend.module_name == "example_dist"
+    assert backend.module_paths is None
+    assert backend.source_paths is None
+    assert backend.build_inputs == []
+
+
+def test_flit_dotted_module_name():
+    assert _flit({"module": {"name": "airflow.providers.smtp"}}).module_name == "airflow.providers.smtp"
+
+
+@pytest.mark.parametrize("dynamic", [["version"], ["description"], ["version", "description"]])
+def test_flit_dynamic_metadata_stages_the_module(dynamic):
+    backend = _flit({"module": {"name": "ns.pkg"}}, {"dynamic": dynamic})
+    assert backend.build_inputs == ["ns/pkg/__init__.py", "src/ns/pkg/__init__.py"]
+
+
+def test_flit_static_metadata_stages_nothing():
+    assert _flit({}, {"version": "1.0", "description": "x", "dynamic": ["readme"]}).build_inputs == []
+
+
+def test_flit_external_data():
+    assert _flit({"external-data": {"directory": "data"}}).build_inputs == ["data", "data/**"]
+
+
+@pytest.mark.parametrize("backend", ["uv_build", "hatchling.build", "pdm.backend", "setuptools.build_meta"])
+def test_only_flit_declares_a_module_name(backend):
+    assert _system(backend).module_name is None
