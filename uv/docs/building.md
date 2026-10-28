@@ -128,6 +128,9 @@ See the full list [here](build-backends/index.md).
 
 The module parses their native configuration files and copies files required to build the package before installing it, ensuring optimal caching.
 
+??? note "Build timestamps"
+    Unless your `base_container` sets [`SOURCE_DATE_EPOCH`](https://reproducible-builds.org/docs/source-date-epoch/), the module sets it to 1980-01-01 to avoid timestamps that wheels can't store.
+
 !!! warning "Unsupported backends"
     Packages using other backends are not explicitly supported, and builds for them
     will only work with the standard `src/` layout, with package being named after the distribution.

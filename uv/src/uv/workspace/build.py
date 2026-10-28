@@ -18,6 +18,11 @@ _BUSYBOX = pinned_image("busybox")
 # Prints every symlink under the current directory whose target is missing.
 _DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 
+# 1980-01-01, the earliest timestamp a wheel (zip) can hold. Dagger git trees
+# normalize mtimes to 1, which backends that stamp files from their mtime (flit)
+# reject unless SOURCE_DATE_EPOCH is set.
+_SOURCE_DATE_EPOCH = "315532800"
+
 
 @object_type
 class UvWorkspaceBuild:
@@ -374,7 +379,15 @@ class UvWorkspaceBuild:
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
             # `with_exec` is lazy; sync() inside the span so it captures the actual
             # install rather than just the query-graph construction.
-            return await ctr.with_exec(self.plan.uv_sync_args).sync()
+            # Set SOURCE_DATE_EPOCH for this sync only, keeping a value the base sets.
+            if await ctr.env_variable("SOURCE_DATE_EPOCH"):
+                return await ctr.with_exec(self.plan.uv_sync_args).sync()
+            return await (
+                ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
+                .with_exec(self.plan.uv_sync_args)
+                .without_env_variable("SOURCE_DATE_EPOCH")
+                .sync()
+            )
 
     @function
     async def with_local_dependencies(self) -> Container:
