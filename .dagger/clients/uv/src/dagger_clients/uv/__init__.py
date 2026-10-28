@@ -105,81 +105,6 @@ class Uv(_Type):
         return UvWorkspaces(_ctx)
 
 
-class UvBuildLayout(_Type):
-    """ Normalized uv_build settings carried between the Dagger build
-    steps.  """
-
-    async def id(self) -> str:
-        """A unique identifier for this UvBuildLayout.
-
-        Note
-        ----
-        This is lazily evaluated, no operation is actually run.
-
-        Returns
-        -------
-        str
-            The `ID` scalar type represents a unique identifier, often used to
-            refetch an object or as key for a cache. The ID type appears in a
-            JSON response as a String; however, it is not intended to be
-            human-readable. When expected as an input type, any string (such
-            as `"4"`) or integer (such as `4`) input value will be accepted as
-            an ID.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("id", _args)
-        return await _ctx.execute(str)
-
-    async def module_names(self) -> list[str]:
-        """Declared Python import names
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("moduleNames", _args)
-        return await _ctx.execute(list[str])
-
-    async def module_root(self) -> str:
-        """Source root; an empty string means a flat layout
-
-        Returns
-        -------
-        str
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("moduleRoot", _args)
-        return await _ctx.execute(str)
-
-
 class UvIndex(_Type):
     """ A configured package index for a uv workspace.  """
 
@@ -495,12 +420,6 @@ class UvLocalPackage(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("pyprojectContents", _args)
         return await _ctx.execute(str)
-
-    def uv_build_layout(self) -> UvBuildLayout:
-        """Backend-specific layout resolved once from package metadata"""
-        _args: list[_Arg] = []
-        _ctx = self._select("uvBuildLayout", _args)
-        return UvBuildLayout(_ctx)
 
 
 class UvPackageSource(_Type):
@@ -1811,7 +1730,6 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, session: _Session | N
 
 __all__ = [
     "Uv",
-    "UvBuildLayout",
     "UvIndex",
     "UvLocalPackage",
     "UvPackageSource",

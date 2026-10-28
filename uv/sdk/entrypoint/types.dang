@@ -3,16 +3,12 @@
 type ModuleTypes {
   pub all: [TypeDef!]! {
     [
-      typeDef.withObject("UvBuildLayout", description: "Normalized uv_build settings carried between the Dagger build steps.")
-        .withField("module_root", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Source root; an empty string means a flat layout")
-        .withField("module_names", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Declared Python import names"),
       typeDef.withObject("LocalPackage", description: "A local (editable/directory/virtual) package in a uv workspace.\n\n``pyproject_contents`` is captured while resolving the plan so scaffold\nlayers depend on package metadata, not on the whole source directory.")
         .withField("name", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Package name")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace-relative path")
         .withField("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Python module name")
         .withField("flat", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Flat layout (module at package root) vs src layout (module under src/)")
-        .withField("pyproject_contents", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Already-read package metadata used when creating a dependency scaffold")
-        .withField("uv_build_layout", typeDef.withOptional(true).withObject("UvBuildLayout"), description: "Backend-specific layout resolved once from package metadata"),
+        .withField("pyproject_contents", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Already-read package metadata used when creating a dependency scaffold"),
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
         .withField("ws_dir", typeDef.withObject("Directory"), description: "Resolved workspace directory")
         .withField("source_dir", typeDef.withObject("Directory"), description: "Full source directory")

@@ -2,7 +2,7 @@
 name = "typesafe-daggerverse"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io", "anyio", "dagger-clients-core", "dagger-clients-github", "dagger-clients-deptry", "dagger-clients-pytest", "dagger-clients-twingate", "dagger-clients-ruff", "dagger-clients-uv", "dagger-clients-zizmor", "dagger-clients-pyproject"]
+dependencies = ["dagger-io", "anyio", "dagger-clients-core", "dagger-clients-github", "dagger-clients-deptry", "dagger-clients-pytest", "dagger-clients-twingate", "dagger-clients-ruff", "dagger-clients-uv", "dagger-clients-zizmor", "dagger-clients-pyproject", "pyyaml>=6.0.3"]
 
 [build-system]
 requires = ["uv_build>=0.8.4,<0.9.0"]
@@ -21,10 +21,12 @@ dagger-clients-zizmor = { workspace = true }
 dagger-clients-pyproject = { workspace = true }
 
 # Map distributions to the import packages they ship, so deptry doesn't flag
-# those imports as missing/unused: `dagger-io` ships `dagger`, and the
-# generated `dagger-clients-*` distributions ship the `dagger_clients` namespace.
+# those imports as missing/unused: `dagger-io` ships `dagger`, `pyyaml` ships
+# `yaml`, and the generated `dagger-clients-*` distributions ship the
+# `dagger_clients` namespace.
 [tool.deptry.package_module_name_map]
 dagger-io = "dagger"
+pyyaml = "yaml"
 dagger-clients-core = "dagger_clients"
 dagger-clients-github = "dagger_clients"
 dagger-clients-deptry = "dagger_clients"

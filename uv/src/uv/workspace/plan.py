@@ -15,7 +15,7 @@ from uv.utils import (
     parse_project_name,
     require_package_selection,
 )
-from uv.workspace.uv_build import UvBuildLayout
+from uv.workspace.build_backends import BuildBackend
 
 
 def _match_reachable(
@@ -122,24 +122,32 @@ class LocalPackage:
         str,
         Doc("Already-read package metadata used when creating a dependency scaffold"),
     ] = field()
-    uv_build_layout: Annotated[
-        UvBuildLayout | None,
-        Doc("Backend-specific layout resolved once from package metadata"),
-    ] = field(default=None)
+
+    @property
+    def build_backend(self) -> BuildBackend:
+        """Build backend and its settings, derived from the captured package metadata."""
+        return BuildBackend.from_pyproject(tomllib.loads(self.pyproject_contents), self.name)
 
     @property
     def module_paths(self) -> list[str]:
-        """Package-relative import directories used to scaffold modules."""
-        if self.uv_build_layout is not None:
-            return self.uv_build_layout.module_paths
+        """Package-relative import directories (or `.py` modules) used to scaffold modules."""
+        paths = self.build_backend.module_paths
+        if paths is not None:
+            return paths
         return [self.module if self.flat else posixpath.join("src", self.module)]
 
     @property
     def source_paths(self) -> list[str]:
         """Copy source roots, or only declared modules for a flat layout."""
-        if self.uv_build_layout is not None:
-            return self.uv_build_layout.source_paths
+        paths = self.build_backend.source_paths
+        if paths is not None:
+            return paths
         return [self.module] if self.flat else ["src"]
+
+    @property
+    def build_inputs(self) -> list[str]:
+        """Package-relative files (or globs) staged into the scaffold for the backend."""
+        return self.build_backend.build_inputs
 
 
 @object_type
@@ -240,7 +248,6 @@ class UvSyncPlan:
                     module=_module_name(name),
                     flat=flat_flags.get(name, False),
                     pyproject_contents=contents,
-                    uv_build_layout=UvBuildLayout.from_pyproject(metadata, name) if not virtual else None,
                 )
                 local_packages[name] = pkg
                 span.add_event(
@@ -249,6 +256,7 @@ class UvSyncPlan:
                         "package.name": name,
                         "package.path": pkg_path,
                         "package.backend": metadata.get("build-system", {}).get("build-backend", "none"),
+                        "package.backend_kind": pkg.build_backend.kind.name,
                         "package.virtual": virtual,
                         "package.module_paths": [] if virtual else pkg.module_paths,
                         "package.source_paths": [] if virtual else pkg.source_paths,

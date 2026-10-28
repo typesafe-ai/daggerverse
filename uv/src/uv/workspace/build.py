@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import posixpath
-import tomllib
 from typing import Annotated
 
 from dagger import Doc, field, function, object_type
@@ -10,6 +9,7 @@ from dagger_clients.core import Container, Directory, core
 
 from uv.args import LockTimeout, MaxCacheSize, PruneCache
 from uv.utils import _DEFAULT_VERSION, image_ref
+from uv.workspace.build_backends.paths import is_file
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
 
@@ -238,18 +238,16 @@ class UvWorkspaceBuild:
             return overlay
         overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
         for module_path in pkg.module_paths:
-            overlay = overlay.with_new_file(
-                posixpath.join(ctr_base, module_path, "__init__.py").lstrip("/"),
-                "",
-            )
-        license_files = tomllib.loads(pkg.pyproject_contents).get("project", {}).get("license-files", [])
-        if license_files:
+            # A single-file module is stubbed as itself, a package by its `__init__.py`.
+            stub = module_path if is_file(module_path) else posixpath.join(module_path, "__init__.py")
+            overlay = overlay.with_new_file(posixpath.join(ctr_base, stub).lstrip("/"), "")
+        if pkg.build_inputs:
             # Editable installs build metadata from the scaffold before sources are copied.
             resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
             overlay = overlay.with_directory(
                 ctr_base.lstrip("/"),
                 self.plan.source_dir.directory(resolved),
-                include=license_files,
+                include=pkg.build_inputs,
             )
         return overlay
 
@@ -302,11 +300,13 @@ class UvWorkspaceBuild:
     def _copy_package(self, overlay: Directory, workdir: str, pkg: LocalPackage) -> Directory:
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
-        for module_path in pkg.source_paths:
-            overlay = overlay.with_directory(
-                posixpath.join(ctr_base, module_path).lstrip("/"),
-                self.plan.source_dir.directory(posixpath.join(resolved, module_path)),
-            )
+        for source_path in pkg.source_paths:
+            target = posixpath.join(ctr_base, source_path).lstrip("/")
+            source = posixpath.join(resolved, source_path)
+            if is_file(source_path):
+                overlay = overlay.with_file(target, self.plan.source_dir.file(source))
+            else:
+                overlay = overlay.with_directory(target, self.plan.source_dir.directory(source))
         return overlay
 
     async def _copy_sources(self, ctr: Container, workdir: str) -> Container:
