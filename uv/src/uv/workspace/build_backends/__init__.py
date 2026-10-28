@@ -16,9 +16,10 @@ from typing import Self
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
 from uv.workspace.build_backends.pdm import PdmSettings
+from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
 
-type BackendSettings = UvBuildSettings | HatchlingSettings | PdmSettings | FlitSettings
+type BackendSettings = UvBuildSettings | HatchlingSettings | PdmSettings | FlitSettings | PoetrySettings
 
 
 class BuildBackendKind(enum.Enum):
@@ -28,6 +29,7 @@ class BuildBackendKind(enum.Enum):
     HATCHLING = "hatchling.build"
     PDM = "pdm.backend"
     FLIT = "flit_core.buildapi"
+    POETRY = "poetry.core.masonry.api"
     OTHER = "other"
     """Any other backend: conventional flat or `src/` layout, no backend-specific settings."""
 
@@ -56,6 +58,8 @@ class BuildBackend:
                 settings = PdmSettings.from_pyproject(metadata, name)
             case BuildBackendKind.FLIT:
                 settings = FlitSettings.from_pyproject(metadata, name)
+            case BuildBackendKind.POETRY:
+                settings = PoetrySettings.from_pyproject(metadata)
             case BuildBackendKind.OTHER:
                 settings = None
         return cls(kind=kind, settings=settings, project_inputs=_project_inputs(metadata.get("project", {})))
