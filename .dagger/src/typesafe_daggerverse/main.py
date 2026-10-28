@@ -1,9 +1,11 @@
 """Checks for typesafe-ai daggerverse modules."""
 
+import tomllib
 from collections.abc import Awaitable
 from typing import Annotated
 
 import anyio
+import yaml
 from dagger import Doc, check, function, object_type
 from dagger.telemetry import get_tracer
 from dagger_clients.core import Changeset, Check, Container, Directory, Secret, Service, Workspace, core
@@ -23,6 +25,9 @@ _ZENSICAL_GLOB = "*/zensical.toml"
 
 # Self-contained project holding the docs landing page (served at `/`).
 _LANDING_PROJECT = ".docs"
+
+# Pinned open-source projects the `uv` module must build (see `uv_real_world`).
+_REAL_WORLD_PROJECTS = "real-world.yaml"
 
 
 def _pytest_otel_source() -> Directory:
@@ -588,6 +593,40 @@ class TypesafeDaggerverse:
             assert await scaffold.file("src/standalone_app/__init__.py").contents() == ""
             for path in expected:
                 assert await scaffold.file(path).contents() == path
+
+    @check
+    @function
+    async def uv_real_world(
+        self,
+        repo: Annotated[str | None, Doc("Only build this `owner/name` entry")] = None,
+    ) -> None:
+        """Build the pinned open-source projects in `uv/tests/real-world.yaml`.
+
+        Each project is cloned at its pinned commit and installed both editable
+        and non-editable, then its declared modules must import.
+        """
+        projects = yaml.safe_load(await _src("uv/tests").file(_REAL_WORLD_PROJECTS).contents())
+        if repo is not None:
+            projects = [p for p in projects if p["repo"] == repo]
+            if not projects:
+                raise ValueError(f"no entry for {repo!r} in {_REAL_WORLD_PROJECTS}")
+        tracer = get_tracer()
+
+        async def _build(project: dict, no_editable: bool) -> None:
+            with tracer.start_as_current_span(f"{project['repo']} (no_editable={no_editable})"):
+                source = core().git(f"https://github.com/{project['repo']}").commit(project["rev"]).tree()
+                names = [
+                    tomllib.loads(await source.file(f"{path}/pyproject.toml").contents())["project"]["name"]
+                    for path in project["packages"]
+                ]
+                ctr = await uv(source.as_workspace()).workspace(".").install(package=names, no_editable=no_editable)
+                script = "".join(f"import {module}\n" for module in project["imports"])
+                await ctr.with_exec(["uv", "run", "--no-sync", "python", "-c", script]).sync()
+
+        async with anyio.create_task_group() as tg:
+            for project in projects:
+                for no_editable in (False, True):
+                    tg.start_soon(_build, project, no_editable)
 
     @function
     async def uv_workspace_auto_install_uv(self) -> None:

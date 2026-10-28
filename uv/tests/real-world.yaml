@@ -1,0 +1,26 @@
+# Popular pure-Python projects the uv module must build, editable and
+# non-editable. Each entry covers a layout/backend combination the others don't.
+#
+#   repo:     GitHub `owner/name`
+#   rev:      commit SHA (release tag in the comment)
+#   packages: package directories (relative to the repo root) to install
+#   imports:  modules that must import after the build
+
+# pdm-backend, flat layout, version read from the module (`[tool.pdm] version`).
+- repo: fastapi/fastapi
+  rev: 7a0a3f0b286c6c865cf4398ea0e957a87b8bffa4 # 0.162.0
+  packages: [.]
+  imports: [fastapi]
+
+# hatchling, flat layout auto-discovered by hatch, readme outside the package root.
+- repo: litestar-org/litestar
+  rev: ac33702eea7aa3c99d62711bce2d55bdada6b944 # v2.25.0
+  packages: [.]
+  imports: [litestar]
+
+# hatchling, src layout via wheel `packages`, readme built by a custom metadata
+# hook script (`scripts/hatch_metadata.py`) outside the import package.
+- repo: openai/openai-python
+  rev: 23a6be4b8ab346609babc1337b445e4ee658137d # v3.40.0
+  packages: [.]
+  imports: [openai]

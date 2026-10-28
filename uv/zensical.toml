@@ -15,6 +15,12 @@ nav = [
   { "Checks" = [
     { "Auditing dependencies" = "checks/audit.md" },
   ] },
+  { "Supported Build Backends" = [
+    "build-backends/index.md",
+    { "uv_build" = "build-backends/uv-build.md" },
+    { "Hatchling" = "build-backends/hatchling.md" },
+    { "pdm-backend" = "build-backends/pdm-backend.md" },
+  ] },
 ]
 
 [project.theme]
@@ -23,7 +29,7 @@ features = [
   "content.code.copy",
   "content.code.annotate",
   "content.tabs.link",
-  "navigation.sections",
+  "navigation.indexes",
   "navigation.footer",
   "navigation.top",
 ]

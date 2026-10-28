@@ -78,12 +78,12 @@ expensive work stays cached across builds:
 2. **Remote** (third-party) dependencies are installed first. They change rarely, so
    this layer caches well. If the cache has grown past a configurable size,
    `uv cache prune --ci` runs afterwards.
-3. The needed **local** members are scaffolded as stubs (their `pyproject.toml`, files
-   matched by `project.license-files`, and an empty module) and installed with `uv sync`.
-   License patterns are relative to each member's `pyproject.toml` and support globs
-   such as `LICENSE*` and `licenses/**/*.txt`. `uv` installs workspace members as
-   *editable* by default, so this step only records path links. It depends on the
-   packages' metadata, not their code, and stays cached when only source changes.
+3. The needed **local** members are scaffolded as stubs (their `pyproject.toml`, empty
+   modules, and the [files their build backend reads](#supported-build-backends), such as
+   the readme, license files, and version file) and installed with `uv sync`. `uv`
+   installs workspace members as *editable* by default, so this step only records path
+   links. It depends on the packages' metadata, not their code, and stays cached when
+   only source changes.
 4. The real source is copied in **last**, on top of the stubs. The editable installs
    already point at these paths, so the code goes live without a re-sync, and a
    source-only change invalidates only this final layer.
@@ -121,50 +121,18 @@ When the cache grows past 100 GiB, the module runs `uv cache prune --ci`. This i
 
 ## Supported build backends
 
-`uv` installs packages using their declared build backend. This module also needs to
-know their import layout so it can create valid stubs and copy the right source files.
-Backend support here describes that staging behavior:
+The module supports Python build backends such as `uv_build`, `hatchling`, or `pdm-backend`.
+See the full list [here](build-backends/index.md).
 
-| Backend or project type | Layout support |
-| --- | --- |
-| `uv_build` | Default `src/` layout, custom `module-root`, and explicit `module-name` strings or lists. |
-| Other backends, including Hatchling | Conventional single-module flat or `src/` layouts, using a module-name heuristic. Backend-specific package mappings and build hooks are not interpreted. |
-| Dependency-only projects | Their metadata and transitive local dependencies are staged; the project itself is not installed or copied as a Python package. |
+The module parses their native configuration files and copies files required to build the package before installing it, ensuring optimal caching.
 
-### `uv_build` layouts
-
-The default module name is derived from the distribution name by lowercasing it and
-replacing dots and dashes with underscores. Explicit names can differ from the
-distribution name; dotted names map to nested import directories. See the
-[uv build backend documentation](https://docs.astral.sh/uv/concepts/build-backend/#modules)
-for the upstream settings.
-
-For example, this configuration declares two modules at the package root:
-
-```toml
-[tool.uv.build-backend]
-module-name = ["actual_package", "compat_package"]
-module-root = "."
-```
-
-The build copies `actual_package/` and `compat_package/`, including files inside those
-directories. Both `module-root = "."` and `module-root = ""` mean a flat layout.
-Unrelated root-level files such as `tests/` and documentation are excluded from this
-source-copy step. For a non-empty source root such as `src` or `python`, the entire
-source root is copied. Package metadata and declared `project.license-files` are
-staged separately.
+!!! warning "Unsupported backends"
+    Packages using other backends are not explicitly supported, and builds for them
+    will only work with the standard `src/` layout, with package being named after the distribution.
 
 !!! warning "Non-editable installs"
     With `no_editable=True`, changes to source code trigger a rebuild of the package.
     Third-party dependencies remain cached.
-
-!!! warning "Staging limitations"
-    `namespace = true` and type-stub (`-stubs`) packages are not supported by the
-    current scaffold, which creates `__init__.py` placeholders. External data
-    directories, custom include rules, and extra build-hook inputs are not staged
-    automatically. Supply required inputs before `with_local_dependencies()` when
-    using such settings; a full project copy after installation is too late for
-    files the backend needs while building.
 
 ## Running the pipeline step by step
 
