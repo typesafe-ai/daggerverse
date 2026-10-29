@@ -9,7 +9,7 @@ from dagger_clients.core import Container, Directory, ExistsType, core
 
 from uv.args import LockTimeout, MaxCacheSize, PruneCache
 from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
-from uv.workspace.build_backends import BackendHooks
+from uv.workspace.build_backends import BACKENDS, BackendHooks
 from uv.workspace.build_backends.paths import is_file
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
@@ -250,19 +250,19 @@ class UvWorkspaceBuild:
         return posixpath.normpath(posixpath.join(workdir, posixpath.relpath(".", self.plan.workspace_path)))
 
     def _hooks(self) -> dict[str, BackendHooks]:
-        """Each backend's `setup`/`teardown`, once, for the local packages this build installs.
+        """The `setup`/`teardown` around the local packages' build, once each, keyed for the trace.
 
-        A plug-in always has them; built-in settings only when the backend needs them.
+        A package's handler provides them; without one, its built-in backend, if it needs any.
         """
-        plugins = dict(zip(self.plan.plugin_names, self.plan.build_backends, strict=True))
         hooks: dict[str, BackendHooks] = {}
         for pkg in self.plan.needed_local:
-            backend = pkg.build_backend
-            if pkg.name in self.plan.flat_packages or backend.name is None or backend.name in hooks:
+            backend = pkg.build_backend.name
+            if pkg.name in self.plan.flat_packages or backend is None:
                 continue
-            hook = plugins.get(backend.name) or backend.settings
-            if isinstance(hook, BackendHooks):
-                hooks[backend.name] = hook
+            if pkg.handler is not None:
+                hooks.setdefault(f"{backend} handler #{pkg.handler}", self.plan.handlers[pkg.handler])
+            elif (builtin := BACKENDS.get(backend)) and builtin.hooks:
+                hooks.setdefault(backend, builtin.hooks)
         return hooks
 
     async def _scaffold(

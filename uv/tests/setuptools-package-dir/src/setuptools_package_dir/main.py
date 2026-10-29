@@ -1,8 +1,8 @@
-"""A `UvBuildBackend` plug-in fixture for the uv module's checks.
+"""A `UvBuildBackendHandler` fixture for the uv module's checks.
 
-Supports setuptools packages under `[tool.setuptools] package-dir`, a layout the
-uv module's generic one can't build. Plug-ins must live in their own module:
-the Python SDK can't pass a module's own objects to its dependencies.
+Handles setuptools packages under `[tool.setuptools] package-dir`, a layout the
+uv module's generic one can't build. Handlers must live in their own module: the
+Python SDK can't pass a module's own objects to its dependencies.
 """
 
 import tomllib

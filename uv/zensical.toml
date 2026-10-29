@@ -22,7 +22,8 @@ nav = [
     { "pdm-backend" = "build-backends/pdm-backend.md" },
     { "flit_core" = "build-backends/flit.md" },
     { "poetry-core" = "build-backends/poetry.md" },
-    { "Custom backends" = "build-backends/custom.md" },
+    { "maturin" = "build-backends/maturin.md" },
+    { "Adding support for a build backend" = "build-backends/plugging-in.md" },
   ] },
 ]
 

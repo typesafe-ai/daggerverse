@@ -5,11 +5,13 @@ import asyncio
 import pytest
 from uv.workspace.build_backends import PackageBackend
 from uv.workspace.build_backends.flit import FlitSettings
+from uv.workspace.build_backends.handler import BuildBackendLayout, MaturinHandler
 from uv.workspace.build_backends.hatchling import HatchlingSettings
+from uv.workspace.build_backends.maturin import MaturinSettings
 from uv.workspace.build_backends.pdm import PdmSettings
-from uv.workspace.build_backends.plugin import BuildBackendLayout
 from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
+from uv.workspace.plan import handlers_by_backend
 
 
 def _system(backend: str, tool: dict | None = None, project: dict | None = None, name: str = "example"):
@@ -37,6 +39,7 @@ def _pdm(pdm: dict, name: str = "example") -> PackageBackend:
         ("pdm.backend", PdmSettings),
         ("flit_core.buildapi", FlitSettings),
         ("poetry.core.masonry.api", PoetrySettings),
+        ("maturin", MaturinSettings),
         ("setuptools.build_meta", type(None)),
         (None, type(None)),
     ],
@@ -337,10 +340,10 @@ def test_poetry_legacy_build_string():
     assert _poetry({"build": "build.py"}).build_inputs == ["build.py"]
 
 
-# ---- plug-ins ----
+# ---- handlers ----
 
 
-class _SetuptoolsPlugin:
+class _SetuptoolsHandler:
     async def build_backend(self) -> str:
         return "setuptools.build_meta"
 
@@ -357,8 +360,8 @@ class _SetuptoolsPlugin:
         return ["VERSION"]
 
 
-def test_plugin_layout_resolves_every_answer():
-    layout = asyncio.run(BuildBackendLayout.resolve(_SetuptoolsPlugin(), "", "plugged"))
+def test_handler_layout_resolves_every_answer():
+    layout = asyncio.run(BuildBackendLayout.resolve(_SetuptoolsHandler(), "", "plugged"))
     assert layout.module_name is None
     assert layout.module_paths == ["lib/plugged"]
     assert layout.source_paths == ["lib"]
@@ -366,7 +369,7 @@ def test_plugin_layout_resolves_every_answer():
 
 
 @pytest.mark.parametrize("backend", ["setuptools.build_meta", "hatchling.build"])
-def test_plugin_layout_replaces_builtin_settings(backend):
+def test_handler_layout_replaces_builtin_settings(backend):
     layout = BuildBackendLayout(module_paths=["lib/plugged"], source_paths=["lib"], build_inputs=["VERSION"])
     metadata = {"build-system": {"build-backend": backend}, "project": {"readme": "README.md"}}
     system = PackageBackend.from_pyproject(metadata, "plugged", layout)
@@ -374,3 +377,86 @@ def test_plugin_layout_replaces_builtin_settings(backend):
     assert system.module_paths == ["lib/plugged"]
     assert system.source_paths == ["lib"]
     assert system.build_inputs == ["README.md", "VERSION"]
+
+
+# ---- maturin ----
+
+
+def _maturin(maturin: dict, project: dict | None = None, name: str = "example-dist") -> PackageBackend:
+    return _system("maturin", {"maturin": maturin}, project, name=name)
+
+
+def test_maturin_pure_rust_stages_rust_and_stubs_only():
+    backend = _maturin({"module-name": "jiter"}, name="jiter")
+    assert backend.module_paths == []
+    assert backend.source_paths == []
+    assert {"Cargo.toml", "Cargo.lock", "src/**", "build.rs"} <= set(backend.build_inputs)
+    assert not any(path.startswith("/") for path in backend.build_inputs)
+    assert {"jiter.pyi", "py.typed"} <= set(backend.build_inputs)
+
+
+def test_maturin_default_module_name_is_pure_rust():
+    assert _maturin({}).module_paths == []
+
+
+def test_maturin_dotted_module_is_a_mixed_package_at_the_root():
+    backend = _maturin({"module-name": "watchfiles._rust_notify"})
+    assert backend.module_paths == backend.source_paths == ["watchfiles"]
+    assert "watchfiles._rust_notify.pyi" not in backend.build_inputs
+
+
+def test_maturin_python_source():
+    backend = _maturin({"module-name": "pkg._native", "python-source": "python"})
+    assert backend.module_paths == ["python/pkg"]
+    assert backend.source_paths == ["python"]
+
+
+def test_maturin_cargo_metadata_files_and_wheel_includes():
+    backend = _maturin(
+        {"include": ["data/schema.json", {"path": "sdist-only", "format": "sdist"}, {"path": "assets"}]},
+        project={"dynamic": ["version", "readme"]},
+    )
+    inputs = backend.build_inputs
+    assert "README*" in inputs
+    assert "LICENSE*" not in inputs
+    assert "data/schema.json" in inputs
+    assert {"assets", "assets/**"} <= set(inputs)
+    assert not any(path.startswith("sdist-only") for path in inputs)
+
+
+def test_maturin_crate_inputs_follow_the_manifest_path():
+    backend = _maturin({"module-name": "pkg._native", "manifest-path": "rust/Cargo.toml"})
+    assert {"rust/Cargo.toml", "rust/Cargo.lock", "rust/src/**", "rust/build.rs"} <= set(backend.build_inputs)
+
+
+# ---- handler selection ----
+
+
+def test_handlers_by_backend_indexes_each_backend():
+    assert handlers_by_backend(["maturin", "hatchling.build"]) == {"maturin": 0, "hatchling.build": 1}
+    assert handlers_by_backend([]) == {}
+
+
+def test_handlers_by_backend_rejects_two_handlers_for_one_backend():
+    with pytest.raises(ValueError, match="more than one build backend handler for maturin"):
+        handlers_by_backend(["maturin", "hatchling.build", "maturin"])
+
+
+def test_builtin_handler_adds_package_config_to_the_builtin_answers():
+    pyproject = '[build-system]\nbuild-backend = "maturin"\n[tool.maturin]\nmodule-name = "jiter"\n'
+    handler = MaturinHandler().with_package_config(name="Jiter", extra_build_inputs=["/Cargo.lock"])
+    assert asyncio.run(handler.build_backend()) == "maturin"
+    assert asyncio.run(handler.module_paths(pyproject, "jiter")) == []
+    jiter = asyncio.run(handler.build_inputs(pyproject, "jiter"))
+    assert "Cargo.toml" in jiter
+    assert jiter[-1] == "/Cargo.lock"
+    assert "/Cargo.lock" not in asyncio.run(handler.build_inputs(pyproject, "other"))
+
+
+def test_builtin_handler_package_configs_accumulate():
+    handler = (
+        MaturinHandler()
+        .with_package_config(name="a", extra_build_inputs=["a.txt"])
+        .with_package_config(name="b", extra_build_inputs=["b.txt"])
+    )
+    assert handler.package_inputs == {"a": ["a.txt"], "b": ["b.txt"]}

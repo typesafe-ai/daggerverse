@@ -1,11 +1,15 @@
-# Popular pure-Python projects the uv module must build, editable and
-# non-editable. Each entry covers a layout/backend combination the others don't.
+# Popular projects the uv module must build, editable and non-editable. Each
+# entry covers a layout/backend combination the others don't.
 #
 #   repo:     GitHub `owner/name`
 #   rev:      commit SHA (release tag in the comment)
 #   packages: package directories (relative to the repo root) to install
 #   imports:  modules that must import after the build
 #   install:  extra `install` options (optional)
+#   base:     base image, e.g. one with a Rust toolchain (optional)
+#   handlers: built-in build backend handlers to configure (optional): each
+#             `build_backend_handlers()` function, e.g. `maturin`, mapped to
+#             distribution names and their extra build inputs
 
 # pdm-backend, flat layout, version read from the module (`[tool.pdm] version`).
 - repo: fastapi/fastapi
@@ -43,3 +47,31 @@
   imports: [airflow]
   install:
     no_default_groups: true
+
+# maturin, pure Rust: the package is a crate in a Cargo workspace whose
+# `Cargo.toml`, `Cargo.lock` and sibling crate (`crates/jiter`) sit above it,
+# passed to a maturin handler.
+- repo: pydantic/jiter
+  rev: fc2da0bd1fb699a6c4e9641e9e1c06fa6d5d93e8 # v0.18.0
+  packages: [crates/jiter-python]
+  imports: [jiter]
+  base: rust:1.90.0-slim-bookworm
+  handlers:
+    maturin:
+      # Cargo loads every workspace member's declared targets, tests and benches included.
+      jiter:
+        - /Cargo.toml
+        - /Cargo.lock
+        - /crates/jiter/Cargo.toml
+        - /crates/jiter/build.rs
+        - /crates/jiter/src/**
+        - /crates/jiter/tests/*.rs
+        - /crates/jiter/benches/*.rs
+
+# maturin, mixed layout: a Python package with a native submodule
+# (`watchfiles._rust_notify`); version and readme come from `Cargo.toml`.
+- repo: samuelcolvin/watchfiles
+  rev: e74b8fc7d8d9e35c3b6bb88af0aef5ea82ee815e # v1.3.0
+  packages: [.]
+  imports: [watchfiles, watchfiles._rust_notify]
+  base: rust:1.90.0-slim-bookworm

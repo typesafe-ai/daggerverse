@@ -5,20 +5,21 @@ so it must know where each backend expects the import directories and which
 extra files (readme, license files, version source, hook scripts) the build reads.
 
 Each supported backend lives in its own module and is registered in
-`BACKENDS` under its `[build-system].build-backend` value. These are plain
-Python types derived from a package's `pyproject.toml` on demand, not Dagger
-API types. Other modules can add or replace backends through the
-`BuildBackend` interface (see `plugin`).
+`BACKENDS` under its `[build-system].build-backend` value. Its settings are plain
+Python types derived from a package's `pyproject.toml` on demand. Handlers
+(see `handler`) configure a built-in backend for some packages, or support a
+backend this module doesn't know, through the `BuildBackendHandler` interface.
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol, Self, runtime_checkable
+from typing import Protocol, Self
 
 from dagger_clients.core import Container
 
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
+from uv.workspace.build_backends.maturin import MaturinHooks, MaturinSettings
 from uv.workspace.build_backends.pdm import PdmSettings
 from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
@@ -56,9 +57,8 @@ class BackendSettings(Protocol):
         ...
 
 
-@runtime_checkable
 class BackendHooks(Protocol):
-    """What runs around the local packages' build: a plug-in, or settings of a backend that needs it."""
+    """What runs around the local packages' build: a handler, or a built-in backend that needs it."""
 
     def setup(self, container: Container) -> Container:
         """Prepare the container before the local packages build, e.g. mount caches or set variables."""
@@ -69,13 +69,25 @@ class BackendHooks(Protocol):
         ...
 
 
-# Each backend's settings, parsed from the package's metadata and distribution name.
-BACKENDS: dict[str, Callable[[dict, str], BackendSettings]] = {
-    "uv_build": UvBuildSettings.from_pyproject,
-    "hatchling.build": HatchlingSettings.from_pyproject,
-    "pdm.backend": PdmSettings.from_pyproject,
-    "flit_core.buildapi": FlitSettings.from_pyproject,
-    "poetry.core.masonry.api": PoetrySettings.from_pyproject,
+@dataclass(frozen=True)
+class Builtin:
+    """A backend this module supports."""
+
+    # Its function in `build_backend_handlers()`, e.g. `pdm_backend`.
+    handler: str
+    # Its settings, parsed from a package's metadata and distribution name.
+    parse: Callable[[dict, str], BackendSettings]
+    # What runs around the build, if anything.
+    hooks: BackendHooks | None = None
+
+
+BACKENDS: dict[str, Builtin] = {
+    "uv_build": Builtin("uv_build", UvBuildSettings.from_pyproject),
+    "hatchling.build": Builtin("hatchling", HatchlingSettings.from_pyproject),
+    "pdm.backend": Builtin("pdm_backend", PdmSettings.from_pyproject),
+    "flit_core.buildapi": Builtin("flit_core", FlitSettings.from_pyproject),
+    "poetry.core.masonry.api": Builtin("poetry_core", PoetrySettings.from_pyproject),
+    "maturin": Builtin("maturin", MaturinSettings.from_pyproject, MaturinHooks()),
 }
 
 
@@ -85,17 +97,17 @@ class PackageBackend:
 
     # `[build-system].build-backend`, if declared.
     name: str | None = None
-    # Settings of a supported or plugged-in backend; None for any other backend.
+    # Settings of a supported backend, or a handler's answers; None for any other backend.
     settings: BackendSettings | None = None
     # `[project]` readme and license files, which every backend reads.
     project_inputs: list[str] = field(default_factory=list)
 
     @classmethod
     def from_pyproject(cls, metadata: dict, name: str, settings: BackendSettings | None = None) -> Self:
-        """The package's backend; `settings` (resolved from a plug-in) replaces the built-in ones."""
+        """The package's backend; `settings` (resolved from a handler) replaces the built-in ones."""
         backend = metadata.get("build-system", {}).get("build-backend")
-        if settings is None and (parse := BACKENDS.get(backend) if backend else None):
-            settings = parse(metadata, name)
+        if settings is None and (builtin := BACKENDS.get(backend) if backend else None):
+            settings = builtin.parse(metadata, name)
         return cls(
             name=backend,
             settings=settings,

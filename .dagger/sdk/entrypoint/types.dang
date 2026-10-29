@@ -142,8 +142,8 @@ type ModuleTypes {
             .withDescription("A `subset` of the workspaces audits only those, so a vulnerable-but-unselected tree passes.")
         )
         .withFunction(
-          function("uv_build_backend_plugin", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("A `BuildBackend` plug-in module (`setuptools-package-dir`) lays out a package the built-in backends can't.")
+          function("uv_build_backend_handler", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Another module's handler (`setuptools-package-dir`) builds a package the built-in backends can't.")
         )
         .withFunction(
           function("uv_build_layouts", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

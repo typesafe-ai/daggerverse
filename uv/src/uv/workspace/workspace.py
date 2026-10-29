@@ -3,7 +3,7 @@ import logging
 import posixpath
 import tomllib
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 import dagger
 from dagger import Doc, check, field, function, object_type
@@ -38,11 +38,19 @@ from uv.utils import (
     resolve_specifier,
 )
 from uv.workspace.build import UvWorkspaceBuild
-from uv.workspace.build_backends.plugin import BuildBackend
+from uv.workspace.build_backends.handler import BuildBackendHandler
 from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_workspace_indices
 from uv.workspace.package import UvPackageSource
 from uv.workspace.plan import ProjectSource, UvSyncPlan
 from uv.workspace.venv import UvVenv
+
+BuildBackendHandlerList: TypeAlias = Annotated[
+    list[BuildBackendHandler],
+    Doc(
+        "Handlers for the local packages' build backends: from `build_backend_handlers()`, or another "
+        "module's `BuildBackendHandler`. They take precedence over the module's own support for their backends."
+    ),
+]
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +98,6 @@ class UvWorkspaceSource:
     src_init_paths: Annotated[
         list[str],
         Doc("The projects' `src/*/__init__.py` files, which mark a `src` layout."),
-    ] = field(default=list)
-
-    build_backends: Annotated[
-        list[BuildBackend],
-        Doc("Plug-in build backends, which take precedence over the built-in ones."),
     ] = field(default=list)
 
     path: Annotated[
@@ -388,6 +391,7 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
+        build_backend_handlers: BuildBackendHandlerList | None = None,
         venv_relocatable: VenvRelocatable = False,
         activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
@@ -437,7 +441,7 @@ class UvWorkspaceSource:
                 all_packages=all_packages,
                 no_editable=no_editable,
                 no_default_groups=no_default_groups,
-                build_backends=self.build_backends,
+                handlers=build_backend_handlers,
             )
             span.set_attribute("uv.sync_args", plan.uv_sync_args)
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
@@ -506,6 +510,7 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
+        build_backend_handlers: BuildBackendHandlerList | None = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -535,6 +540,7 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
+            build_backend_handlers=build_backend_handlers,
             venv_relocatable=venv_relocatable,
             activate_venv=activate_venv,
             auto_install_uv=auto_install_uv,
@@ -560,6 +566,7 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
+        build_backend_handlers: BuildBackendHandlerList | None = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -589,6 +596,7 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
+            build_backend_handlers=build_backend_handlers,
             venv_relocatable=True,
             auto_install_uv=auto_install_uv,
         )
