@@ -24,7 +24,11 @@ class UvBuildSettings:
     @classmethod
     def from_pyproject(cls, metadata: dict, name: str) -> Self:
         backend = metadata.get("tool", {}).get("uv", {}).get("build-backend", {})
-        names = backend.get("module-name", name.lower().replace("-", "_").replace(".", "_"))
+        default = name.lower().replace("-", "_").replace(".", "_")
+        # Type-stub packages keep their `-stubs` suffix.
+        if default.endswith("_stubs"):
+            default = default.removesuffix("_stubs") + "-stubs"
+        names = backend.get("module-name", default)
         if isinstance(names, str):
             names = [names]
         root = posixpath.normpath(backend.get("module-root", "src"))

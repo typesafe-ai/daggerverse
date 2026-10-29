@@ -25,6 +25,22 @@ _DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 _SOURCE_DATE_EPOCH = "315532800"
 
 
+def _module_stubs(ctr_base: str, pkg: LocalPackage) -> list[str]:
+    """Container paths of the empty files that stand in for `pkg`'s modules until its source is copied.
+
+    A single-file module is stubbed as itself, a package by its `__init__.py`, and a
+    type-stub (`-stubs`) package by its `__init__.pyi`.
+    """
+    stubs = []
+    for module_path in pkg.module_paths:
+        if is_file(module_path):
+            stubs.append(posixpath.join(ctr_base, module_path))
+        else:
+            init = "__init__.pyi" if module_path.endswith("-stubs") else "__init__.py"
+            stubs.append(posixpath.join(ctr_base, module_path, init))
+    return stubs
+
+
 @object_type
 class UvWorkspaceBuild:
     """An in-progress workspace build: a container plus its resolved sync plan.
@@ -224,10 +240,8 @@ class UvWorkspaceBuild:
         if pkg.name in self.plan.flat_packages:
             return overlay
         overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
-        for module_path in pkg.module_paths:
-            # A single-file module is stubbed as itself, a package by its `__init__.py`.
-            stub = module_path if is_file(module_path) else posixpath.join(module_path, "__init__.py")
-            overlay = overlay.with_new_file(posixpath.join(ctr_base, stub).lstrip("/"), "")
+        for stub in _module_stubs(ctr_base, pkg):
+            overlay = overlay.with_new_file(stub.lstrip("/"), "")
         # Editable installs build metadata from the scaffold before sources are copied.
         package_inputs = [path for path in pkg.build_inputs if not path.startswith("/")]
         root_inputs = [path.lstrip("/") for path in pkg.build_inputs if path.startswith("/")]
@@ -331,13 +345,18 @@ class UvWorkspaceBuild:
         Python graph-building and report ~zero duration.
         """
         overlay = core().directory()
+        stubs: list[str] = []
         with get_tracer().start_as_current_span("copy local dependency sources") as span:
             span.set_attribute("packages.count", len(self.plan.needed_local))
             span.set_attribute("packages.names", [pkg.name for pkg in self.plan.needed_local])
             for pkg in self.plan.needed_local:
                 if pkg.name in self.plan.flat_packages:
                     continue
+                stubs += _module_stubs(posixpath.normpath(posixpath.join(workdir, pkg.path)), pkg)
                 overlay = self._copy_package(overlay, workdir, pkg)
+            # Drop the module stubs the real source doesn't replace, e.g. the `__init__.py`
+            # that would turn a namespace package into a regular one.
+            ctr = ctr.without_files(stubs)
             overlay = await self._with_link_targets(overlay, workdir)
             return await ctr.with_directory("/", overlay).sync()
 

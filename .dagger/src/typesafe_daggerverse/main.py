@@ -531,14 +531,19 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_build_layouts(self) -> None:
-        """Virtual members, renamed modules, multiple modules, and custom roots build together."""
+        """Virtual members, renamed modules, multiple modules, custom roots, namespace and stub packages build together."""
         source = _src("uv/tests/_packages/uv-build-layouts")
         source = source.with_new_file("flat/tests/unrelated.py", "Must stay out of the package build layer\n")
         script = (
-            "from importlib.metadata import distributions\n"
+            "from importlib.metadata import distribution, distributions\n"
             "from pathlib import Path\n"
-            "import actual_package, compat_package, vendor_sdk\n"
+            "import actual_package, compat_package, vendor_sdk, layout_ns, layout_ns.plugin\n"
             "assert actual_package.VALUE == compat_package.VALUE == vendor_sdk.VALUE == 'real source'\n"
+            "assert layout_ns.plugin.VALUE == 'real source'\n"
+            "assert layout_ns.__file__ is None, 'namespace package became a regular package'\n"
+            "assert not Path('stubs/src/vendor_sdk-stubs/__init__.py').exists()\n"
+            "files = {str(f) for d in ('namespaced-dist', 'vendor-sdk-stubs') for f in distribution(d).files}\n"
+            "assert not {'layout_ns/__init__.py', 'vendor_sdk-stubs/__init__.py'} & files, files\n"
             "assert not Path('flat/tests/unrelated.py').exists()\n"
             "installed = {d.metadata['Name'] for d in distributions()}\n"
             "assert not {'layout-workspace', 'virtual-app'} & installed\n"

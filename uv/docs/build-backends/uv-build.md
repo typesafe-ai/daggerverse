@@ -29,7 +29,6 @@ Only `actual_package/` and `compat_package/` are copied, so unrelated root-level
 such as `tests/` stay out of the container. With a source root such as `src`, the whole
 root is copied.
 
-!!! warning "Not supported"
-    [Namespace packages](https://docs.astral.sh/uv/concepts/build-backend/#namespace-packages)
-    (`namespace = true`) and
-    [stub packages](https://docs.astral.sh/uv/concepts/build-backend/#stub-packages).
+[Namespace packages](https://docs.astral.sh/uv/concepts/build-backend/#namespace-packages)
+(`namespace = true`) and
+[stub packages](https://docs.astral.sh/uv/concepts/build-backend/#stub-packages) are supported.

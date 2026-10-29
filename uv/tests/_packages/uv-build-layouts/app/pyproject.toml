@@ -2,7 +2,7 @@
 name = "virtual-app"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["renamed-dist"]
+dependencies = ["renamed-dist", "namespaced-dist", "vendor-sdk-stubs"]
 
 [build-system]
 requires = ["uv_build>=0.11.11,<0.12"]
@@ -13,3 +13,5 @@ package = false
 
 [tool.uv.sources]
 renamed-dist = { workspace = true }
+namespaced-dist = { workspace = true }
+vendor-sdk-stubs = { workspace = true }

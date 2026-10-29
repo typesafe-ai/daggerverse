@@ -6,7 +6,9 @@ requires-python = ">=3.13"
 members = [
     "flat-dist",
     "layout-workspace",
+    "namespaced-dist",
     "renamed-dist",
+    "vendor-sdk-stubs",
     "virtual-app",
 ]
 
@@ -27,6 +29,11 @@ dependencies = [
 requires-dist = [{ name = "virtual-app", virtual = "app" }]
 
 [[package]]
+name = "namespaced-dist"
+version = "0.1.0"
+source = { editable = "namespaced" }
+
+[[package]]
 name = "renamed-dist"
 version = "0.1.0"
 source = { editable = "renamed" }
@@ -38,12 +45,23 @@ dependencies = [
 requires-dist = [{ name = "flat-dist", editable = "flat" }]
 
 [[package]]
+name = "vendor-sdk-stubs"
+version = "0.1.0"
+source = { editable = "stubs" }
+
+[[package]]
 name = "virtual-app"
 version = "0.1.0"
 source = { virtual = "app" }
 dependencies = [
+    { name = "namespaced-dist" },
     { name = "renamed-dist" },
+    { name = "vendor-sdk-stubs" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "renamed-dist", editable = "renamed" }]
+requires-dist = [
+    { name = "namespaced-dist", editable = "namespaced" },
+    { name = "renamed-dist", editable = "renamed" },
+    { name = "vendor-sdk-stubs", editable = "stubs" },
+]
