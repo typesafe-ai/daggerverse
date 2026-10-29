@@ -15,6 +15,12 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+            .withDescription("Whether an editable build writes into the package's source tree, e.g. a compiled extension.\n\nuv caches only the editable wheel, so such packages are rebuilt every time\ninstead of installed from a cached build that would leave that out.")
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
           function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
             .withDescription("The import name for the generic layout, dotted for a module inside namespace packages.")
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -46,7 +52,8 @@ type ModuleTypes {
         .withField("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Import name for the generic layout, if declared")
         .withField("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Import directories (or `.py` modules) to scaffold")
         .withField("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Directories (or files) to copy")
-        .withField("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Files (or globs) the backend reads while building"),
+        .withField("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Files (or globs) the backend reads while building")
+        .withField("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Whether an editable build writes into the package's source tree"),
       typeDef.withObject("UvBuildHandler", description: "Handles packages built with `uv_build`.")
         .withFunction(
           function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -54,6 +61,11 @@ type ModuleTypes {
         )
         .withFunction(
           function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
@@ -91,6 +103,11 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
           function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -120,6 +137,11 @@ type ModuleTypes {
         )
         .withFunction(
           function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
@@ -157,6 +179,11 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
           function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -190,6 +217,11 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
           function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -219,6 +251,11 @@ type ModuleTypes {
         )
         .withFunction(
           function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )

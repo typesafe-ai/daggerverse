@@ -182,6 +182,10 @@ type ModuleTypes {
             .withDescription("Declared license globs are available for editable and non-editable builds.")
         )
         .withFunction(
+          function("uv_maturin_editable_cached_build", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("An editable maturin install has its extension even when uv reuses its cached build.\n\nmaturin writes an editable package's extension into its source tree, not\ninto the wheel uv caches. The local install runs twice on the same\nscaffold, the second time as its own step, so uv's cache holds the first\none's build.")
+        )
+        .withFunction(
           function("uv_maturin_outside_workspace", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A maturin crate builds against a crate outside its uv workspace, staged from the workspace root.\n\nThe Cargo target cache is cleared after every build here, which must leave the\ninstalled extension working.")
         )

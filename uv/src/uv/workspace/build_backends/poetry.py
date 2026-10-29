@@ -83,6 +83,11 @@ class PoetrySettings:
         return self.packages
 
     @property
+    def editable_writes_source(self) -> bool:
+        # The build script builds extensions in place.
+        return self.build_script is not None
+
+    @property
     def build_inputs(self) -> list[str]:
         # A literal include may be a file or a directory; a glob is matched as written.
         inputs = [

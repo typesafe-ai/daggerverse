@@ -370,6 +370,9 @@ class _SetuptoolsHandler:
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
         return ["VERSION"]
 
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        return True
+
 
 def test_handler_layout_resolves_every_answer():
     layout = asyncio.run(BuildBackendLayout.resolve(_SetuptoolsHandler(), "", "plugged"))
@@ -377,6 +380,9 @@ def test_handler_layout_resolves_every_answer():
     assert layout.module_paths == ["lib/plugged"]
     assert layout.source_paths == ["lib"]
     assert layout.build_inputs == ["VERSION"]
+    assert layout.editable_writes_source is True
+    metadata = {"build-system": {"build-backend": "setuptools.build_meta"}}
+    assert PackageBackend.from_pyproject(metadata, "plugged", layout).editable_writes_source is True
 
 
 @pytest.mark.parametrize("backend", ["setuptools.build_meta", "hatchling.build"])
@@ -447,6 +453,33 @@ def test_maturin_target_prune_clears_only_past_the_limit(tmp_path, monkeypatch, 
     subprocess.run(["sh", "-c", target_prune_script(max_target_size)], check=True)
     assert target.is_dir()
     assert (not any(target.iterdir())) == cleared
+
+
+@pytest.mark.parametrize(
+    ("backend", "tool", "writes_source"),
+    [
+        ("uv_build", {}, False),
+        ("flit_core.buildapi", {}, False),
+        ("hatchling.build", {}, False),
+        # Metadata hooks only fill in metadata; build hooks may compile in place.
+        ("hatchling.build", {"hatch": {"metadata": {"hooks": {"custom": {}}}}}, False),
+        ("hatchling.build", {"hatch": {"build": {"hooks": {"cython": {}}}}}, True),
+        ("hatchling.build", {"hatch": {"build": {"targets": {"wheel": {"hooks": {"custom": {}}}}}}}, True),
+        # `pdm_build.py` runs whenever it exists, which `pyproject.toml` doesn't tell.
+        ("pdm.backend", {}, True),
+        ("poetry.core.masonry.api", {}, False),
+        ("poetry.core.masonry.api", {"poetry": {"build": {"script": "build.py"}}}, True),
+        ("poetry.core.masonry.api", {"poetry": {"build": "build.py"}}, True),
+        # A pure Rust module's editable wheel carries the extension; a mixed project's doesn't.
+        ("maturin", {}, False),
+        ("maturin", {"maturin": {"module-name": "pkg._native"}}, True),
+        ("maturin", {"maturin": {"python-source": "python"}}, True),
+        (None, {}, False),
+    ],
+)
+def test_editable_writes_source(backend, tool, writes_source):
+    metadata = {"build-system": {"build-backend": backend}, "tool": tool} if backend else {}
+    assert PackageBackend.from_pyproject(metadata, "example-dist").editable_writes_source is writes_source
 
 
 def test_maturin_crate_inputs_follow_the_manifest_path():

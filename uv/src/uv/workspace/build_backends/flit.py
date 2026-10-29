@@ -46,6 +46,11 @@ class FlitSettings:
         return None
 
     @property
+    def editable_writes_source(self) -> bool:
+        # Pure Python: an editable build is just a `.pth`.
+        return False
+
+    @property
     def build_inputs(self) -> list[str]:
         inputs = []
         if self.reads_module:

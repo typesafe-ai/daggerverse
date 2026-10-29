@@ -278,6 +278,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_build_layouts", self.uv_build_layouts)
             tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
             tg.start_soon(_run, "uv_maturin_outside_workspace", self.uv_maturin_outside_workspace)
+            tg.start_soon(_run, "uv_maturin_editable_cached_build", self.uv_maturin_editable_cached_build)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
@@ -630,6 +631,41 @@ class TypesafeDaggerverse:
                 )
                 .sync()
             )
+
+    @function
+    async def uv_maturin_editable_cached_build(self) -> None:
+        """An editable maturin install has its extension even when uv reuses its cached build.
+
+        maturin writes an editable package's extension into its source tree, not
+        into the wheel uv caches. The local install runs twice on the same
+        scaffold, the second time as its own step, so uv's cache holds the first
+        one's build.
+        """
+        ws = _fixture("uv/tests/_packages/maturin-outside-workspace")
+        uv_ = uv(ws)
+        maturin = (
+            uv_.build_backend_handlers()
+            .maturin()
+            .with_package_config(
+                name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
+            )
+        )
+        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
+        scaffold = (
+            uv_.workspace("py")
+            .build(base_container=base, build_backend_handlers=[maturin], ws=ws)
+            .with_remote_dependencies()
+            .with_workspace_files()
+        )
+        await scaffold.with_local_dependencies()
+        rerun = scaffold.with_container(scaffold.container().with_env_variable("UV_MATURIN_CACHED_BUILD", "rerun"))
+        await (
+            (await rerun.with_local_dependencies())
+            .with_exec(
+                ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
+            )
+            .sync()
+        )
 
     @function
     async def uv_license_files(self) -> None:

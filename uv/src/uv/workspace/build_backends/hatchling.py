@@ -34,6 +34,8 @@ class HatchlingSettings:
     shared_paths: list[str] = field(default_factory=list)
     # Scripts of `custom` build and metadata hooks.
     hook_scripts: list[str] = field(default_factory=list)
+    # Whether any build hook (e.g. `custom`, or a plugin like hatch-cython) runs for the wheel.
+    build_hooks: bool = False
     # File the `regex` or `code` version source reads (`[tool.hatch.version].path`).
     version_path: str | None = None
 
@@ -71,6 +73,7 @@ class HatchlingSettings:
                 }
             ),
             hook_scripts=list(dict.fromkeys(hook.get("path", _DEFAULT_HOOK_SCRIPT) for hook in hooks)),
+            build_hooks=bool(build.get("hooks") or wheel.get("hooks")),
             version_path=hatch.get("version", {}).get("path"),
         )
 
@@ -93,6 +96,11 @@ class HatchlingSettings:
     @property
     def source_paths(self) -> list[str] | None:
         return self._selection
+
+    @property
+    def editable_writes_source(self) -> bool:
+        # Build hooks also run for editable builds, and may compile extensions in place.
+        return self.build_hooks
 
     @property
     def build_inputs(self) -> list[str]:

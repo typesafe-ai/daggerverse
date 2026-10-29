@@ -412,11 +412,27 @@ class UvWorkspaceBuild:
                     elif await source.exists(source_path):
                         overlay = overlay.without_file(link).with_file(link, source.file(source_path))
 
+    def _rebuild_args(self) -> list[str]:
+        """`--reinstall-package` for editable packages whose backend writes into the source tree.
+
+        uv caches only the editable wheel, so installing a cached one into a
+        fresh container would leave out what the build wrote into the source
+        (e.g. a compiled extension); rebuilding them puts it back.
+        """
+        if self.plan.no_editable:
+            return []
+        return [
+            f"--reinstall-package={pkg.name}"
+            for pkg in self.plan.needed_local
+            if pkg.name not in self.plan.flat_packages and pkg.build_backend.editable_writes_source
+        ]
+
     async def _sync_local(self, ctr: Container) -> Container:
         """Build and install the local packages, with the backends' hooks around the `uv sync`."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
             hooks = self._hooks()
-            span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
+            args = [*self.plan.uv_sync_args, *self._rebuild_args()]
+            span.set_attribute("uv.sync_args", args)
             span.set_attribute("build.backend_hooks", list(hooks))
             for hook in hooks.values():
                 ctr = hook.setup(ctr)
@@ -424,7 +440,7 @@ class UvWorkspaceBuild:
             set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
             if set_epoch:
                 ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
-            ctr = ctr.with_exec(self.plan.uv_sync_args)
+            ctr = ctr.with_exec(args)
             if set_epoch:
                 ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
             for hook in reversed(hooks.values()):

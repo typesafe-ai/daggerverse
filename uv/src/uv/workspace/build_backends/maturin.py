@@ -90,6 +90,12 @@ class MaturinSettings:
         return [self.python_source or self._package]
 
     @property
+    def editable_writes_source(self) -> bool:
+        # A mixed project's editable build places the extension in its Python package;
+        # a pure Rust module's editable wheel carries the extension itself.
+        return self._package is not None
+
+    @property
     def build_inputs(self) -> list[str]:
         inputs = [posixpath.normpath(posixpath.join(self.crate_dir, path)) for path in _CRATE_INPUTS]
         if self._package is None:

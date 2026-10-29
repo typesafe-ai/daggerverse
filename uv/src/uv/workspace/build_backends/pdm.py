@@ -70,6 +70,13 @@ class PdmSettings:
         return None
 
     @property
+    def editable_writes_source(self) -> bool:
+        # `run-setuptools` builds extensions in place, and pdm-backend runs `pdm_build.py`
+        # whenever it exists, which `pyproject.toml` doesn't tell. Rebuilding a pure-Python
+        # editable package only regenerates its `.pth`.
+        return True
+
+    @property
     def build_inputs(self) -> list[str]:
         # The hook only runs if the script exists; a missing file is simply not staged.
         inputs = [self.custom_hook]

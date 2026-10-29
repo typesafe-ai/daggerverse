@@ -26,6 +26,12 @@ Cargo never prunes that cache, so it's cleared after a build that leaves it larg
 than 50 GiB. Change the limit with the maturin handler's `with_max_target_size`
 (`0` clears it after every build).
 
+Editable installs of a mixed project rebuild it every time they run: maturin
+writes the extension into the project's Python package rather than into the wheel
+uv caches, so a cached build would install without it. The compiled crates are
+reused, so the rebuild is incremental. A pure Rust module's editable wheel carries
+the extension itself, so it's installed from uv's cache as usual.
+
 The base container needs a Rust toolchain.
 
 ## Cargo workspaces

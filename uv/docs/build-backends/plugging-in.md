@@ -13,14 +13,15 @@ the `UvBuildBackendHandler` interface in your own Dagger object with appropriate
 
 Implement the following functions:
 
-| Function              | Description                                                                  |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `module_name`         | Names the import package; dotted inside namespace packages                   |
-| `module_paths`        | Lists the package-relative import directories (or `.py` modules) to stub     |
-| `source_paths`        | Lists the package-relative directories (or files) to copy                    |
-| `build_inputs`        | Lists the files (or globs) the build reads; `/` starts at the root of `ws`   |
-| `setup(container)`    | Prepares the container before the build, e.g. mounts caches                  |
-| `teardown(container)` | Cleans the container up after the build                                      |
+| Function                 | Description                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `module_name`            | Names the import package; dotted inside namespace packages                                                                             |
+| `module_paths`           | Lists the package-relative import directories (or `.py` modules) to stub                                                               |
+| `source_paths`           | Lists the package-relative directories (or files) to copy                                                                              |
+| `build_inputs`           | Lists the files (or globs) the build reads; `/` starts at the root of `ws`                                                             |
+| `editable_writes_source` | Whether an editable build writes into the source tree, e.g. a compiled extension, so it's rebuilt instead of installed from uv's cache |
+| `setup(container)`       | Prepares the container before the build, e.g. mounts caches                                                                            |
+| `teardown(container)`    | Cleans the container up after the build                                                                                                |
 
 Returning `None` from `module_name`, `module_paths`, or `source_paths` falls back to
 the conventional layout: the module named after the distribution, under `src/` or

@@ -61,6 +61,15 @@ class BuildBackendHandler(Protocol):
         ...
 
     @function
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Whether an editable build writes into the package's source tree, e.g. a compiled extension.
+
+        uv caches only the editable wheel, so such packages are rebuilt every time
+        instead of installed from a cached build that would leave that out.
+        """
+        ...
+
+    @function
     def setup(self, container: Container) -> Container:
         """Prepare the container before the local packages build, e.g. mount caches, set variables or secrets.
 
@@ -88,20 +97,25 @@ class BuildBackendLayout:
     )
     source_paths: Annotated[list[str] | None, Doc("Directories (or files) to copy")] = field(default=None)
     build_inputs: Annotated[list[str], Doc("Files (or globs) the backend reads while building")] = field(default=list)
+    editable_writes_source: Annotated[bool, Doc("Whether an editable build writes into the package's source tree")] = (
+        field(default=False)
+    )
 
     @classmethod
     async def resolve(cls, handler: BuildBackendHandler, pyproject: str, name: str) -> Self:
-        module_name, module_paths, source_paths, build_inputs = await asyncio.gather(
+        module_name, module_paths, source_paths, build_inputs, editable_writes_source = await asyncio.gather(
             handler.module_name(pyproject, name),
             handler.module_paths(pyproject, name),
             handler.source_paths(pyproject, name),
             handler.build_inputs(pyproject, name),
+            handler.editable_writes_source(pyproject, name),
         )
         return cls(
             module_name=module_name,
             module_paths=module_paths,
             source_paths=source_paths,
             build_inputs=build_inputs,
+            editable_writes_source=editable_writes_source,
         )
 
 
@@ -152,6 +166,10 @@ class _Builtin:
     @function
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
         return self._settings(pyproject, name).build_inputs
+
+    @function
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        return self._settings(pyproject, name).editable_writes_source
 
     @function
     def setup(self, container: Container) -> Container:
