@@ -17,6 +17,7 @@ from uv.args import (
     Group,
     LockTimeout,
     MaxCacheSize,
+    NoDefaultGroups,
     NoEditable,
     Package,
     PruneCache,
@@ -299,6 +300,7 @@ class UvWorkspaceSource:
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
+        no_default_groups: NoDefaultGroups = False,
         auto_install_uv: Annotated[
             bool,
             Doc(
@@ -332,6 +334,7 @@ class UvWorkspaceSource:
                 all_groups=all_groups,
                 all_packages=all_packages,
                 no_editable=no_editable,
+                no_default_groups=no_default_groups,
             )
             span.set_attribute("uv.sync_args", plan.uv_sync_args)
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
@@ -397,6 +400,7 @@ class UvWorkspaceSource:
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
+        no_default_groups: NoDefaultGroups = False,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -432,6 +436,7 @@ class UvWorkspaceSource:
             all_groups=all_groups,
             all_packages=all_packages,
             no_editable=no_editable,
+            no_default_groups=no_default_groups,
             auto_install_uv=auto_install_uv,
         )
         if venv:
@@ -456,6 +461,7 @@ class UvWorkspaceSource:
         all_groups: AllGroups = False,
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
+        no_default_groups: NoDefaultGroups = False,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -484,6 +490,7 @@ class UvWorkspaceSource:
             all_groups=all_groups,
             all_packages=all_packages,
             no_editable=no_editable,
+            no_default_groups=no_default_groups,
             auto_install_uv=auto_install_uv,
         )
         b = await b.with_venv(relocatable=True)

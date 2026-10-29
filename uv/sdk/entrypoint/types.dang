@@ -6,7 +6,7 @@ type ModuleTypes {
       typeDef.withObject("LocalPackage", description: "A local (editable/directory/virtual) package in a uv workspace.\n\n``pyproject_contents`` is captured while resolving the plan so scaffold\nlayers depend on package metadata, not on the whole source directory.")
         .withField("name", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Package name")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace-relative path")
-        .withField("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Python module name")
+        .withField("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Python import name; dotted for a module inside namespace packages")
         .withField("flat", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Flat layout (module at package root) vs src layout (module under src/)")
         .withField("pyproject_contents", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Already-read package metadata used when creating a dependency scaffold"),
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
@@ -133,6 +133,7 @@ type ModuleTypes {
             .withArg("all_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every dependency group; maps to `uv sync --all-groups`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every workspace member; maps to `uv sync --all-packages`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("auto_install_uv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.", defaultValue: ("true" :: Dagger.JSON!))
         )
         .withFunction(
@@ -151,6 +152,7 @@ type ModuleTypes {
             .withArg("all_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every dependency group; maps to `uv sync --all-groups`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every workspace member; maps to `uv sync --all-packages`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("prune_cache", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Whether to run `uv cache prune --ci` after installing remote dependencies. Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("max_cache_size", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Prune the uv cache only once it grows past this many GiB.", defaultValue: ("100" :: Dagger.JSON!))
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
@@ -182,6 +184,7 @@ type ModuleTypes {
             .withArg("all_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every dependency group; maps to `uv sync --all-groups`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every workspace member; maps to `uv sync --all-packages`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("prune_cache", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Whether to run `uv cache prune --ci` after installing remote dependencies. Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("max_cache_size", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Prune the uv cache only once it grows past this many GiB.", defaultValue: ("100" :: Dagger.JSON!))
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))

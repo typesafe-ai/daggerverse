@@ -5,13 +5,23 @@ from typing import Annotated
 
 from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Container, Directory, core
+from dagger_clients.core import Container, Directory, ExistsType, core
 
 from uv.args import LockTimeout, MaxCacheSize, PruneCache
-from uv.utils import _DEFAULT_VERSION, image_ref
+from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
 from uv.workspace.build_backends.paths import is_file
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
+
+_BUSYBOX = pinned_image("busybox")
+
+# Prints every symlink under the current directory whose target is missing.
+_DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
+
+# 1980-01-01, the earliest timestamp a wheel (zip) can hold. Dagger git trees
+# normalize mtimes to 1, which backends that stamp files from their mtime (flit)
+# reject unless SOURCE_DATE_EPOCH is set.
+_SOURCE_DATE_EPOCH = "315532800"
 
 
 @object_type
@@ -324,14 +334,60 @@ class UvWorkspaceBuild:
                 if pkg.name in self.plan.flat_packages:
                     continue
                 overlay = self._copy_package(overlay, workdir, pkg)
+            overlay = await self._with_link_targets(overlay, workdir)
             return await ctr.with_directory("/", overlay).sync()
+
+    async def _with_link_targets(self, overlay: Directory, workdir: str) -> Directory:
+        """Replace copied symlinks that point outside the copied sources with their content.
+
+        Packages can link to code elsewhere in the repository (e.g. modules vendored
+        from a sibling directory). A busybox exec lists the dangling links, since the
+        Dagger API has no way to list them; Dagger follows each link in the source
+        tree, and its content replaces the link. Repeats while that content brings
+        new dangling links.
+        """
+        seen: set[str] = set()
+        source = self.plan.source_dir
+        with get_tracer().start_as_current_span("resolve dangling symlinks") as span:
+            while True:
+                listing = await (
+                    core()
+                    .container()
+                    .from_(_BUSYBOX)
+                    .with_directory("/overlay", overlay)
+                    .with_workdir("/overlay")
+                    .with_exec(["sh", "-c", _DANGLING_LINKS])
+                    .stdout()
+                )
+                links = [link.removeprefix("./") for link in listing.splitlines()]
+                links = [link for link in links if link not in seen]
+                if not links:
+                    span.set_attribute("links.resolved", sorted(seen))
+                    return overlay
+                seen.update(links)
+                for link in links:
+                    # The container mirrors the source tree with the workspace root at `workdir`.
+                    relative = posixpath.relpath(f"/{link}", workdir)
+                    source_path = posixpath.normpath(posixpath.join(self.plan.workspace_path, relative))
+                    if await source.exists(source_path, expected_type=ExistsType.DIRECTORY_TYPE):
+                        overlay = overlay.without_file(link).with_directory(link, source.directory(source_path))
+                    elif await source.exists(source_path):
+                        overlay = overlay.without_file(link).with_file(link, source.file(source_path))
 
     async def _sync_local(self, ctr: Container) -> Container:
         with get_tracer().start_as_current_span("install local dependencies") as span:
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
             # `with_exec` is lazy; sync() inside the span so it captures the actual
             # install rather than just the query-graph construction.
-            return await ctr.with_exec(self.plan.uv_sync_args).sync()
+            # Set SOURCE_DATE_EPOCH for this sync only, keeping a value the base sets.
+            if await ctr.env_variable("SOURCE_DATE_EPOCH"):
+                return await ctr.with_exec(self.plan.uv_sync_args).sync()
+            return await (
+                ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
+                .with_exec(self.plan.uv_sync_args)
+                .without_env_variable("SOURCE_DATE_EPOCH")
+                .sync()
+            )
 
     @function
     async def with_local_dependencies(self) -> Container:

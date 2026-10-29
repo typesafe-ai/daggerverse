@@ -13,6 +13,7 @@ from uv.utils import (
     parse_required_version_from_uv_toml,
     require_package_selection,
     resolve_specifier,
+    selected_groups,
 )
 from uv.workspace.index import UvIndex, merge_indices
 
@@ -30,6 +31,23 @@ class TestRequirePackageSelection:
     def test_pure_root_no_selection_raises(self):
         with pytest.raises(ValueError, match="pure workspace root"):
             require_package_selection([], False, None)
+
+
+class TestSelectedGroups:
+    @pytest.mark.parametrize(
+        ("pyproject", "groups", "all_groups", "no_default_groups", "expected"),
+        [
+            ("", [], False, False, {"dev"}),
+            ("", ["docs"], False, False, {"dev", "docs"}),
+            ("", ["docs"], False, True, {"docs"}),
+            ("", [], True, True, None),
+            ('[tool.uv]\ndefault-groups = ["lint", "test"]\n', [], False, False, {"lint", "test"}),
+            ('[tool.uv]\ndefault-groups = "all"\n', [], False, False, None),
+            ('[tool.uv]\ndefault-groups = "all"\n', ["docs"], False, True, {"docs"}),
+        ],
+    )
+    def test_selection(self, pyproject, groups, all_groups, no_default_groups, expected):
+        assert selected_groups(pyproject, groups, all_groups, no_default_groups) == expected
 
 
 class TestImageRef:

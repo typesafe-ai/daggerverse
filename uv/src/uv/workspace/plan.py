@@ -14,6 +14,7 @@ from uv.utils import (
     parse_local_packages,
     parse_project_name,
     require_package_selection,
+    selected_groups,
 )
 from uv.workspace.build_backends import BuildBackend
 
@@ -42,10 +43,10 @@ def _module_name(pkg_name: str) -> str:
     return _MODULE_NAME_OVERRIDES.get(pkg_name, pkg_name.replace("-", "_"))
 
 
-def _transitive_union(lock_data: dict, packages: list[str]) -> OrderedDict[str, str]:
+def _transitive_union(lock_data: dict, packages: list[str], groups: set[str] | None) -> OrderedDict[str, str]:
     merged: OrderedDict[str, str] = OrderedDict()
     for package in packages:
-        merged.update(find_transitive_local_deps(lock_data, package))
+        merged.update(find_transitive_local_deps(lock_data, package, groups))
     return OrderedDict(sorted(merged.items()))
 
 
@@ -54,20 +55,22 @@ async def _discover_local_packages(
     packages: list[str],
     all_packages: bool,
     default_package: str | None,
+    groups: set[str] | None,
     workspace_path: str,
     source_dir: Directory,
     ws_dir: Directory,
-) -> tuple[OrderedDict[str, str], OrderedDict[str, str], dict[str, bool]]:
-    """Find reachable local packages and detect each one's layout (flat vs src).
+) -> tuple[OrderedDict[str, str], OrderedDict[str, str], set[str]]:
+    """Find reachable local packages and the `src/<module>/__init__.py` paths in the tree.
 
     Runs in-process with many glob calls against the Dagger API, so it gets its
     own span to surface the file-discovery phase as a node in the trace.
-    Returns `(all_local, needed_local, flat_flags)`.
+    Returns `(all_local, needed_local, src_init_paths)`.
 
     `needed_local` mirrors `uv sync`'s selection: every member when
     `all_packages` is set, the union of the explicit `packages`' transitive
     local deps when given, otherwise the transitive local deps of
-    `default_package` (the current package, à la a bare `uv sync`).
+    `default_package` (the current package, à la a bare `uv sync`). Only the
+    targets' own selected dependency `groups` are followed.
     """
     with get_tracer().start_as_current_span("discover local packages") as span:
         # Glob the source tree's pyproject.toml paths once and reuse them for both
@@ -80,7 +83,9 @@ async def _discover_local_packages(
             # create()'s require_package_selection guarantees a target here:
             # the explicit packages, or the current (workspace-root) package.
             targets = packages or ([default_package] if default_package else [])
-            needed_local = _match_reachable(_transitive_union(lock_data, targets), workspace_path, pyproject_paths)
+            needed_local = _match_reachable(
+                _transitive_union(lock_data, targets, groups), workspace_path, pyproject_paths
+            )
 
         src_init_paths: set[str] = set()
         for p in await source_dir.glob("**/src/*/__init__.py"):
@@ -89,18 +94,11 @@ async def _discover_local_packages(
             resolved = p if workspace_path == "." else posixpath.join(workspace_path, p)
             src_init_paths.add(posixpath.normpath(resolved))
 
-        flat_flags: dict[str, bool] = {}
-        for name, path in all_local.items():
-            module = _module_name(name)
-            resolved_pkg = posixpath.normpath(posixpath.join(workspace_path, path))
-            expected = posixpath.normpath(posixpath.join(resolved_pkg, "src", module, "__init__.py"))
-            flat_flags[name] = expected not in src_init_paths
-
         span.set_attribute("packages.all", len(all_local))
         span.set_attribute("packages.needed", len(needed_local))
         span.set_attribute("packages.names", sorted(all_local))
 
-    return all_local, needed_local, flat_flags
+    return all_local, needed_local, src_init_paths
 
 
 @object_type
@@ -113,7 +111,7 @@ class LocalPackage:
 
     name: Annotated[str, Doc("Package name")] = field()
     path: Annotated[str, Doc("Workspace-relative path")] = field()
-    module: Annotated[str, Doc("Python module name")] = field()
+    module: Annotated[str, Doc("Python import name; dotted for a module inside namespace packages")] = field()
     flat: Annotated[
         bool,
         Doc("Flat layout (module at package root) vs src layout (module under src/)"),
@@ -134,7 +132,8 @@ class LocalPackage:
         paths = self.build_backend.module_paths
         if paths is not None:
             return paths
-        return [self.module if self.flat else posixpath.join("src", self.module)]
+        module_path = self.module.replace(".", "/")
+        return [module_path if self.flat else posixpath.join("src", module_path)]
 
     @property
     def source_paths(self) -> list[str]:
@@ -142,7 +141,7 @@ class LocalPackage:
         paths = self.build_backend.source_paths
         if paths is not None:
             return paths
-        return [self.module] if self.flat else ["src"]
+        return [self.module.replace(".", "/")] if self.flat else ["src"]
 
     @property
     def build_inputs(self) -> list[str]:
@@ -206,6 +205,7 @@ class UvSyncPlan:
         all_groups: bool = False,
         all_packages: bool = False,
         no_editable: bool = False,
+        no_default_groups: bool = False,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front."""
         ws_dir = source_dir if workspace_path == "." else source_dir.directory(workspace_path)
@@ -214,13 +214,15 @@ class UvSyncPlan:
 
         # The workspace root's package name is `uv sync`'s implicit target when no
         # package is requested; resolve it so we mirror that default.
-        root_name = parse_project_name(await ws_dir.file("pyproject.toml").contents())
+        root_pyproject = await ws_dir.file("pyproject.toml").contents()
+        root_name = parse_project_name(root_pyproject)
         default_package = normalize_package_name(root_name) if root_name else None
         # Fail fast on a pure workspace root with no selection (nothing to install).
         require_package_selection(packages, all_packages, default_package)
 
-        all_local, needed_local, flat_flags = await _discover_local_packages(
-            lock_data, packages, all_packages, default_package, workspace_path, source_dir, ws_dir
+        groups = selected_groups(root_pyproject, group or [], all_groups, no_default_groups)
+        all_local, needed_local, src_init_paths = await _discover_local_packages(
+            lock_data, packages, all_packages, default_package, groups, workspace_path, source_dir, ws_dir
         )
 
         # A local package with no [build-system] or with package = false is deps-only:
@@ -242,11 +244,14 @@ class UvSyncPlan:
                 )
                 if virtual:
                     flat_packages.append(name)
+                module = BuildBackend.from_pyproject(metadata, name).module_name or _module_name(name)
+                # A src layout has the module's top-level package under `src/`.
+                top = module.split(".", 1)[0]
                 pkg = LocalPackage(
                     name=name,
                     path=pkg_path,
-                    module=_module_name(name),
-                    flat=flat_flags.get(name, False),
+                    module=module,
+                    flat=posixpath.normpath(posixpath.join(resolved, "src", top, "__init__.py")) not in src_init_paths,
                     pyproject_contents=contents,
                 )
                 local_packages[name] = pkg
@@ -271,6 +276,7 @@ class UvSyncPlan:
             all_groups=all_groups,
             all_packages=all_packages,
             no_editable=no_editable,
+            no_default_groups=no_default_groups,
         )
 
         return cls(
