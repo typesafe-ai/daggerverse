@@ -38,6 +38,223 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 """The module that this client loads on first use."""
 
 
+@_runtime_checkable
+class UvBuildBackend(_Protocol):
+    """ A build backend this module doesn't support natively, or one whose
+    built-in support it replaces.  Every function except `build_backend`
+    receives the package's `pyproject.toml` contents and its distribution
+    name. Returning None from `module_name`, `module_paths`, or
+    `source_paths` falls back to the generic layout: the module named
+    after the distribution, under `src/` or at the package root.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this implementation handles, e.g. `setuptools.build_meta`.
+
+        """
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """
+        Package-relative files (or globs) the backend reads while building.
+
+        """
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """
+        The import name for the generic layout, dotted for a module inside namespace packages.
+
+        """
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """
+        Package-relative import directories (or `.py` modules) to scaffold.
+
+        """
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """
+        Package-relative directories (or files) to copy as the package's source.
+
+        """
+
+
+class _UvBuildBackendClient(_Type):
+    """Concrete client for UvBuildBackend interface."""
+
+    @classmethod
+    def _graphql_name(cls) -> str:
+        return "UvBuildBackend"
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this implementation handles,
+        e.g. `setuptools.build_meta`.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """
+        Package-relative files (or globs) the backend reads while building.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildBackend.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildBackend.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvBuildBackend.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """
+        The import name for the generic layout, dotted for a module inside
+        namespace packages.
+
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildBackend.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildBackend.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """
+        Package-relative import directories (or `.py` modules) to scaffold.
+
+        Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildBackend.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildBackend.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """
+        Package-relative directories (or files) to copy as the package's
+        source.
+
+        Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildBackend.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildBackend.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+
 class Uv(_Type):
     """ Entrypoint for the `uv` module.  Hands out one `UvWorkspaceSource`
     per uv workspace, as the `pyproject` module discovers them. Use
@@ -103,6 +320,122 @@ class Uv(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("workspaces", _args)
         return UvWorkspaces(_ctx)
+
+
+class UvBuildBackendLayout(_Type):
+    """ A package layout resolved from a `BuildBackend` plug-in.  """
+
+    async def build_inputs(self) -> list[str]:
+        """Files (or globs) the backend reads while building
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvBuildBackendLayout.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self) -> str | None:
+        """Import name for the generic layout, if declared
+
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self) -> list[str] | None:
+        """Import directories (or `.py` modules) to scaffold
+
+        Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    async def source_paths(self) -> list[str] | None:
+        """Directories (or files) to copy
+
+        Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
 
 
 class UvIndex(_Type):
@@ -336,6 +669,14 @@ class UvLocalPackage(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
+
+    def layout(self) -> UvBuildBackendLayout:
+        """Layout resolved from a `BuildBackend` plug-in, replacing built-in
+        backend settings
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("layout", _args)
+        return UvBuildBackendLayout(_ctx)
 
     async def module(self) -> str:
         """Python import name; dotted for a module inside namespace packages
@@ -1178,7 +1519,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
         """
         Prepare a build for this workspace without installing anything yet.
 
@@ -1218,6 +1559,7 @@ class UvWorkspaceSource(_Type):
             Skip the default dependency groups (`[tool.uv] default-groups`,
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
+        build_backends:
         auto_install_uv:
             Automatically install the uv binary if it is not already on $PATH.
             Set to False if your base_container already ships uv.
@@ -1240,6 +1582,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.build", "no_editable", no_editable, "bool")
         if not (isinstance(no_default_groups, bool)):
             raise _type_error("UvWorkspaceSource.build", "no_default_groups", no_default_groups, "bool")
+        if not (build_backends is None or (isinstance(build_backends, list) and all(isinstance(_v0, UvBuildBackend) for _v0 in build_backends))):
+            raise _type_error("UvWorkspaceSource.build", "build_backends", build_backends, "list[UvBuildBackend] | None")
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.build", "auto_install_uv", auto_install_uv, "bool")
         _args = [
@@ -1252,6 +1596,7 @@ class UvWorkspaceSource(_Type):
             _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("buildBackends", build_backends, None),
             _Arg("autoInstallUv", auto_install_uv, True),
         ]
         _ctx = self._select("build", _args)
@@ -1312,7 +1657,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
+    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
         """
         Build a minimal container with deps installed for the given
         package(s).
@@ -1348,6 +1693,7 @@ class UvWorkspaceSource(_Type):
             Skip the default dependency groups (`[tool.uv] default-groups`,
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
+        build_backends:
         prune_cache:
             Whether to run `uv cache prune --ci` after installing remote
             dependencies. Learn more about the reasoning in [uv
@@ -1385,6 +1731,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.install", "no_editable", no_editable, "bool")
         if not (isinstance(no_default_groups, bool)):
             raise _type_error("UvWorkspaceSource.install", "no_default_groups", no_default_groups, "bool")
+        if not (build_backends is None or (isinstance(build_backends, list) and all(isinstance(_v0, UvBuildBackend) for _v0 in build_backends))):
+            raise _type_error("UvWorkspaceSource.install", "build_backends", build_backends, "list[UvBuildBackend] | None")
         if not (isinstance(prune_cache, bool)):
             raise _type_error("UvWorkspaceSource.install", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
@@ -1407,6 +1755,7 @@ class UvWorkspaceSource(_Type):
             _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("buildBackends", build_backends, None),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
@@ -1530,7 +1879,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("uvVersion", _args)
         return await _ctx.execute(str)
 
-    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
+    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
         """
         Install into a relocatable venv and export it with the Python it links
         against.
@@ -1568,6 +1917,7 @@ class UvWorkspaceSource(_Type):
             Skip the default dependency groups (`[tool.uv] default-groups`,
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
+        build_backends:
         prune_cache:
             Whether to run `uv cache prune --ci` after installing remote
             dependencies. Learn more about the reasoning in [uv
@@ -1600,6 +1950,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.venv", "no_editable", no_editable, "bool")
         if not (isinstance(no_default_groups, bool)):
             raise _type_error("UvWorkspaceSource.venv", "no_default_groups", no_default_groups, "bool")
+        if not (build_backends is None or (isinstance(build_backends, list) and all(isinstance(_v0, UvBuildBackend) for _v0 in build_backends))):
+            raise _type_error("UvWorkspaceSource.venv", "build_backends", build_backends, "list[UvBuildBackend] | None")
         if not (isinstance(prune_cache, bool)):
             raise _type_error("UvWorkspaceSource.venv", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
@@ -1618,6 +1970,7 @@ class UvWorkspaceSource(_Type):
             _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("buildBackends", build_backends, None),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
@@ -1751,6 +2104,8 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, session: _Session | N
 
 __all__ = [
     "Uv",
+    "UvBuildBackend",
+    "UvBuildBackendLayout",
     "UvIndex",
     "UvLocalPackage",
     "UvPackageSource",

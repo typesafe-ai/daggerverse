@@ -49,7 +49,10 @@ clients = ["./pyproject"]
 is-module = true
 
 [sdks.python.scopes.".dagger"]
-clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor", "./pyproject"]
+clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor", "./pyproject", "./uv/tests/setuptools-package-dir"]
+is-module = true
+
+[sdks.python.scopes."uv/tests/setuptools-package-dir"]
 is-module = true
 
 [modules.pyproject]

@@ -14,24 +14,25 @@ The module reads the native settings of these build backends:
 - [flit_core](flit.md)
 - [poetry-core](poetry.md)
 
-For every backend, the files named in `[project]` (`readme`, `license-files`, and
-`license = { file = ... }`) are included as well. License patterns support globs such
-as `LICENSE*` and `licenses/**/*.txt`.
+!!! tip "Your build backend is not supported?"
+    No worries! Learn how to [implement your own](custom.md)
 
-Members with no build system, or with `tool.uv.package = false`, are dependency-only:
-their dependencies are installed, but the member itself is not.
+!!! note "Backend-agnostic settings"
+    Files defined in `[project.readme]`, `[project.license-files]`, and
+    `license = { file = ... }` are included for all backends.
 
-## Other backends
-
-Packages using any other backend (such as `setuptools`) build
-when their module is named after the distribution (lowercased, with dashes replaced by
-underscores) and sits under `src/` or at the package root.
+!!! note "Installing pure applications (no build system)"
+    Projects without a build system, or with `tool.uv.package = false` do not get installed, only their dependencies are.
 
 !!! warning "Limitations"
-    - Namespace packages are supported only through [flit_core](flit.md)'s dotted
-      module names, and type-stub (`-stubs`) packages are not supported.
+    - Namespace packages are not supported.
+    - Type-stub (`-stubs`) packages are not supported.
     - Versions read from git fail, because the build has no `.git` directory.
 
     Each backend page lists its own limitations. Supply missing inputs before
     `with_local_dependencies()` when using such settings; a full project copy after
     installation is too late for files the backend needs while building.
+
+## Unknown build backends
+
+Packages using an unknown backend can only be built if their module is named after the distribution (lowercased, with dashes replaced by underscores) and is either using the standard `src/` or the flat layout.

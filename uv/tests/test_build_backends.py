@@ -1,28 +1,31 @@
 """Backend settings determine scaffold paths and the files copied for installation."""
 
+import asyncio
+
 import pytest
-from uv.workspace.build_backends import BuildBackend
+from uv.workspace.build_backends import PackageBackend
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
 from uv.workspace.build_backends.pdm import PdmSettings
+from uv.workspace.build_backends.plugin import BuildBackendLayout
 from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
 
 
 def _system(backend: str, tool: dict | None = None, project: dict | None = None, name: str = "example"):
     metadata = {"build-system": {"build-backend": backend}, "tool": tool or {}, "project": project or {}}
-    return BuildBackend.from_pyproject(metadata, name)
+    return PackageBackend.from_pyproject(metadata, name)
 
 
-def _uv_build(settings: dict | None = None, name: str = "example") -> BuildBackend:
+def _uv_build(settings: dict | None = None, name: str = "example") -> PackageBackend:
     return _system("uv_build", {"uv": {"build-backend": settings or {}}}, name=name)
 
 
-def _hatchling(hatch: dict) -> BuildBackend:
+def _hatchling(hatch: dict) -> PackageBackend:
     return _system("hatchling.build", {"hatch": hatch})
 
 
-def _pdm(pdm: dict, name: str = "example") -> BuildBackend:
+def _pdm(pdm: dict, name: str = "example") -> PackageBackend:
     return _system("pdm.backend", {"pdm": pdm}, name=name)
 
 
@@ -39,7 +42,7 @@ def _pdm(pdm: dict, name: str = "example") -> BuildBackend:
     ],
 )
 def test_registry_selects_settings(backend, settings):
-    system = BuildBackend.from_pyproject({"build-system": {"build-backend": backend}}, "example")
+    system = PackageBackend.from_pyproject({"build-system": {"build-backend": backend}}, "example")
     assert system.name == backend
     assert type(system.settings) is settings
 
@@ -249,7 +252,7 @@ def test_pdm_custom_hook_path():
 # ---- flit_core ----
 
 
-def _flit(flit: dict, project: dict | None = None, name: str = "example-dist") -> BuildBackend:
+def _flit(flit: dict, project: dict | None = None, name: str = "example-dist") -> PackageBackend:
     return _system("flit_core.buildapi", {"flit": flit}, project, name=name)
 
 
@@ -289,7 +292,7 @@ def test_only_flit_declares_a_module_name(backend):
 # ---- poetry-core ----
 
 
-def _poetry(poetry: dict) -> BuildBackend:
+def _poetry(poetry: dict) -> PackageBackend:
     return _system("poetry.core.masonry.api", {"poetry": poetry})
 
 
@@ -332,3 +335,42 @@ def test_poetry_wheel_includes_readme_and_build_script():
 
 def test_poetry_legacy_build_string():
     assert _poetry({"build": "build.py"}).build_inputs == ["build.py"]
+
+
+# ---- plug-ins ----
+
+
+class _SetuptoolsPlugin:
+    async def build_backend(self) -> str:
+        return "setuptools.build_meta"
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        return None
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        return [f"lib/{name}"]
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        return ["lib"]
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        return ["VERSION"]
+
+
+def test_plugin_layout_resolves_every_answer():
+    layout = asyncio.run(BuildBackendLayout.resolve(_SetuptoolsPlugin(), "", "plugged"))
+    assert layout.module_name is None
+    assert layout.module_paths == ["lib/plugged"]
+    assert layout.source_paths == ["lib"]
+    assert layout.build_inputs == ["VERSION"]
+
+
+@pytest.mark.parametrize("backend", ["setuptools.build_meta", "hatchling.build"])
+def test_plugin_layout_replaces_builtin_settings(backend):
+    layout = BuildBackendLayout(module_paths=["lib/plugged"], source_paths=["lib"], build_inputs=["VERSION"])
+    metadata = {"build-system": {"build-backend": backend}, "project": {"readme": "README.md"}}
+    system = PackageBackend.from_pyproject(metadata, "plugged", layout)
+    assert system.settings is layout
+    assert system.module_paths == ["lib/plugged"]
+    assert system.source_paths == ["lib"]
+    assert system.build_inputs == ["README.md", "VERSION"]

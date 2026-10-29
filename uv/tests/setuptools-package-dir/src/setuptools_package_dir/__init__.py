@@ -1,0 +1,1 @@
+from setuptools_package_dir.main import SetuptoolsPackageDir as SetuptoolsPackageDir

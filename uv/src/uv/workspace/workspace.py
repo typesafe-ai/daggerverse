@@ -2,7 +2,7 @@ import asyncio
 import posixpath
 import tomllib
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 import dagger
 from dagger import Doc, check, field, function, object_type
@@ -34,10 +34,19 @@ from uv.utils import (
     resolve_specifier,
 )
 from uv.workspace.build import UvWorkspaceBuild
+from uv.workspace.build_backends.plugin import BuildBackend
 from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_workspace_indices
 from uv.workspace.package import UvPackageSource
 from uv.workspace.plan import UvSyncPlan
 from uv.workspace.venv import UvVenv
+
+BuildBackends: TypeAlias = Annotated[
+    list[BuildBackend],
+    Doc(
+        "Build backends implemented by other modules, for packages whose `[build-system].build-backend` "
+        "matches their `build_backend()`. They take precedence over the built-in backends."
+    ),
+]
 
 
 @object_type
@@ -301,6 +310,7 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
+        build_backends: BuildBackends | None = None,
         auto_install_uv: Annotated[
             bool,
             Doc(
@@ -335,6 +345,7 @@ class UvWorkspaceSource:
                 all_packages=all_packages,
                 no_editable=no_editable,
                 no_default_groups=no_default_groups,
+                build_backends=build_backends,
             )
             span.set_attribute("uv.sync_args", plan.uv_sync_args)
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
@@ -401,6 +412,7 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
+        build_backends: BuildBackends | None = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -437,6 +449,7 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
+            build_backends=build_backends,
             auto_install_uv=auto_install_uv,
         )
         if venv:
@@ -462,6 +475,7 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
+        build_backends: BuildBackends | None = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -491,6 +505,7 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
+            build_backends=build_backends,
             auto_install_uv=auto_install_uv,
         )
         b = await b.with_venv(relocatable=True)
