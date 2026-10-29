@@ -97,6 +97,7 @@ class Uv:
             return UvWorkspaceSource(
                 path=path,
                 source=ws.directory("/", include=include, exclude=exclude, gitignore=True),
+                root=ws.directory("/", gitignore=True),
                 manifests=ws.directory("/", include=manifest_include, exclude=manifest_exclude),
                 projects=[sources[root] for root in roots if root in sources],
                 # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.

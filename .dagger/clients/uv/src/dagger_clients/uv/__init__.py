@@ -2340,6 +2340,14 @@ class UvSyncPlan(_Type):
         _ctx = self._select("noEditable", _args)
         return await _ctx.execute(bool)
 
+    def root_dir(self) -> Directory:
+        """The whole source tree; read only for the local packages' `/`-prefixed
+        build inputs
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("rootDir", _args)
+        return Directory(_ctx)
+
     def source_dir(self) -> Directory:
         """Every member's files; read only for files outside the needed packages,
         e.g. symlink targets
@@ -3240,6 +3248,14 @@ class UvWorkspaceSource(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("pythonVersion", _args)
         return await _ctx.execute(str | None)
+
+    def root(self) -> Directory:
+        """The whole source tree, read only for `/`-prefixed build inputs, which
+        may lie outside the members (e.g. a Cargo workspace above them).
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("root", _args)
+        return Directory(_ctx)
 
     def source(self) -> Directory:
         """The workspace's members and their path dependencies, at workspace-

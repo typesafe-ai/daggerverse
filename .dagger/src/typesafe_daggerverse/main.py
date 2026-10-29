@@ -277,6 +277,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "build_workspace_flat", self.uv_workspace_build_workspace_flat)
             tg.start_soon(_run, "uv_build_layouts", self.uv_build_layouts)
             tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
+            tg.start_soon(_run, "uv_maturin_outside_workspace", self.uv_maturin_outside_workspace)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
@@ -599,6 +600,30 @@ class TypesafeDaggerverse:
             await ctr.file("/tmp/setuptools-package-dir-setup").sync()
             if await ctr.env_variable("SETUPTOOLS_PACKAGE_DIR"):
                 raise AssertionError("expected the handler's teardown to remove SETUPTOOLS_PACKAGE_DIR")
+
+    @function
+    async def uv_maturin_outside_workspace(self) -> None:
+        """A maturin crate builds against a crate outside its uv workspace, staged from the workspace root."""
+        source = _src("uv/tests/_packages/maturin-outside-workspace")
+        uv_ = uv(source.as_workspace())
+        maturin = (
+            uv_.build_backend_handlers()
+            .maturin()
+            .with_package_config(
+                name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
+            )
+        )
+        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
+        for no_editable in (False, True):
+            await (
+                uv_.workspace("py")
+                .install(base_container=base, no_editable=no_editable, build_backend_handlers=[maturin])
+                # Isolated (`-I`), so the installed package is imported rather than the source.
+                .with_exec(
+                    ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
+                )
+                .sync()
+            )
 
     @function
     async def uv_license_files(self) -> None:

@@ -1,0 +1,14 @@
+[project]
+name = "outside-app"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+module-name = "outside._native"
+features = ["pyo3/extension-module"]

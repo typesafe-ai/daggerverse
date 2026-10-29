@@ -285,6 +285,7 @@ type ModuleTypes {
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
         .withField("ws_dir", typeDef.withObject("Directory"), description: "The workspace root's manifests: uv.lock, uv.toml and pyproject.toml files")
         .withField("source_dir", typeDef.withObject("Directory"), description: "Every member's files; read only for files outside the needed packages, e.g. symlink targets")
+        .withField("root_dir", typeDef.withObject("Directory"), description: "The whole source tree; read only for the local packages' `/`-prefixed build inputs")
         .withField("workspace_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace path within the source directory")
         .withField("all_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Every local package in the workspace (sorted by name)")
         .withField("needed_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Local packages the target transitively depends on (sorted by name)")
@@ -381,6 +382,7 @@ type ModuleTypes {
         ),
       typeDef.withObject("UvWorkspaceSource", description: "A self-contained uv workspace: the source files rooted at a `uv.lock`.\n\nCarries the source tree and the workspace's path within it (`\".\"` for a\nroot workspace), relative to the Dagger workspace root. From those it derives everything it needs to `audit` the\nlocked dependencies or `build` a minimal container for a package, so\nthe parent `Uv` stays a thin, container-free entrypoint.\n\nEvery directory keeps workspace-root-relative paths, so builds can reach a\nsibling like `../my-dep` in a nested workspace. They are lazy: resolving\nand planning read only `manifests`, and a build loads only the `projects`\nit installs. Projects nested in those trees that nothing needs (e.g. test\nfixtures) are left out, so their edits don't invalidate this workspace's\nbuilds.\n\nNamed `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with\nthe top-level `Uv` constructor when composed in a parent module.")
         .withField("source", typeDef.withObject("Directory"), description: "The workspace's members and their path dependencies, at workspace-root-relative paths.")
+        .withField("root", typeDef.withObject("Directory"), description: "The whole source tree, read only for `/`-prefixed build inputs, which may lie outside the members (e.g. a Cargo workspace above them).")
         .withField("manifests", typeDef.withObject("Directory"), description: "Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files.")
         .withField("projects", typeDef.withListOf(typeDef.withObject("ProjectSource")), description: "Each member's and local dependency's files, loaded only when a build installs that project.")
         .withField("src_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The entries directly under the projects' `src/`, which mark a `src` layout.")

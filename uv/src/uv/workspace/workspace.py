@@ -85,6 +85,14 @@ class UvWorkspaceSource:
         Doc("The workspace's members and their path dependencies, at workspace-root-relative paths."),
     ] = field()
 
+    root: Annotated[
+        Directory,
+        Doc(
+            "The whole source tree, read only for `/`-prefixed build inputs, which may lie outside the members "
+            "(e.g. a Cargo workspace above them)."
+        ),
+    ] = field()
+
     manifests: Annotated[
         Directory,
         Doc("Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files."),
@@ -429,6 +437,7 @@ class UvWorkspaceSource:
 
             plan = await UvSyncPlan.create(
                 source_dir=self.source,
+                root_dir=self.root,
                 manifests_dir=self.manifests,
                 projects=self.projects,
                 src_paths=self.src_paths,
