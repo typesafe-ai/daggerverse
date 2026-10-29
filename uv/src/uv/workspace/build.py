@@ -232,7 +232,7 @@ class UvWorkspaceBuild:
             resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
             overlay = overlay.with_directory(
                 ctr_base.lstrip("/"),
-                self.plan.source_dir.directory(resolved),
+                pkg.source.directory(resolved),
                 include=pkg.build_inputs,
             )
         return overlay
@@ -290,9 +290,9 @@ class UvWorkspaceBuild:
             target = posixpath.join(ctr_base, source_path).lstrip("/")
             source = posixpath.join(resolved, source_path)
             if is_file(source_path):
-                overlay = overlay.with_file(target, self.plan.source_dir.file(source))
+                overlay = overlay.with_file(target, pkg.source.file(source))
             else:
-                overlay = overlay.with_directory(target, self.plan.source_dir.directory(source))
+                overlay = overlay.with_directory(target, pkg.source.directory(source))
         return overlay
 
     async def _copy_sources(self, ctr: Container, workdir: str) -> Container:

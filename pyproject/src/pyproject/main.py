@@ -44,8 +44,14 @@ class PyprojectProject:
             "(path and workspace sources, transitively), wherever they live."
         ),
     ] = field()
-    include: list[str]
-    exclude: list[str]
+    include: Annotated[
+        list[str],
+        Doc("Glob patterns of what `source` loads: the project and its local dependencies."),
+    ] = field()
+    exclude: Annotated[
+        list[str],
+        Doc("Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects."),
+    ] = field()
 
     @classmethod
     def of(cls, project: discovery.Project) -> Self:
@@ -126,9 +132,19 @@ class PyprojectWorkspace:
         Doc("Roots of the projects the members depend on through path sources, outside the membership."),
     ] = field()
     member_items: list[PyprojectProject]
-    include: list[str]
-    exclude: list[str]
-    manifest_include: list[str]
+    include: Annotated[
+        list[str],
+        Doc("Glob patterns of what `source` loads: every member and their local dependencies."),
+    ] = field()
+    exclude: Annotated[
+        list[str],
+        Doc("Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects."),
+    ] = field()
+    manifest_include: Annotated[
+        list[str],
+        Doc("Glob patterns of what `manifests` loads: lockfiles, `uv.toml`, `pyproject.toml` and `.python-version`."),
+    ] = field()
+    manifest_exclude: Annotated[list[str], Doc("Glob patterns `manifests` leaves out.")] = field()
 
     @function
     def projects(self) -> PyprojectProjects:
@@ -155,7 +171,7 @@ class PyprojectWorkspace:
         workspace-root-relative paths. A source edit changes none of them, so
         a dependency layer built from this stays cached across source edits.
         """
-        return ws.directory("/", include=self.manifest_include, exclude=SOURCE_EXCLUDE)
+        return ws.directory("/", include=self.manifest_include, exclude=self.manifest_exclude)
 
 
 @object_type
@@ -251,6 +267,7 @@ class Pyproject:
                     include=list(workspace.include),
                     exclude=list(workspace.exclude),
                     manifest_include=list(workspace.manifest_include),
+                    manifest_exclude=list(SOURCE_EXCLUDE),
                 )
             )
         return cls(

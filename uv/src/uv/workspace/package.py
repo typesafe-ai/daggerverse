@@ -13,19 +13,19 @@ from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_wo
 class UvPackageSource:
     """A single member package within a uv workspace.
 
-    Carries the workspace source tree, the workspace root path, and the
+    Carries the workspace's manifests, the workspace root path, and the
     member's own path so it can read both workspace-level and package-level
     index configuration.
     """
 
-    source: Annotated[
+    manifests: Annotated[
         Directory,
-        Doc("Source tree containing the workspace."),
+        Doc("The workspace's manifests: uv.lock, uv.toml and pyproject.toml files."),
     ] = field()
 
     workspace_path: Annotated[
         str,
-        Doc("Workspace root path within source (`.` for a root workspace)."),
+        Doc("Workspace root path within the manifests (`.` for a root workspace)."),
     ] = field()
 
     package_path: Annotated[
@@ -34,7 +34,7 @@ class UvPackageSource:
     ] = field()
 
     def _ws_dir(self) -> Directory:
-        return self.source if self.workspace_path == "." else self.source.directory(self.workspace_path)
+        return self.manifests if self.workspace_path == "." else self.manifests.directory(self.workspace_path)
 
     def _pkg_dir(self) -> Directory:
         ws = self._ws_dir()

@@ -762,10 +762,18 @@ class UvLocalPackage(_Type):
         _ctx = self._select("pyprojectContents", _args)
         return await _ctx.execute(str)
 
+    def source(self) -> Directory:
+        """The package's files and those of its local dependencies, at workspace-
+        root-relative paths
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("source", _args)
+        return Directory(_ctx)
+
 
 class UvPackageSource(_Type):
     """ A single member package within a uv workspace.  Carries the
-    workspace source tree, the workspace root path, and the member's own
+    workspace's manifests, the workspace root path, and the member's own
     path so it can read both workspace-level and package-level index
     configuration.  """
 
@@ -820,6 +828,12 @@ class UvPackageSource(_Type):
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
+    def manifests(self) -> Directory:
+        """The workspace's manifests: uv.lock, uv.toml and pyproject.toml files."""
+        _args: list[_Arg] = []
+        _ctx = self._select("manifests", _args)
+        return Directory(_ctx)
+
     async def package_path(self) -> str:
         """Package path relative to the workspace root.
 
@@ -841,14 +855,8 @@ class UvPackageSource(_Type):
         _ctx = self._select("packagePath", _args)
         return await _ctx.execute(str)
 
-    def source(self) -> Directory:
-        """Source tree containing the workspace."""
-        _args: list[_Arg] = []
-        _ctx = self._select("source", _args)
-        return Directory(_ctx)
-
     async def workspace_path(self) -> str:
-        """Workspace root path within source (`.` for a root workspace).
+        """Workspace root path within the manifests (`.` for a root workspace).
 
         Returns
         -------
@@ -867,6 +875,66 @@ class UvPackageSource(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("workspacePath", _args)
         return await _ctx.execute(str)
+
+
+class UvProjectSource(_Type):
+    """ A project's files: the project and its local dependencies, at
+    workspace-root-relative paths.  """
+
+    async def id(self) -> str:
+        """A unique identifier for this UvProjectSource.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def path(self) -> str:
+        """Project root, relative to the workspace root
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("path", _args)
+        return await _ctx.execute(str)
+
+    def source(self) -> Directory:
+        """The project's files and those of its local dependencies"""
+        _args: list[_Arg] = []
+        _ctx = self._select("source", _args)
+        return Directory(_ctx)
 
 
 class UvSyncPlan(_Type):
@@ -954,7 +1022,9 @@ class UvSyncPlan(_Type):
         return await _ctx.execute(bool)
 
     def source_dir(self) -> Directory:
-        """Full source directory"""
+        """Every member's files; read only for files outside the needed packages,
+        e.g. symlink targets
+        """
         _args: list[_Arg] = []
         _ctx = self._select("sourceDir", _args)
         return Directory(_ctx)
@@ -1002,7 +1072,9 @@ class UvSyncPlan(_Type):
         return await _ctx.execute(str)
 
     def ws_dir(self) -> Directory:
-        """Resolved workspace directory"""
+        """The workspace root's manifests: uv.lock, uv.toml and pyproject.toml
+        files
+        """
         _args: list[_Arg] = []
         _ctx = self._select("wsDir", _args)
         return Directory(_ctx)
@@ -1447,14 +1519,15 @@ class UvWorkspaceSource(_Type):
     (`"."` for a root workspace), relative to the Dagger workspace root.
     From those it derives everything it needs to `audit` the locked
     dependencies or `build` a minimal container for a package, so the
-    parent `Uv` stays a thin, container-free entrypoint.  `source` keeps
-    workspace-root-relative paths and holds the members plus their path
-    dependencies, wherever they live, so builds can reach a sibling like
-    `../my-dep` in a nested workspace. Projects nested in those trees that
-    nothing needs (e.g. test fixtures) are left out, so their edits don't
-    invalidate this workspace's builds.  Named `UvWorkspaceSource` (not
-    `UvWorkspace`) to avoid colliding with the top-level `Uv` constructor
-    when composed in a parent module.  """
+    parent `Uv` stays a thin, container-free entrypoint.  Every directory
+    keeps workspace-root-relative paths, so builds can reach a sibling
+    like `../my-dep` in a nested workspace. They are lazy: resolving and
+    planning read only `manifests`, and a build loads only the `projects`
+    it installs. Projects nested in those trees that nothing needs (e.g.
+    test fixtures) are left out, so their edits don't invalidate this
+    workspace's builds.  Named `UvWorkspaceSource` (not `UvWorkspace`) to
+    avoid colliding with the top-level `Uv` constructor when composed in a
+    parent module.  """
 
     def audit(self, *, uv_version: str | None = None, image: str | None = None,) -> Check:
         """
@@ -1812,6 +1885,14 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
 
+    async def projects(self) -> list[UvProjectSource]:
+        """Each member's and local dependency's files, loaded only when a build
+        installs that project.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("projects", _args)
+        return await _ctx.execute_object_list(UvProjectSource)
+
     async def python_version(self) -> str | None:
         """
         The Python version pinned by the workspace's `.python-version`, if
@@ -1848,6 +1929,27 @@ class UvWorkspaceSource(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
+
+    async def src_init_paths(self) -> list[str]:
+        """The projects' `src/*/__init__.py` files, which mark a `src` layout.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("srcInitPaths", _args)
+        return await _ctx.execute(list[str])
 
     async def uv_version(self) -> str:
         """
@@ -2108,6 +2210,7 @@ __all__ = [
     "UvIndex",
     "UvLocalPackage",
     "UvPackageSource",
+    "UvProjectSource",
     "UvSyncPlan",
     "UvVenv",
     "UvWorkspaceBuild",

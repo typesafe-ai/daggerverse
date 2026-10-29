@@ -58,14 +58,12 @@ async def _discover_local_packages(
     default_package: str | None,
     groups: set[str] | None,
     workspace_path: str,
-    source_dir: Directory,
-    ws_dir: Directory,
-) -> tuple[OrderedDict[str, str], OrderedDict[str, str], set[str]]:
-    """Find reachable local packages and the `src/<module>/__init__.py` paths in the tree.
+    manifests_dir: Directory,
+) -> tuple[OrderedDict[str, str], OrderedDict[str, str]]:
+    """Find the reachable local packages: `(all_local, needed_local)`.
 
-    Runs in-process with many glob calls against the Dagger API, so it gets its
-    own span to surface the file-discovery phase as a node in the trace.
-    Returns `(all_local, needed_local, src_init_paths)`.
+    Reads only the manifests (lockfiles and `pyproject.toml` files), so it never
+    loads package sources.
 
     `needed_local` mirrors `uv sync`'s selection: every member when
     `all_packages` is set, the union of the explicit `packages`' transitive
@@ -74,9 +72,9 @@ async def _discover_local_packages(
     targets' own selected dependency `groups` are followed.
     """
     with get_tracer().start_as_current_span("discover local packages") as span:
-        # Glob the source tree's pyproject.toml paths once and reuse them for both
-        # all-local and needed-local reachability filtering.
-        pyproject_paths = await source_dir.glob("**/pyproject.toml")
+        # Glob the pyproject.toml paths once and reuse them for both all-local and
+        # needed-local reachability filtering.
+        pyproject_paths = await manifests_dir.glob("**/pyproject.toml")
         all_local = _match_reachable(parse_local_packages(lock_data), workspace_path, pyproject_paths)
         if all_packages:
             needed_local = all_local
@@ -88,18 +86,19 @@ async def _discover_local_packages(
                 _transitive_union(lock_data, targets, groups), workspace_path, pyproject_paths
             )
 
-        src_init_paths: set[str] = set()
-        for p in await source_dir.glob("**/src/*/__init__.py"):
-            src_init_paths.add(posixpath.normpath(p))
-        for p in await ws_dir.glob("**/src/*/__init__.py"):
-            resolved = p if workspace_path == "." else posixpath.join(workspace_path, p)
-            src_init_paths.add(posixpath.normpath(resolved))
-
         span.set_attribute("packages.all", len(all_local))
         span.set_attribute("packages.needed", len(needed_local))
         span.set_attribute("packages.names", sorted(all_local))
 
-    return all_local, needed_local, src_init_paths
+    return all_local, needed_local
+
+
+@object_type
+class ProjectSource:
+    """A project's files: the project and its local dependencies, at workspace-root-relative paths."""
+
+    path: Annotated[str, Doc("Project root, relative to the workspace root")] = field()
+    source: Annotated[Directory, Doc("The project's files and those of its local dependencies")] = field()
 
 
 @object_type
@@ -120,6 +119,10 @@ class LocalPackage:
     pyproject_contents: Annotated[
         str,
         Doc("Already-read package metadata used when creating a dependency scaffold"),
+    ] = field()
+    source: Annotated[
+        Directory,
+        Doc("The package's files and those of its local dependencies, at workspace-root-relative paths"),
     ] = field()
     layout: Annotated[
         BuildBackendLayout | None,
@@ -160,12 +163,12 @@ class UvSyncPlan:
 
     ws_dir: Annotated[
         Directory,
-        Doc("Resolved workspace directory"),
+        Doc("The workspace root's manifests: uv.lock, uv.toml and pyproject.toml files"),
     ] = field()
 
     source_dir: Annotated[
         Directory,
-        Doc("Full source directory"),
+        Doc("Every member's files; read only for files outside the needed packages, e.g. symlink targets"),
     ] = field()
 
     workspace_path: Annotated[
@@ -202,6 +205,9 @@ class UvSyncPlan:
     async def create(
         cls,
         source_dir: Directory,
+        manifests_dir: Directory,
+        projects: list[ProjectSource],
+        src_init_paths: list[str],
         workspace_path: str = ".",
         package: list[str] | None = None,
         extra: list[str] | None = None,
@@ -213,8 +219,12 @@ class UvSyncPlan:
         no_default_groups: bool = False,
         build_backends: list[BuildBackend] | None = None,
     ) -> Self:
-        """Parse uv.lock and resolve all build configuration up front."""
-        ws_dir = source_dir if workspace_path == "." else source_dir.directory(workspace_path)
+        """Parse uv.lock and resolve all build configuration up front.
+
+        Reads only `manifests_dir`; each package's sources come from its project's
+        directory in `projects` and are loaded only when the build copies them.
+        """
+        ws_dir = manifests_dir if workspace_path == "." else manifests_dir.directory(workspace_path)
         packages = [normalize_package_name(p) for p in (package or [])]
         lock_data = tomllib.loads(await ws_dir.file("uv.lock").contents())
 
@@ -227,9 +237,11 @@ class UvSyncPlan:
         require_package_selection(packages, all_packages, default_package)
 
         groups = selected_groups(root_pyproject, group or [], all_groups, no_default_groups)
-        all_local, needed_local, src_init_paths = await _discover_local_packages(
-            lock_data, packages, all_packages, default_package, groups, workspace_path, source_dir, ws_dir
+        all_local, needed_local = await _discover_local_packages(
+            lock_data, packages, all_packages, default_package, groups, workspace_path, manifests_dir
         )
+        project_sources = {project.path: project.source for project in projects}
+        src_inits = {posixpath.normpath(path) for path in src_init_paths}
 
         # A local package with no [build-system] or with package = false is deps-only:
         # uv installs its dependencies but never builds the package itself, so its
@@ -244,7 +256,7 @@ class UvSyncPlan:
             span.set_attribute("packages.count", len(all_local))
             for name, pkg_path in all_local.items():
                 resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
-                contents = await source_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
+                contents = await manifests_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
                 metadata = tomllib.loads(contents)
                 virtual = (
                     "build-system" not in metadata or metadata.get("tool", {}).get("uv", {}).get("package") is False
@@ -260,8 +272,9 @@ class UvSyncPlan:
                     name=name,
                     path=pkg_path,
                     module=module,
-                    flat=posixpath.normpath(posixpath.join(resolved, "src", top, "__init__.py")) not in src_init_paths,
+                    flat=posixpath.normpath(posixpath.join(resolved, "src", top, "__init__.py")) not in src_inits,
                     pyproject_contents=contents,
+                    source=project_sources.get(resolved, source_dir),
                     layout=layout,
                 )
                 local_packages[name] = pkg
