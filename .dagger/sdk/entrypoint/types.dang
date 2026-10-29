@@ -183,7 +183,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_maturin_outside_workspace", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("A maturin crate builds against a crate outside its uv workspace, staged from the workspace root.")
+            .withDescription("A maturin crate builds against a crate outside its uv workspace, staged from the workspace root.\n\nThe Cargo target cache is cleared after every build here, which must leave the\ninstalled extension working.")
         )
         .withFunction(
           function("uv_no_editable_bakes_local_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

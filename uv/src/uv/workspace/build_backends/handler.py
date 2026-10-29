@@ -21,6 +21,7 @@ from dagger_clients.core import Container
 
 from uv.utils import normalize_package_name
 from uv.workspace.build_backends import BACKENDS, BackendSettings
+from uv.workspace.build_backends.maturin import MaturinHooks
 
 
 @interface
@@ -112,6 +113,11 @@ ExtraBuildInputs = Annotated[
     ),
 ]
 
+MaxTargetSize = Annotated[
+    int,
+    Doc("Clear the Cargo target cache after a build once it grows past this many GiB; 0 clears it every time."),
+]
+
 
 @dataclass
 class _Builtin:
@@ -200,6 +206,7 @@ class MaturinHandler(_Builtin):
     backend: ClassVar[str] = "maturin"
     # Extra build inputs per normalized distribution name.
     package_inputs: dict[str, list[str]] = dataclasses.field(default_factory=dict)
+    max_target_size: int = MaturinHooks.max_target_size
 
     @function
     def with_package_config(self, name: str, extra_build_inputs: ExtraBuildInputs) -> "MaturinHandler":
@@ -211,6 +218,19 @@ class MaturinHandler(_Builtin):
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
         extra = self.package_inputs.get(normalize_package_name(name), [])
         return [*self._settings(pyproject, name).build_inputs, *extra]
+
+    @function
+    def with_max_target_size(self, max_target_size: MaxTargetSize) -> "MaturinHandler":
+        """Bound the Cargo target cache that keeps compiled crates between builds."""
+        return dataclasses.replace(self, max_target_size=max_target_size)
+
+    @function
+    def setup(self, container: Container) -> Container:
+        return MaturinHooks(self.max_target_size).setup(container)
+
+    @function
+    def teardown(self, container: Container) -> Container:
+        return MaturinHooks(self.max_target_size).teardown(container)
 
 
 @object_type
