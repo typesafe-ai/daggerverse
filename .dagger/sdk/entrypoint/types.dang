@@ -171,7 +171,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_install_venv", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`install` with `venv=True` creates a relocatable venv via `uv venv`, then syncs into it.\n\nExercises the bare-image default (uv provisions Python), the `with_venv`\nstep, and local-package scaffolding; then confirms deps import from the venv.")
+            .withDescription("`install(venv_relocatable=True)` creates an activated relocatable venv, then syncs into it.\n\nExercises the bare-image default (uv provisions Python) and local-package\nscaffolding; plain `python` resolves to the activated venv.")
         )
         .withFunction(
           function("uv_license_file_patterns", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -184,6 +184,10 @@ type ModuleTypes {
         .withFunction(
           function("uv_no_editable_bakes_local_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`no_editable=True` bakes real local-package *source* into site-packages.\n\nRegression test for the editable-only copy-last optimization in\n`with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from\nwhatever source is on disk at sync time, so real source must be copied in\n*before* the sync. Otherwise the empty scaffold stubs get baked into\nsite-packages. We export the venv into a fresh Python-less container (so\nleftover workspace source can't mask the install) and assert each local\npackage's `hello()` returns its real string. Asserting the *return value*,\nnot just importability, is the point: an empty stub still imports fine.")
+        )
+        .withFunction(
+          function("uv_project_environment", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Where `install` puts packages, depending on the base container.\n\n- The default base, or a Python that doesn't match `requires-python`: a\n  uv-managed Python, installed into directly.\n- A matching Python and no `UV_PROJECT_ENVIRONMENT`: an activated `.venv`, or an\n  inactive one with `activate_venv=False`.\n- `UV_PROJECT_ENVIRONMENT` set: that environment, with no `.venv`.")
         )
         .withFunction(
           function("uv_real_world", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

@@ -1015,7 +1015,7 @@ class UvVenv(_Type):
     provides it. This pairs the venv with that interpreter so the two can
     be dropped into a fresh container (one without any Python of its own)
     and run without uv.  Only valid for a venv created with
-    `with_venv(relocatable=True)` against a *uv-managed* (standalone)
+    `build(venv_relocatable=True)` against a *uv-managed* (standalone)
     Python: uv's standalone Pythons are themselves relocatable, and a
     relocatable venv keeps working when its directory is moved. The venv
     may be mounted at any path, but the Python must be remounted at
@@ -1345,7 +1345,7 @@ class UvWorkspaceBuild(_Type):
         Pin the project's Python with `uv python pin` (writes `.python-
         version`).
 
-        Makes subsequent `uv venv`/`uv sync` select this exact version.
+        Makes subsequent `uv sync` select this exact version.
 
         Parameters
         ----------
@@ -1423,36 +1423,6 @@ class UvWorkspaceBuild(_Type):
         _ctx = self._select("withUv", _args)
         return UvWorkspaceBuild(_ctx)
 
-    def with_venv(self, *, relocatable: bool = False, args: list[str] | None = None,) -> _Self:
-        """
-        Create the project virtual environment with `uv venv`.
-
-        Run before the install steps so the subsequent `uv sync` populates
-        this
-        environment rather than creating its own (e.g. a `relocatable` venv
-        that
-        can be copied to a different path in a later stage).
-
-        Parameters
-        ----------
-        relocatable:
-            Create a relocatable virtual environment (`uv venv
-            --relocatable`). Useful for multi-stage builds.
-        args:
-            Additional arguments passed through to `uv venv` (e.g. `--python`,
-            `--seed`).
-        """
-        if not (isinstance(relocatable, bool)):
-            raise _type_error("UvWorkspaceBuild.with_venv", "relocatable", relocatable, "bool")
-        if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
-            raise _type_error("UvWorkspaceBuild.with_venv", "args", args, "list[str] | None")
-        _args = [
-            _Arg("relocatable", relocatable, False),
-            _Arg("args", args, None),
-        ]
-        _ctx = self._select("withVenv", _args)
-        return UvWorkspaceBuild(_ctx)
-
     def with_workspace_files(self) -> _Self:
         """
         Scaffold needed local package stubs (pyproject.toml + empty src/) into
@@ -1519,13 +1489,25 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
         """
         Prepare a build for this workspace without installing anything yet.
 
-        Resolves the sync plan, mounts the uv cache, and copies the root
-        pyproject.toml and uv.lock into the container. The returned
-        `UvWorkspaceBuild` drives the pipeline from here:
+        Resolves the sync plan, mounts the uv cache, prepares the environment
+        uv
+        installs into, and copies the root pyproject.toml and uv.lock into the
+        container.
+
+        The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets
+        it.
+        Otherwise the default base, or one without a suitable Python, gets a
+        uv-managed Python that packages install into directly, and a base with
+        a suitable Python gets a `.venv` (activated unless
+        `activate_venv=False`). Set
+        `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
+        redundant `.venv`.
+
+        The returned `UvWorkspaceBuild` drives the pipeline from here:
         `with_remote_dependencies()` to install remote deps,
         `with_workspace_files()`
         to scaffold local packages, then `with_local_dependencies()` to
@@ -1560,6 +1542,14 @@ class UvWorkspaceSource(_Type):
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
         build_backends:
+        venv_relocatable:
+            Create a relocatable `.venv` (`uv venv --relocatable`) before
+            installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
+            Needed to copy the environment into another image (see `venv`).
+        activate_venv:
+            When the build uses a `.venv`, activate it in the container: set
+            `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain
+            `python` runs the installed environment.
         auto_install_uv:
             Automatically install the uv binary if it is not already on $PATH.
             Set to False if your base_container already ships uv.
@@ -1584,6 +1574,10 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.build", "no_default_groups", no_default_groups, "bool")
         if not (build_backends is None or (isinstance(build_backends, list) and all(isinstance(_v0, UvBuildBackend) for _v0 in build_backends))):
             raise _type_error("UvWorkspaceSource.build", "build_backends", build_backends, "list[UvBuildBackend] | None")
+        if not (isinstance(venv_relocatable, bool)):
+            raise _type_error("UvWorkspaceSource.build", "venv_relocatable", venv_relocatable, "bool")
+        if not (isinstance(activate_venv, bool)):
+            raise _type_error("UvWorkspaceSource.build", "activate_venv", activate_venv, "bool")
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.build", "auto_install_uv", auto_install_uv, "bool")
         _args = [
@@ -1597,6 +1591,8 @@ class UvWorkspaceSource(_Type):
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
             _Arg("buildBackends", build_backends, None),
+            _Arg("venvRelocatable", venv_relocatable, False),
+            _Arg("activateVenv", activate_venv, True),
             _Arg("autoInstallUv", auto_install_uv, True),
         ]
         _ctx = self._select("build", _args)
@@ -1657,14 +1653,14 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv: bool = False, venv_relocatable: bool = False, auto_install_uv: bool = True,) -> Container:
+    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backends: list[UvBuildBackend] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> Container:
         """
         Build a minimal container with deps installed for the given
         package(s).
 
-        Convenience method composing `build`, optionally `with_venv`,
-        `with_remote_dependencies`, `with_workspace_files`, and
-        `with_local_dependencies`. For fine-grained control (e.g. running
+        Convenience method composing `build`, `with_remote_dependencies`,
+        `with_workspace_files`, and `with_local_dependencies`. For fine-
+        grained control (e.g. running
         `pulumi install` between remote deps and local source), call them
         individually.
 
@@ -1704,11 +1700,14 @@ class UvWorkspaceSource(_Type):
         lock_timeout:
             Seconds uv waits to acquire the cache file lock
             (`UV_LOCK_TIMEOUT`) while pruning the cache.
-        venv:
-            Create the virtual environment up front with `uv venv` (before
-            installing).
         venv_relocatable:
-            When `venv` is set, make it relocatable (`uv venv --relocatable`).
+            Create a relocatable `.venv` (`uv venv --relocatable`) before
+            installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
+            Needed to copy the environment into another image (see `venv`).
+        activate_venv:
+            When the build uses a `.venv`, activate it in the container: set
+            `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain
+            `python` runs the installed environment.
         auto_install_uv:
             Automatically install the uv binary if it is not already on $PATH.
             Set to False if your base_container already ships uv.
@@ -1739,10 +1738,10 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.install", "max_cache_size", max_cache_size, "int")
         if not (isinstance(lock_timeout, int)):
             raise _type_error("UvWorkspaceSource.install", "lock_timeout", lock_timeout, "int")
-        if not (isinstance(venv, bool)):
-            raise _type_error("UvWorkspaceSource.install", "venv", venv, "bool")
         if not (isinstance(venv_relocatable, bool)):
             raise _type_error("UvWorkspaceSource.install", "venv_relocatable", venv_relocatable, "bool")
+        if not (isinstance(activate_venv, bool)):
+            raise _type_error("UvWorkspaceSource.install", "activate_venv", activate_venv, "bool")
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.install", "auto_install_uv", auto_install_uv, "bool")
         _args = [
@@ -1759,8 +1758,8 @@ class UvWorkspaceSource(_Type):
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
-            _Arg("venv", venv, False),
             _Arg("venvRelocatable", venv_relocatable, False),
+            _Arg("activateVenv", activate_venv, True),
             _Arg("autoInstallUv", auto_install_uv, True),
         ]
         _ctx = self._select("install", _args)
@@ -1820,7 +1819,7 @@ class UvWorkspaceSource(_Type):
 
         Returns its contents (e.g. `3.13.7`), or `None` when the file is
         absent.
-        `build` stages this pin so `uv venv`/`uv sync` select the exact
+        `build` stages this pin so the environment and `uv sync` use the exact
         interpreter
         instead of resolving `requires-python`.
 

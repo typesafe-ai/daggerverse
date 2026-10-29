@@ -86,10 +86,11 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     ```mermaid
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
-      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + sync plan)</i>"]
+      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
       WS -->|install| C1["Container"]
+      WS -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
       B -->|with_local_dependencies / copy_venv| C2["Container"]
-      B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
+      B -->|venv| V
     ```
 
     - **`Uv`** holds the source tree it reads from the Dagger workspace (`ws`). Ask it
@@ -98,8 +99,8 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
       `install` everything in one call.
-    - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
-      plan. It exposes the individual pipeline steps so you can run your own steps
+    - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
+      environment ready, plus the resolved sync plan. It exposes the individual pipeline steps so you can run your own steps
       between them, and exports the result as a container or a [`UvVenv`](virtual-environments.md).
 
     The convenience methods (`audit`, `install`) cover the common cases. Use the

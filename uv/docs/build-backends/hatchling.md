@@ -22,7 +22,7 @@ Applies to packages with `build-backend = "hatchling.build"`. The module reads:
 
 Options under `[tool.hatch.build.targets.wheel]` take precedence over the same options
 under `[tool.hatch.build]`, as in Hatchling. Without an explicit selection, the module
-expects the [conventional layout](index.md#other-backends).
+expects the [conventional layout](index.md#unknown-build-backends).
 
 For example, a `src/` layout with a metadata hook that renders the readme:
 

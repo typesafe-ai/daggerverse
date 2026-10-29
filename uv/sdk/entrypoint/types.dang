@@ -53,7 +53,7 @@ type ModuleTypes {
         .withField("flat_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Virtual/deps-only packages: pyproject scaffolded, source skipped")
         .withField("uv_sync_args", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Precomputed uv sync argv")
         .withField("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Local packages installed non-editable (source baked into site-packages, not path-linked)"),
-      typeDef.withObject("UvVenv", description: "A relocatable uv virtual environment bundled with the uv-managed Python it needs.\n\nA venv never contains the standard library: `.venv/bin/python` resolves to\na base interpreter whose `lib/` provides it. This pairs the venv with that\ninterpreter so the two can be dropped into a fresh container (one without any\nPython of its own) and run without uv.\n\nOnly valid for a venv created with `with_venv(relocatable=True)` against a\n*uv-managed* (standalone) Python: uv's standalone Pythons are themselves\nrelocatable, and a relocatable venv keeps working when its directory is moved.\nThe venv may be mounted at any path, but the Python must be remounted at\n`python_path` (the absolute location its `pyvenv.cfg` records).\n\nThe bundled Python is the python-build-standalone variant uv selected for the\nbase image's platform/libc (set by `base_container` at build time), so the\ntarget container must match it: a Debian (glibc) base exports to glibc targets,\nan Alpine (musl) base to musl/alpine targets.")
+      typeDef.withObject("UvVenv", description: "A relocatable uv virtual environment bundled with the uv-managed Python it needs.\n\nA venv never contains the standard library: `.venv/bin/python` resolves to\na base interpreter whose `lib/` provides it. This pairs the venv with that\ninterpreter so the two can be dropped into a fresh container (one without any\nPython of its own) and run without uv.\n\nOnly valid for a venv created with `build(venv_relocatable=True)` against a\n*uv-managed* (standalone) Python: uv's standalone Pythons are themselves\nrelocatable, and a relocatable venv keeps working when its directory is moved.\nThe venv may be mounted at any path, but the Python must be remounted at\n`python_path` (the absolute location its `pyvenv.cfg` records).\n\nThe bundled Python is the python-build-standalone variant uv selected for the\nbase image's platform/libc (set by `base_container` at build time), so the\ntarget container must match it: a Debian (glibc) base exports to glibc targets,\nan Alpine (musl) base to musl/alpine targets.")
         .withField("venv", typeDef.withObject("Directory"), description: "The relocatable `.venv` directory.")
         .withField("python", typeDef.withObject("Directory"), description: "uv's managed-Python store (the interpreter the venv links against, plus uv's version symlinks).")
         .withField("python_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Absolute path the Python store must be mounted at for the venv to resolve its interpreter.")
@@ -104,7 +104,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("with_python_pin", typeDef.withObject("UvWorkspaceBuild"))
-            .withDescription("Pin the project's Python with `uv python pin` (writes `.python-version`).\n\nMakes subsequent `uv venv`/`uv sync` select this exact version.")
+            .withDescription("Pin the project's Python with `uv python pin` (writes `.python-version`).\n\nMakes subsequent `uv sync` select this exact version.")
             .withArg("version", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Python version to pin via `uv python pin` (writes a `.python-version` file).")
         )
         .withFunction(
@@ -118,12 +118,6 @@ type ModuleTypes {
           function("with_uv", typeDef.withObject("UvWorkspaceBuild"))
             .withDescription("Copy the uv binary into the build container.\n\nUseful when using a custom `base_container` that doesn't ship uv.\nCopies the static binary from the official distroless image to `/uv/uv`\nand prepends `/uv` to `$PATH`.")
             .withArg("version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "uv version to install. Defaults to the version detected from the workspace.", defaultValue: ("null" :: Dagger.JSON!))
-        )
-        .withFunction(
-          function("with_venv", typeDef.withObject("UvWorkspaceBuild"))
-            .withDescription("Create the project virtual environment with `uv venv`.\n\nRun before the install steps so the subsequent `uv sync` populates this\nenvironment rather than creating its own (e.g. a `relocatable` venv that\ncan be copied to a different path in a later stage).")
-            .withArg("relocatable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Create a relocatable virtual environment (`uv venv --relocatable`). Useful for multi-stage builds.", defaultValue: ("false" :: Dagger.JSON!))
-            .withArg("args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments passed through to `uv venv` (e.g. `--python`, `--seed`).", defaultValue: ("null" :: Dagger.JSON!))
         )
         .withFunction(
           function("with_workspace_files", typeDef.withObject("UvWorkspaceBuild"))
@@ -159,7 +153,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("build", typeDef.withObject("UvWorkspaceBuild"))
-            .withDescription("Prepare a build for this workspace without installing anything yet.\n\nResolves the sync plan, mounts the uv cache, and copies the root\npyproject.toml and uv.lock into the container. The returned `UvWorkspaceBuild` drives the pipeline from here:\n`with_remote_dependencies()` to install remote deps, `with_workspace_files()`\nto scaffold local packages, then `with_local_dependencies()` to install them.\nSkip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)\nhandles dependency installation.")
+            .withDescription("Prepare a build for this workspace without installing anything yet.\n\nResolves the sync plan, mounts the uv cache, prepares the environment uv\ninstalls into, and copies the root pyproject.toml and uv.lock into the\ncontainer.\n\nThe environment follows `UV_PROJECT_ENVIRONMENT` when the base sets it.\nOtherwise the default base, or one without a suitable Python, gets a\nuv-managed Python that packages install into directly, and a base with\na suitable Python gets a `.venv` (activated unless `activate_venv=False`). Set\n`UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a\nredundant `.venv`.\n\nThe returned `UvWorkspaceBuild` drives the pipeline from here:\n`with_remote_dependencies()` to install remote deps, `with_workspace_files()`\nto scaffold local packages, then `with_local_dependencies()` to install them.\nSkip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)\nhandles dependency installation.")
             .withArg("base_container", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container to build on top of (auth, system packages, etc.). Defaults to a Debian-based uv image at the workspace's uv version (uv provisions Python on demand).", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("package", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
             .withArg("extra", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
@@ -170,6 +164,8 @@ type ModuleTypes {
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("build_backends", typeDef.withOptional(true).withListOf(typeDef.withInterface("BuildBackend")).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("venv_relocatable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Create a relocatable `.venv` (`uv venv --relocatable`) before installing, even when the base sets `UV_PROJECT_ENVIRONMENT`. Needed to copy the environment into another image (see `venv`).", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("activate_venv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "When the build uses a `.venv`, activate it in the container: set `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain `python` runs the installed environment.", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("auto_install_uv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.", defaultValue: ("true" :: Dagger.JSON!))
         )
         .withFunction(
@@ -179,7 +175,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("install", typeDef.withObject("Container"))
-            .withDescription("Build a minimal container with deps installed for the given package(s).\n\nConvenience method composing `build`, optionally `with_venv`,\n`with_remote_dependencies`, `with_workspace_files`, and\n`with_local_dependencies`. For fine-grained control (e.g. running\n`pulumi install` between remote deps and local source), call them individually.")
+            .withDescription("Build a minimal container with deps installed for the given package(s).\n\nConvenience method composing `build`, `with_remote_dependencies`,\n`with_workspace_files`, and `with_local_dependencies`. For fine-grained control (e.g. running\n`pulumi install` between remote deps and local source), call them individually.")
             .withArg("base_container", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container to build on (auth, system packages, etc.). Defaults to a Debian-based uv image at the workspace's uv version (uv provisions Python on demand).", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("package", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
             .withArg("extra", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
@@ -193,8 +189,8 @@ type ModuleTypes {
             .withArg("prune_cache", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Whether to run `uv cache prune --ci` after installing remote dependencies. Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("max_cache_size", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Prune the uv cache only once it grows past this many GiB.", defaultValue: ("100" :: Dagger.JSON!))
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
-            .withArg("venv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Create the virtual environment up front with `uv venv` (before installing).", defaultValue: ("false" :: Dagger.JSON!))
-            .withArg("venv_relocatable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "When `venv` is set, make it relocatable (`uv venv --relocatable`).", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("venv_relocatable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Create a relocatable `.venv` (`uv venv --relocatable`) before installing, even when the base sets `UV_PROJECT_ENVIRONMENT`. Needed to copy the environment into another image (see `venv`).", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("activate_venv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "When the build uses a `.venv`, activate it in the container: set `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain `python` runs the installed environment.", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("auto_install_uv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.", defaultValue: ("true" :: Dagger.JSON!))
         )
         .withFunction(
@@ -204,7 +200,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("python_version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
-            .withDescription("The Python version pinned by the workspace's `.python-version`, if any.\n\nReturns its contents (e.g. `3.13.7`), or `None` when the file is absent.\n`build` stages this pin so `uv venv`/`uv sync` select the exact interpreter\ninstead of resolving `requires-python`.")
+            .withDescription("The Python version pinned by the workspace's `.python-version`, if any.\n\nReturns its contents (e.g. `3.13.7`), or `None` when the file is absent.\n`build` stages this pin so the environment and `uv sync` use the exact interpreter\ninstead of resolving `requires-python`.")
         )
         .withFunction(
           function("uv_version", typeDef.withKind(TypeDefKind.STRING_KIND))

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import posixpath
 import tomllib
 from pathlib import PurePosixPath
@@ -10,6 +11,7 @@ from dagger.telemetry import get_tracer
 from dagger_clients.core import Container, Directory, File, ReturnType, core
 
 from uv.args import (
+    ActivateVenv,
     AllExtras,
     AllGroups,
     AllPackages,
@@ -21,6 +23,7 @@ from uv.args import (
     NoEditable,
     Package,
     PruneCache,
+    VenvRelocatable,
 )
 from uv.utils import (
     _DEFAULT_VERSION,
@@ -31,6 +34,7 @@ from uv.utils import (
     parse_indices,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
+    python_request,
     resolve_specifier,
 )
 from uv.workspace.build import UvWorkspaceBuild
@@ -47,6 +51,13 @@ BuildBackends: TypeAlias = Annotated[
         "matches their `build_backend()`. They take precedence over the built-in backends."
     ),
 ]
+
+logger = logging.getLogger(__name__)
+
+_VENV_WARNING = (
+    "UV_PROJECT_ENVIRONMENT is not set, so uv creates a .venv. Unless you need one, set "
+    "UV_PROJECT_ENVIRONMENT on the base container to its Python's prefix, such as /usr/local."
+)
 
 
 @object_type
@@ -124,7 +135,7 @@ class UvWorkspaceSource:
         """The Python version pinned by the workspace's `.python-version`, if any.
 
         Returns its contents (e.g. `3.13.7`), or `None` when the file is absent.
-        `build` stages this pin so `uv venv`/`uv sync` select the exact interpreter
+        `build` stages this pin so the environment and `uv sync` use the exact interpreter
         instead of resolving `requires-python`.
         """
         ws = self._ws_dir()
@@ -281,6 +292,65 @@ class UvWorkspaceSource:
             span.set_attribute("uv.found", found)
             return found
 
+    @staticmethod
+    async def _has_python(ctr: Container, python: str | None) -> bool:
+        """Whether the base has its own Python that satisfies the workspace's request."""
+        with get_tracer().start_as_current_span("find a system Python") as span:
+            argv = ["uv", "python", "find", "--system", *([python] if python else [])]
+            found = await ctr.with_exec(argv, expect=ReturnType.ANY).exit_code() == 0
+            span.set_attribute("python.found", found)
+            return found
+
+    @classmethod
+    async def _with_project_environment(
+        cls, ctr: Container, python: str | None, *, default_base: bool, venv_relocatable: bool, activate_venv: bool
+    ) -> Container:
+        """Choose and prepare the environment `uv sync` installs into.
+
+        Runs before the workspace's `pyproject.toml` and `uv.lock` are copied in, so
+        these layers survive dependency changes. In order:
+
+        - `venv_relocatable`: a relocatable `.venv`, whatever the base sets.
+        - The base sets `UV_PROJECT_ENVIRONMENT`: uv installs there; nothing to do.
+        - The default base, or a base without a Python that satisfies `python`: a
+          uv-managed Python, installed into directly (no `.venv`). The default
+          image's `python3` belongs to Debian.
+        - A base with a suitable Python: a `.venv` on it, with a warning, as that's
+          what uv does.
+        """
+        tracer = get_tracer()
+        python_args = ["--python", python] if python else []
+        if venv_relocatable:
+            with tracer.start_as_current_span("create relocatable .venv"):
+                ctr = await (
+                    ctr.without_env_variable("UV_PROJECT_ENVIRONMENT")
+                    .with_exec(["uv", "venv", "--relocatable", *python_args])
+                    .sync()
+                )
+        elif await ctr.env_variable("UV_PROJECT_ENVIRONMENT"):
+            return ctr
+        elif default_base or not await cls._has_python(ctr, python):
+            with tracer.start_as_current_span("install uv-managed Python") as span:
+                request = [python] if python else []
+                ctr = await ctr.with_exec(["uv", "python", "install", *request]).sync()
+                interpreter = (await ctr.with_exec(["uv", "python", "find", *request]).stdout()).strip()
+                prefix = (await ctr.with_exec([interpreter, "-c", "import sys; print(sys.prefix)"]).stdout()).strip()
+                span.set_attribute("python.prefix", prefix)
+            return ctr.with_env_variable("UV_PROJECT_ENVIRONMENT", prefix).with_env_variable(
+                "PATH", f"{prefix}/bin:${{PATH}}", expand=True
+            )
+        else:
+            with tracer.start_as_current_span("create .venv (UV_PROJECT_ENVIRONMENT is not set)") as span:
+                logger.warning(_VENV_WARNING)
+                span.add_event("warning", {"message": _VENV_WARNING})
+                ctr = await ctr.with_exec(["uv", "venv", *python_args]).sync()
+        if activate_venv:
+            venv = posixpath.join(await ctr.workdir(), ".venv")
+            ctr = ctr.with_env_variable("VIRTUAL_ENV", venv).with_env_variable(
+                "PATH", f"{venv}/bin:${{PATH}}", expand=True
+            )
+        return ctr
+
     async def _default_base_container(self) -> Container:
         """A Debian-based uv image pinned to this workspace's uv version.
 
@@ -311,6 +381,8 @@ class UvWorkspaceSource:
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
         build_backends: BuildBackends | None = None,
+        venv_relocatable: VenvRelocatable = False,
+        activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
             bool,
             Doc(
@@ -321,8 +393,18 @@ class UvWorkspaceSource:
     ) -> UvWorkspaceBuild:
         """Prepare a build for this workspace without installing anything yet.
 
-        Resolves the sync plan, mounts the uv cache, and copies the root
-        pyproject.toml and uv.lock into the container. The returned `UvWorkspaceBuild` drives the pipeline from here:
+        Resolves the sync plan, mounts the uv cache, prepares the environment uv
+        installs into, and copies the root pyproject.toml and uv.lock into the
+        container.
+
+        The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets it.
+        Otherwise the default base, or one without a suitable Python, gets a
+        uv-managed Python that packages install into directly, and a base with
+        a suitable Python gets a `.venv` (activated unless `activate_venv=False`). Set
+        `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
+        redundant `.venv`.
+
+        The returned `UvWorkspaceBuild` drives the pipeline from here:
         `with_remote_dependencies()` to install remote deps, `with_workspace_files()`
         to scaffold local packages, then `with_local_dependencies()` to install them.
         Skip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)
@@ -372,27 +454,29 @@ class UvWorkspaceSource:
             # Place workspace files at their real path within the source tree
             # so that relative paths in uv.lock resolve correctly.
             ws_ctr_path = posixpath.join(workdir, self.path) if self.path != "." else workdir
+            ctr = ctr.with_workdir(ws_ctr_path)
+            python_version = await self.python_version()
+            if python_version:
+                ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, ".python-version"), python_version)
+            if auto_install_uv and not await self._has_uv(ctr):
+                ctr = (await UvWorkspaceBuild(container=ctr, plan=plan).with_uv(await self.uv_version())).container
+
             pyproject_contents, uv_lock_contents = await asyncio.gather(
                 plan.ws_dir.file("pyproject.toml").contents(),
                 plan.ws_dir.file("uv.lock").contents(),
             )
+            ctr = await self._with_project_environment(
+                ctr,
+                python_request(python_version, pyproject_contents),
+                default_base=base_container is None,
+                venv_relocatable=venv_relocatable,
+                activate_venv=activate_venv,
+            )
             ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, "pyproject.toml"), pyproject_contents).with_new_file(
                 posixpath.join(ws_ctr_path, "uv.lock"), uv_lock_contents
             )
-
-            python_version = await self.python_version()
-            if python_version:
-                ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, ".python-version"), python_version)
-
-            ctr = ctr.with_workdir(ws_ctr_path)
             ctr = await ctr.sync()
-
-            build = UvWorkspaceBuild(container=ctr, plan=plan)
-
-            if auto_install_uv and not await self._has_uv(ctr):
-                build = await build.with_uv(await self.uv_version())
-
-            return build
+            return UvWorkspaceBuild(container=ctr, plan=plan)
 
     @function
     async def install(
@@ -416,14 +500,8 @@ class UvWorkspaceSource:
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
-        venv: Annotated[
-            bool,
-            Doc("Create the virtual environment up front with `uv venv` (before installing)."),
-        ] = False,
-        venv_relocatable: Annotated[
-            bool,
-            Doc("When `venv` is set, make it relocatable (`uv venv --relocatable`)."),
-        ] = False,
+        venv_relocatable: VenvRelocatable = False,
+        activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
             bool,
             Doc(
@@ -434,9 +512,8 @@ class UvWorkspaceSource:
     ) -> Container:
         """Build a minimal container with deps installed for the given package(s).
 
-        Convenience method composing `build`, optionally `with_venv`,
-        `with_remote_dependencies`, `with_workspace_files`, and
-        `with_local_dependencies`. For fine-grained control (e.g. running
+        Convenience method composing `build`, `with_remote_dependencies`,
+        `with_workspace_files`, and `with_local_dependencies`. For fine-grained control (e.g. running
         `pulumi install` between remote deps and local source), call them individually.
         """
         b = await self.build(
@@ -450,10 +527,10 @@ class UvWorkspaceSource:
             no_editable=no_editable,
             no_default_groups=no_default_groups,
             build_backends=build_backends,
+            venv_relocatable=venv_relocatable,
+            activate_venv=activate_venv,
             auto_install_uv=auto_install_uv,
         )
-        if venv:
-            b = await b.with_venv(relocatable=venv_relocatable)
         b = await b.with_remote_dependencies(
             prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
         )
@@ -506,9 +583,9 @@ class UvWorkspaceSource:
             no_editable=no_editable,
             no_default_groups=no_default_groups,
             build_backends=build_backends,
+            venv_relocatable=True,
             auto_install_uv=auto_install_uv,
         )
-        b = await b.with_venv(relocatable=True)
         b = await b.with_remote_dependencies(
             prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
         )

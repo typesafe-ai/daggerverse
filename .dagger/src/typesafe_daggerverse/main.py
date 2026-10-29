@@ -1,5 +1,6 @@
 """Checks for typesafe-ai daggerverse modules."""
 
+import posixpath
 import tomllib
 from collections.abc import Awaitable
 from typing import Annotated
@@ -8,7 +9,7 @@ import anyio
 import yaml
 from dagger import Doc, check, function, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Changeset, Check, Container, Directory, Secret, Service, Workspace, core
+from dagger_clients.core import Changeset, Check, Container, Directory, ReturnType, Secret, Service, Workspace, core
 from dagger_clients.deptry import deptry
 from dagger_clients.github import github
 from dagger_clients.pyproject import pyproject
@@ -262,6 +263,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "audit_subset", self.uv_audit_subset)
             tg.start_soon(_run, "workspaces_exclude", self.uv_workspaces_exclude)
             tg.start_soon(_run, "install_venv", self.uv_install_venv)
+            tg.start_soon(_run, "project_environment", self.uv_project_environment)
             tg.start_soon(
                 _run, "relocatable_venv_runs_in_fresh_container", self.uv_relocatable_venv_runs_in_fresh_container
             )
@@ -394,22 +396,69 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_install_venv(self) -> None:
-        """`install` with `venv=True` creates a relocatable venv via `uv venv`, then syncs into it.
+        """`install(venv_relocatable=True)` creates an activated relocatable venv, then syncs into it.
 
-        Exercises the bare-image default (uv provisions Python), the `with_venv`
-        step, and local-package scaffolding; then confirms deps import from the venv.
+        Exercises the bare-image default (uv provisions Python) and local-package
+        scaffolding; plain `python` resolves to the activated venv.
         """
         src = _src("uv/tests/_packages/workspace")
         # Object-returning module functions chain lazily; await only the terminal scalar.
         out = await (
             uv(src.as_workspace())
             .workspace(".")
-            .install(package=["my-app"], venv=True, venv_relocatable=True)
-            .with_exec(["uv", "run", "python", "-c", "import my_app, my_core; print('VENV_OK')"])
+            .install(package=["my-app"], venv_relocatable=True)
+            .with_exec(["python", "-c", "import my_app, my_core, sys; print('VENV_OK', sys.prefix)"])
             .stdout()
         )
-        if "VENV_OK" not in out:
+        if "VENV_OK" not in out or not out.strip().endswith("/.venv"):
             raise AssertionError(f"expected venv install to import workspace packages, got: {out!r}")
+
+    @function
+    async def uv_project_environment(self) -> None:
+        """Where `install` puts packages, depending on the base container.
+
+        - The default base, or a Python that doesn't match `requires-python`: a
+          uv-managed Python, installed into directly.
+        - A matching Python and no `UV_PROJECT_ENVIRONMENT`: an activated `.venv`, or an
+          inactive one with `activate_venv=False`.
+        - `UV_PROJECT_ENVIRONMENT` set: that environment, with no `.venv`.
+        """
+        src = _src("uv/tests/_packages/workspace")
+        workspace = uv(src.as_workspace()).workspace(".")
+        imports = "import my_app, my_core, sys; print(sys.prefix)"
+        with_python = _base().without_env_variable("UV_PROJECT_ENVIRONMENT")
+
+        async def prefix(ctr: Container) -> str:
+            return (await ctr.with_exec(["python", "-c", imports]).stdout()).strip()
+
+        async def has_venv(ctr: Container) -> bool:
+            return await ctr.with_exec(["test", "-e", ".venv"], expect=ReturnType.ANY).exit_code() == 0
+
+        managed = workspace.install(package=["my-app"])
+        managed_prefix = await prefix(managed)
+        if await has_venv(managed) or "/uv/python/" not in managed_prefix:
+            raise AssertionError(f"expected a uv-managed Python and no .venv, got prefix {managed_prefix!r}")
+
+        # Debian's Python 3.13 doesn't satisfy the fixture's `>=3.14`.
+        mismatched = workspace.install(
+            package=["my-app"], base_container=core().container().from_("ghcr.io/astral-sh/uv:0.11.19-debian")
+        )
+        mismatched_prefix = await prefix(mismatched)
+        if await has_venv(mismatched) or "/uv/python/" not in mismatched_prefix:
+            raise AssertionError(f"expected a uv-managed Python for a non-matching base, got {mismatched_prefix!r}")
+
+        activated = workspace.install(package=["my-app"], base_container=with_python)
+        venv = posixpath.join(await activated.workdir(), ".venv")
+        if await activated.env_variable("VIRTUAL_ENV") != venv or await prefix(activated) != venv:
+            raise AssertionError("expected an activated .venv when the base has Python")
+
+        inactive = workspace.install(package=["my-app"], base_container=with_python, activate_venv=False)
+        if not await has_venv(inactive) or await inactive.env_variable("VIRTUAL_ENV"):
+            raise AssertionError("expected an inactive .venv with activate_venv=False")
+
+        system = workspace.install(package=["my-app"], base_container=_base())
+        if await has_venv(system) or await prefix(system) != "/usr/local":
+            raise AssertionError("expected UV_PROJECT_ENVIRONMENT=/usr/local to be installed into directly")
 
     @function
     async def uv_relocatable_venv_runs_in_fresh_container(self) -> None:
@@ -437,8 +486,7 @@ class TypesafeDaggerverse:
         out = await (
             uv(src.as_workspace())
             .workspace(".")
-            .build(extra=["viz"])
-            .with_venv(relocatable=True)
+            .build(extra=["viz"], venv_relocatable=True)
             .with_remote_dependencies()
             .copy_venv(base, set_env_vars=True)
             .with_exec(["python", "-c", "import tabulate; print('FRESH_VENV_OK')"])

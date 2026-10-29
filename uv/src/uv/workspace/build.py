@@ -148,30 +148,6 @@ class UvWorkspaceBuild:
         return self.with_container(ctr)
 
     @function
-    async def with_venv(
-        self,
-        relocatable: Annotated[
-            bool,
-            Doc("Create a relocatable virtual environment (`uv venv --relocatable`). Useful for multi-stage builds."),
-        ] = False,
-        args: Annotated[
-            list[str] | None,
-            Doc("Additional arguments passed through to `uv venv` (e.g. `--python`, `--seed`)."),
-        ] = None,
-    ) -> UvWorkspaceBuild:
-        """Create the project virtual environment with `uv venv`.
-
-        Run before the install steps so the subsequent `uv sync` populates this
-        environment rather than creating its own (e.g. a `relocatable` venv that
-        can be copied to a different path in a later stage).
-        """
-        argv = ["uv", "venv"]
-        if relocatable:
-            argv.append("--relocatable")
-        argv += args or []
-        return await self._exec_step("create virtual environment", argv, {"uv.venv_args": argv})
-
-    @function
     async def with_python_install(
         self,
         version: Annotated[
@@ -197,7 +173,7 @@ class UvWorkspaceBuild:
     ) -> UvWorkspaceBuild:
         """Pin the project's Python with `uv python pin` (writes `.python-version`).
 
-        Makes subsequent `uv venv`/`uv sync` select this exact version.
+        Makes subsequent `uv sync` select this exact version.
         """
         argv = ["uv", "python", "pin", version]
         return await self._exec_step(f"pin python {version}", argv, {"uv.python_version": version})

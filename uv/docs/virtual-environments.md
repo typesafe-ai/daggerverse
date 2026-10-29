@@ -14,15 +14,13 @@ its own. Use this to combine several virtual environments in one image.
 
 Virtual environments aren't self-contained by default: `.venv/bin/python` points back
 at a base interpreter, and the venv's scripts hardcode their location. To make a venv
-that survives being moved, create it with `uv venv --relocatable` *before* installing,
-so the subsequent `uv sync` populates that relocatable environment:
+that survives being moved, pass `venv_relocatable=True` to `build`:
 
 ```python
 b = (
     uv(ws)
     .workspace(".")
-    .build(package=["my-app"], no_editable=True)
-    .with_venv(relocatable=True)  # uv venv --relocatable
+    .build(package=["my-app"], no_editable=True, venv_relocatable=True)  # uv venv --relocatable
     .with_remote_dependencies()  # sync installs into the relocatable venv
 )
 ```
@@ -40,8 +38,7 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger call uv workspace --path . build --package my-app --no-editable \
-        with-venv --relocatable \
+    $ dagger call uv workspace --path . build --package my-app --no-editable --venv-relocatable \
         with-remote-dependencies \
         copy-venv --container alpine --set-env-vars
     ```
@@ -52,8 +49,7 @@ paths the venv expects:
     runner = (
         uv(ws)
         .workspace(".")
-        .build(package=["my-app"], no_editable=True)
-        .with_venv(relocatable=True)
+        .build(package=["my-app"], no_editable=True, venv_relocatable=True)
         .with_remote_dependencies()
         .copy_venv(core().container().from_("debian:bookworm-slim"), set_env_vars=True)
     )
