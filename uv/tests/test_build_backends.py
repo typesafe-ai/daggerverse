@@ -101,6 +101,11 @@ def test_uv_build_default_module_name_and_source_root():
     assert system.source_paths == ["src"]
 
 
+def test_uv_build_stubs_package_keeps_suffix():
+    system = _uv_build(name="example-stubs")
+    assert system.module_paths == ["src/example-stubs"]
+
+
 def test_uv_build_dotted_module_under_custom_root():
     system = _uv_build({"module-name": "example.api", "module-root": "./python"})
     assert system.module_paths == ["python/example/api"]
@@ -239,6 +244,11 @@ def test_pdm_package_dir(package_dir, module_paths, source_paths):
     system = _pdm({"build": {"package-dir": package_dir}}, name="My-Pkg")
     assert system.module_paths == module_paths
     assert system.source_paths == source_paths
+
+
+def test_pdm_package_dir_stubs_package_keeps_suffix():
+    system = _pdm({"build": {"package-dir": "src"}}, name="my-pkg-stubs")
+    assert system.module_paths == ["src/my_pkg-stubs"]
 
 
 def test_pdm_includes_ignore_globs_and_split_modules_from_files():

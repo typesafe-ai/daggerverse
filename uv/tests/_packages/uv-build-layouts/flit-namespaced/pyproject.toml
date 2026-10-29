@@ -1,0 +1,13 @@
+[project]
+name = "flit-namespaced-dist"
+version = "0.1.0"
+description = "A module inside a namespace package, found by flit under src/"
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["flit_core>=3.12,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "layout_flit.plugin"

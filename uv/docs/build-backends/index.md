@@ -26,8 +26,6 @@ The module reads the native settings of these build backends:
     Projects without a build system, or with `tool.uv.package = false` do not get installed, only their dependencies are.
 
 !!! warning "Limitations"
-    - Namespace packages are not supported.
-    - Type-stub (`-stubs`) packages are not supported.
     - Versions taken from VCS (`git`) are not supported.
 
 ## Unknown build backends

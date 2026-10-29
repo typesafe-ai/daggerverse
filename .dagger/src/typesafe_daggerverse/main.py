@@ -531,14 +531,26 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_build_layouts(self) -> None:
-        """Virtual members, renamed modules, multiple modules, and custom roots build together."""
+        """Virtual members, renamed modules, multiple modules, custom roots, namespace and stub packages build together.
+
+        Besides uv_build members, flit and pdm-backend members find a namespace and a stub package under `src/`.
+        """
         source = _src("uv/tests/_packages/uv-build-layouts")
         source = source.with_new_file("flat/tests/unrelated.py", "Must stay out of the package build layer\n")
         script = (
-            "from importlib.metadata import distributions\n"
+            "from importlib.metadata import distribution, distributions\n"
             "from pathlib import Path\n"
-            "import actual_package, compat_package, vendor_sdk\n"
+            "import actual_package, compat_package, vendor_sdk, layout_ns.plugin, layout_flit.plugin\n"
             "assert actual_package.VALUE == compat_package.VALUE == vendor_sdk.VALUE == 'real source'\n"
+            "assert layout_ns.plugin.VALUE == layout_flit.plugin.VALUE == 'real source'\n"
+            "assert layout_ns.__file__ is None, 'namespace package became a regular package'\n"
+            "assert layout_flit.__file__ is None, 'namespace package became a regular package'\n"
+            "assert not Path('stubs/src/vendor_sdk-stubs/__init__.py').exists()\n"
+            "assert not Path('pdm-stubs/src/pdm_sdk-stubs/__init__.py').exists()\n"
+            "dists = ('namespaced-dist', 'vendor-sdk-stubs', 'flit-namespaced-dist', 'pdm-sdk-stubs')\n"
+            "files = {str(f) for d in dists for f in distribution(d).files}\n"
+            "stubs = {'layout_ns/__init__.py', 'layout_flit/__init__.py', 'vendor_sdk-stubs/__init__.py'}\n"
+            "assert not {*stubs, 'pdm_sdk-stubs/__init__.py'} & files, files\n"
             "assert not Path('flat/tests/unrelated.py').exists()\n"
             "installed = {d.metadata['Name'] for d in distributions()}\n"
             "assert not {'layout-workspace', 'virtual-app'} & installed\n"

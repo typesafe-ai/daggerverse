@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import posixpath
 from typing import Annotated
 
@@ -23,6 +24,22 @@ _DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 # normalize mtimes to 1, which backends that stamp files from their mtime (flit)
 # reject unless SOURCE_DATE_EPOCH is set.
 _SOURCE_DATE_EPOCH = "315532800"
+
+
+def _module_stubs(pkg: LocalPackage) -> list[str]:
+    """Package-relative empty files that stand in for `pkg`'s modules until its source is copied.
+
+    A single-file module is stubbed as itself, a package by its `__init__.py`, and a
+    type-stub (`-stubs`) package by its `__init__.pyi`.
+    """
+    stubs = []
+    for module_path in pkg.module_paths:
+        if is_file(module_path):
+            stubs.append(module_path)
+        else:
+            init = "__init__.pyi" if module_path.endswith("-stubs") else "__init__.py"
+            stubs.append(posixpath.join(module_path, init))
+    return stubs
 
 
 @object_type
@@ -224,9 +241,7 @@ class UvWorkspaceBuild:
         if pkg.name in self.plan.flat_packages:
             return overlay
         overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
-        for module_path in pkg.module_paths:
-            # A single-file module is stubbed as itself, a package by its `__init__.py`.
-            stub = module_path if is_file(module_path) else posixpath.join(module_path, "__init__.py")
+        for stub in _module_stubs(pkg):
             overlay = overlay.with_new_file(posixpath.join(ctr_base, stub).lstrip("/"), "")
         # Editable installs build metadata from the scaffold before sources are copied.
         package_inputs = [path for path in pkg.build_inputs if not path.startswith("/")]
@@ -331,15 +346,33 @@ class UvWorkspaceBuild:
         Python graph-building and report ~zero duration.
         """
         overlay = core().directory()
+        packages = [pkg for pkg in self.plan.needed_local if pkg.name not in self.plan.flat_packages]
         with get_tracer().start_as_current_span("copy local dependency sources") as span:
             span.set_attribute("packages.count", len(self.plan.needed_local))
             span.set_attribute("packages.names", [pkg.name for pkg in self.plan.needed_local])
-            for pkg in self.plan.needed_local:
-                if pkg.name in self.plan.flat_packages:
-                    continue
+            for pkg in packages:
                 overlay = self._copy_package(overlay, workdir, pkg)
+            # Drop the module stubs the real source doesn't replace, e.g. the `__init__.py`
+            # that would turn a namespace package into a regular one. Only those, so the
+            # usual packages add no layer.
+            if orphans := await self._orphan_stubs(packages, workdir):
+                ctr = ctr.without_files(orphans)
             overlay = await self._with_link_targets(overlay, workdir)
             return await ctr.with_directory("/", overlay).sync()
+
+    async def _orphan_stubs(self, packages: list[LocalPackage], workdir: str) -> list[str]:
+        """Container paths of the module stubs that `packages`' real source doesn't replace."""
+        candidates = [
+            (
+                pkg.source,
+                posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path, stub)),
+                posixpath.normpath(posixpath.join(workdir, pkg.path, stub)),
+            )
+            for pkg in packages
+            for stub in _module_stubs(pkg)
+        ]
+        found = await asyncio.gather(*(source.exists(path) for source, path, _ in candidates))
+        return [target for (_, _, target), exists in zip(candidates, found, strict=True) if not exists]
 
     async def _with_link_targets(self, overlay: Directory, workdir: str) -> Directory:
         """Replace copied symlinks that point outside the copied sources with their content.

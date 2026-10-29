@@ -11,6 +11,7 @@ from dagger_clients.core import Directory
 from uv.utils import (
     build_uv_sync_args,
     find_transitive_local_deps,
+    import_name,
     normalize_package_name,
     parse_local_packages,
     parse_project_name,
@@ -55,7 +56,7 @@ _MODULE_NAME_OVERRIDES: dict[str, str] = {
 
 
 def _module_name(pkg_name: str) -> str:
-    return _MODULE_NAME_OVERRIDES.get(pkg_name, pkg_name.replace("-", "_"))
+    return _MODULE_NAME_OVERRIDES.get(pkg_name, import_name(pkg_name))
 
 
 def _transitive_union(lock_data: dict, packages: list[str], groups: set[str] | None) -> OrderedDict[str, str]:
@@ -230,7 +231,7 @@ class UvSyncPlan:
         source_dir: Directory,
         manifests_dir: Directory,
         projects: list[ProjectSource],
-        src_init_paths: list[str],
+        src_paths: list[str],
         workspace_path: str = ".",
         package: list[str] | None = None,
         extra: list[str] | None = None,
@@ -264,7 +265,7 @@ class UvSyncPlan:
             lock_data, packages, all_packages, default_package, groups, workspace_path, manifests_dir
         )
         project_sources = {project.path: project.source for project in projects}
-        src_inits = {posixpath.normpath(path) for path in src_init_paths}
+        src_entries = {posixpath.normpath(path) for path in src_paths}
 
         # A local package with no [build-system] or with package = false is deps-only:
         # uv installs its dependencies but never builds the package itself, so its
@@ -298,7 +299,7 @@ class UvSyncPlan:
                     name=name,
                     path=pkg_path,
                     module=module,
-                    flat=posixpath.normpath(posixpath.join(resolved, "src", top, "__init__.py")) not in src_inits,
+                    flat=posixpath.normpath(posixpath.join(resolved, "src", top)) not in src_entries,
                     pyproject_contents=contents,
                     source=project_sources.get(resolved, source_dir),
                     layout=layout,

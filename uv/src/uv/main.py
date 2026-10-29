@@ -23,9 +23,9 @@ def _lookup(items: list[UvWorkspaceSource], path: str) -> UvWorkspaceSource:
     raise ValueError(msg)
 
 
-def _project_of_src_init(path: str) -> str:
-    """The project root of a `<root>/src/<module>/__init__.py` path, `.` for the workspace root."""
-    return posixpath.dirname(posixpath.dirname(posixpath.dirname(path))) or "."
+def _project_of_src_path(path: str) -> str:
+    """The project root of a `<root>/src/<entry>` path, `.` for the workspace root."""
+    return posixpath.dirname(posixpath.dirname(path)) or "."
 
 
 @object_type
@@ -99,12 +99,12 @@ class Uv:
                 source=ws.directory("/", include=include, exclude=exclude, gitignore=True),
                 manifests=ws.directory("/", include=manifest_include, exclude=manifest_exclude),
                 projects=[sources[root] for root in roots if root in sources],
-                # `<root>/src/<module>/__init__.py` marks a project's src layout.
-                src_init_paths=[init for init in src_inits if _project_of_src_init(init) in roots],
+                # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.
+                src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.
-        src_inits = await ws.glob("**/src/*/__init__.py")
+        src_paths = [posixpath.normpath(path) for path in await ws.glob("**/src/*")]
         sources = {source.path: source for source in await asyncio.gather(*(project_source(p) for p in projects))}
         return cls(items=list(await asyncio.gather(*(workspace_source(w) for w in found))))
 

@@ -8,7 +8,7 @@ dependencies = ["virtual-app"]
 package = false
 
 [tool.uv.workspace]
-members = ["app", "renamed", "flat"]
+members = ["app", "renamed", "flat", "namespaced", "stubs", "flit-namespaced", "pdm-stubs"]
 
 [tool.uv.sources]
 virtual-app = { workspace = true }

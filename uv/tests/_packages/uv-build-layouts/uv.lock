@@ -5,8 +5,12 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "flat-dist",
+    "flit-namespaced-dist",
     "layout-workspace",
+    "namespaced-dist",
+    "pdm-sdk-stubs",
     "renamed-dist",
+    "vendor-sdk-stubs",
     "virtual-app",
 ]
 
@@ -14,6 +18,11 @@ members = [
 name = "flat-dist"
 version = "0.1.0"
 source = { editable = "flat" }
+
+[[package]]
+name = "flit-namespaced-dist"
+version = "0.1.0"
+source = { editable = "flit-namespaced" }
 
 [[package]]
 name = "layout-workspace"
@@ -27,6 +36,16 @@ dependencies = [
 requires-dist = [{ name = "virtual-app", virtual = "app" }]
 
 [[package]]
+name = "namespaced-dist"
+version = "0.1.0"
+source = { editable = "namespaced" }
+
+[[package]]
+name = "pdm-sdk-stubs"
+version = "0.1.0"
+source = { editable = "pdm-stubs" }
+
+[[package]]
 name = "renamed-dist"
 version = "0.1.0"
 source = { editable = "renamed" }
@@ -38,12 +57,27 @@ dependencies = [
 requires-dist = [{ name = "flat-dist", editable = "flat" }]
 
 [[package]]
+name = "vendor-sdk-stubs"
+version = "0.1.0"
+source = { editable = "stubs" }
+
+[[package]]
 name = "virtual-app"
 version = "0.1.0"
 source = { virtual = "app" }
 dependencies = [
+    { name = "flit-namespaced-dist" },
+    { name = "namespaced-dist" },
+    { name = "pdm-sdk-stubs" },
     { name = "renamed-dist" },
+    { name = "vendor-sdk-stubs" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "renamed-dist", editable = "renamed" }]
+requires-dist = [
+    { name = "flit-namespaced-dist", editable = "flit-namespaced" },
+    { name = "namespaced-dist", editable = "namespaced" },
+    { name = "pdm-sdk-stubs", editable = "pdm-stubs" },
+    { name = "renamed-dist", editable = "renamed" },
+    { name = "vendor-sdk-stubs", editable = "stubs" },
+]

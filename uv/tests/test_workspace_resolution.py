@@ -481,6 +481,9 @@ class TestModuleName:
     def test_dagger_io_override(self):
         assert _module_name("dagger-io") == "dagger"
 
+    def test_stubs_keep_suffix(self):
+        assert _module_name("my-lib-stubs") == "my_lib-stubs"
+
 
 class TestNameNormalization:
     """PEP 503 name normalization: underscores, mixed case, dots all map to hyphens."""

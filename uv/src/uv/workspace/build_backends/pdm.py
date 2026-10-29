@@ -8,6 +8,7 @@ import posixpath
 from dataclasses import dataclass
 from typing import Self
 
+from uv.utils import import_name
 from uv.workspace.build_backends.paths import is_file, is_module
 
 # pdm-backend runs this script as a build hook whenever it exists.
@@ -40,7 +41,7 @@ class PdmSettings:
             includes = [posixpath.normpath(path) for path in includes if not any(c in path for c in "*?[")]
         package_dir = build.get("package-dir")
         return cls(
-            import_name=name.lower().replace("-", "_").replace(".", "_"),
+            import_name=import_name(name),
             package_dir=posixpath.normpath(package_dir) if package_dir is not None else None,
             includes=includes,
             custom_hook=build.get("custom-hook", _DEFAULT_CUSTOM_HOOK),

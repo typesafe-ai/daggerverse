@@ -383,7 +383,7 @@ type ModuleTypes {
         .withField("source", typeDef.withObject("Directory"), description: "The workspace's members and their path dependencies, at workspace-root-relative paths.")
         .withField("manifests", typeDef.withObject("Directory"), description: "Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files.")
         .withField("projects", typeDef.withListOf(typeDef.withObject("ProjectSource")), description: "Each member's and local dependency's files, loaded only when a build installs that project.")
-        .withField("src_init_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The projects' `src/*/__init__.py` files, which mark a `src` layout.")
+        .withField("src_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The entries directly under the projects' `src/`, which mark a `src` layout.")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace.")
         .withFunction(
           function("audit", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
