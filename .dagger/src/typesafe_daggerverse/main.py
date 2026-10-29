@@ -589,11 +589,12 @@ class TypesafeDaggerverse:
             "assert plugged.VALUE == 'real source'\n"
             "assert version('plugged-app') == '0.1.0'\n"
         )
+        ws = source.as_workspace()
         for no_editable in (False, True):
             ctr = (
-                uv(source.as_workspace())
+                uv(ws)
                 .workspace(".")
-                .install(no_editable=no_editable, build_backend_handlers=[setuptools_package_dir()])
+                .install(no_editable=no_editable, build_backend_handlers=[setuptools_package_dir()], ws=ws)
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
             )
             # The handler's `setup` ran before the build and its `teardown` after it.
@@ -604,8 +605,8 @@ class TypesafeDaggerverse:
     @function
     async def uv_maturin_outside_workspace(self) -> None:
         """A maturin crate builds against a crate outside its uv workspace, staged from the workspace root."""
-        source = _src("uv/tests/_packages/maturin-outside-workspace")
-        uv_ = uv(source.as_workspace())
+        ws = _fixture("uv/tests/_packages/maturin-outside-workspace")
+        uv_ = uv(ws)
         maturin = (
             uv_.build_backend_handlers()
             .maturin()
@@ -617,7 +618,7 @@ class TypesafeDaggerverse:
         for no_editable in (False, True):
             await (
                 uv_.workspace("py")
-                .install(base_container=base, no_editable=no_editable, build_backend_handlers=[maturin])
+                .install(base_container=base, no_editable=no_editable, build_backend_handlers=[maturin], ws=ws)
                 # Isolated (`-I`), so the installed package is imported rather than the source.
                 .with_exec(
                     ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
@@ -730,7 +731,8 @@ class TypesafeDaggerverse:
                     for path in project["packages"]
                 ]
                 base = core().container().from_(project["base"]) if "base" in project else None
-                project_uv = uv(source.as_workspace())
+                project_ws = source.as_workspace()
+                project_uv = uv(project_ws)
                 builtin = project_uv.build_backend_handlers()
                 handlers = []
                 for backend, packages in project.get("handlers", {}).items():
@@ -743,6 +745,7 @@ class TypesafeDaggerverse:
                     no_editable=no_editable,
                     base_container=base,
                     build_backend_handlers=handlers,
+                    ws=project_ws,
                     **project.get("install", {}),
                 )
                 script = "".join(f"import {module}\n" for module in project["imports"])

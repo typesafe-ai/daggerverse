@@ -18,7 +18,7 @@ Implement the following functions:
 | `module_name`         | Names the import package; dotted inside namespace packages                   |
 | `module_paths`        | Lists the package-relative import directories (or `.py` modules) to stub     |
 | `source_paths`        | Lists the package-relative directories (or files) to copy                    |
-| `build_inputs`        | Lists the files (or globs) the build reads; `/` starts at the workspace root |
+| `build_inputs`        | Lists the files (or globs) the build reads; `/` starts at the root of `ws`   |
 | `setup(container)`    | Prepares the container before the build, e.g. mounts caches                  |
 | `teardown(container)` | Cleans the container up after the build                                      |
 

@@ -190,11 +190,6 @@ class UvSyncPlan:
         Doc("Every member's files; read only for files outside the needed packages, e.g. symlink targets"),
     ] = field()
 
-    root_dir: Annotated[
-        Directory,
-        Doc("The whole source tree; read only for the local packages' `/`-prefixed build inputs"),
-    ] = field()
-
     workspace_path: Annotated[
         str,
         Doc("Workspace path within the source directory"),
@@ -230,11 +225,20 @@ class UvSyncPlan:
         Doc("Build backend handlers, whose hooks run around the local packages' build"),
     ] = field(default=list)
 
+    root_inputs_dir: Annotated[
+        Directory | None,
+        Doc("The files the local packages' `/`-prefixed build inputs name, at workspace-root-relative paths"),
+    ] = field(default=None)
+
+    @property
+    def root_inputs(self) -> list[str]:
+        """The local packages' `/`-prefixed build inputs, relative to the workspace root."""
+        return sorted({path.lstrip("/") for pkg in self.all_local for path in pkg.build_inputs if path.startswith("/")})
+
     @classmethod
     async def create(
         cls,
         source_dir: Directory,
-        root_dir: Directory,
         manifests_dir: Directory,
         projects: list[ProjectSource],
         src_paths: list[str],
@@ -340,7 +344,6 @@ class UvSyncPlan:
         return cls(
             ws_dir=ws_dir,
             source_dir=source_dir,
-            root_dir=root_dir,
             workspace_path=workspace_path,
             all_local=[local_packages[name] for name in all_local],
             needed_local=[local_packages[name] for name in needed_local],

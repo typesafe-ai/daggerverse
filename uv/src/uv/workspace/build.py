@@ -254,10 +254,10 @@ class UvWorkspaceBuild:
                 include=package_inputs,
             )
         if root_inputs:
-            # Workspace-root-relative inputs, e.g. a Cargo workspace above the package, which
-            # may lie outside the members, so they come from the whole tree.
+            # Workspace-root-relative inputs, e.g. a Cargo workspace above the package.
+            assert self.plan.root_inputs_dir is not None
             overlay = overlay.with_directory(
-                self._root_path(workdir).lstrip("/") or ".", self.plan.root_dir, include=root_inputs
+                self._root_path(workdir).lstrip("/") or ".", self.plan.root_inputs_dir, include=root_inputs
             )
         return overlay
 
