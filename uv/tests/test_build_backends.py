@@ -1,13 +1,14 @@
 """Backend settings determine scaffold paths and the files copied for installation."""
 
 import asyncio
+import subprocess
 
 import pytest
-from uv.workspace.build_backends import PackageBackend
+from uv.workspace.build_backends import PackageBackend, maturin
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.handler import BuildBackendLayout, MaturinHandler
 from uv.workspace.build_backends.hatchling import HatchlingSettings
-from uv.workspace.build_backends.maturin import MaturinSettings
+from uv.workspace.build_backends.maturin import MaturinSettings, target_prune_script
 from uv.workspace.build_backends.pdm import PdmSettings
 from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
@@ -432,6 +433,20 @@ def test_maturin_cargo_metadata_files_and_wheel_includes():
     assert "data/schema.json" in inputs
     assert {"assets", "assets/**"} <= set(inputs)
     assert not any(path.startswith("sdist-only") for path in inputs)
+
+
+@pytest.mark.parametrize(
+    ("max_target_size", "cleared"),
+    [(0, True), (1, False)],
+)
+def test_maturin_target_prune_clears_only_past_the_limit(tmp_path, monkeypatch, max_target_size, cleared):
+    target = tmp_path / "target"
+    (target / "release").mkdir(parents=True)
+    (target / "release" / "libcore.rlib").write_bytes(b"x" * 1024)
+    monkeypatch.setattr(maturin, "_CARGO_TARGET_DIR", str(target))
+    subprocess.run(["sh", "-c", target_prune_script(max_target_size)], check=True)
+    assert target.is_dir()
+    assert (not any(target.iterdir())) == cleared
 
 
 def test_maturin_crate_inputs_follow_the_manifest_path():

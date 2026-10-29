@@ -103,8 +103,32 @@ class MaturinSettings:
         return inputs
 
 
+def target_prune_script(max_target_size: int) -> str:
+    """Clear the Cargo target dir once it exceeds `max_target_size` GiB (0: always).
+
+    Cargo never prunes a target dir: every toolchain, dependency and feature change
+    leaves its artifacts behind. It has no age-based cleanup either, so this clears
+    it all, costing one cold build each time the limit is crossed.
+    """
+    limit_kib = max_target_size * 1024 * 1024  # GiB -> KiB, to compare with `du -sk`
+    gate = f'[ "${{used_kib:-0}}" -gt {limit_kib} ]' if max_target_size > 0 else "true"
+    return (
+        f"used_kib=$(du -skx {_CARGO_TARGET_DIR} 2>/dev/null | cut -f1); "
+        f"if {gate}; then "
+        f'echo "cargo target: ${{used_kib}} KiB used > {limit_kib} KiB limit; clearing" >&2; '
+        f"find {_CARGO_TARGET_DIR} -mindepth 1 -delete; "
+        "else "
+        f'echo "cargo target: ${{used_kib}} KiB used <= {limit_kib} KiB limit; keeping" >&2; '
+        "fi"
+    )
+
+
+@dataclass(frozen=True)
 class MaturinHooks:
-    """Keeps compiled crates in a cache volume while maturin builds."""
+    """Keeps compiled crates in a cache volume while maturin builds, clearing it once it grows too large."""
+
+    # GiB past which the target cache is cleared after a build.
+    max_target_size: int = 50
 
     def setup(self, container: Container) -> Container:
         return container.with_mounted_cache(
@@ -112,4 +136,9 @@ class MaturinHooks:
         ).with_env_variable("CARGO_TARGET_DIR", _CARGO_TARGET_DIR)
 
     def teardown(self, container: Container) -> Container:
-        return container.without_env_variable("CARGO_TARGET_DIR").without_mount(_CARGO_TARGET_DIR)
+        # The volume is private to this build, so nothing else is using what gets cleared.
+        return (
+            container.with_exec(["sh", "-c", target_prune_script(self.max_target_size)])
+            .without_env_variable("CARGO_TARGET_DIR")
+            .without_mount(_CARGO_TARGET_DIR)
+        )

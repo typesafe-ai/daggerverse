@@ -246,6 +246,11 @@ type ModuleTypes {
             .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
         )
         .withFunction(
+          function("with_max_target_size", typeDef.withObject("MaturinHandler"))
+            .withDescription("Bound the Cargo target cache that keeps compiled crates between builds.")
+            .withArg("max_target_size", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Clear the Cargo target cache after a build once it grows past this many GiB; 0 clears it every time.")
+        )
+        .withFunction(
           function("with_package_config", typeDef.withObject("MaturinHandler"))
             .withDescription("Configure how the package `name` builds, e.g. with the crates its Cargo workspace keeps above it.")
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))

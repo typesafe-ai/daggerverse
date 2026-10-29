@@ -1678,6 +1678,25 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("teardown", _args)
         return Container(_ctx)
 
+    def with_max_target_size(self, max_target_size: int) -> _Self:
+        """
+        Bound the Cargo target cache that keeps compiled crates between
+        builds.
+
+        Parameters
+        ----------
+        max_target_size:
+            Clear the Cargo target cache after a build once it grows past this
+            many GiB; 0 clears it every time.
+        """
+        if not (isinstance(max_target_size, int)):
+            raise _type_error("UvMaturinHandler.with_max_target_size", "max_target_size", max_target_size, "int")
+        _args = [
+            _Arg("maxTargetSize", max_target_size),
+        ]
+        _ctx = self._select("withMaxTargetSize", _args)
+        return UvMaturinHandler(_ctx)
+
     def with_package_config(self, name: str, extra_build_inputs: list[str],) -> _Self:
         """
         Configure how the package `name` builds, e.g. with the crates its

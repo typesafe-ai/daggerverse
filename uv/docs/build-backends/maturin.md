@@ -22,6 +22,10 @@ The crate's `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/`, `.cargo/config.toml`
 license files when `[project].dynamic` takes them from `Cargo.toml`. Compiled crates
 are kept in a cache volume between builds.
 
+Cargo never prunes that cache, so it's cleared after a build that leaves it larger
+than 50 GiB. Change the limit with the maturin handler's `with_max_target_size`
+(`0` clears it after every build).
+
 The base container needs a Rust toolchain.
 
 ## Cargo workspaces

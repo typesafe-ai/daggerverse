@@ -604,7 +604,11 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_maturin_outside_workspace(self) -> None:
-        """A maturin crate builds against a crate outside its uv workspace, staged from the workspace root."""
+        """A maturin crate builds against a crate outside its uv workspace, staged from the workspace root.
+
+        The Cargo target cache is cleared after every build here, which must leave the
+        installed extension working.
+        """
         ws = _fixture("uv/tests/_packages/maturin-outside-workspace")
         uv_ = uv(ws)
         maturin = (
@@ -613,6 +617,7 @@ class TypesafeDaggerverse:
             .with_package_config(
                 name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
             )
+            .with_max_target_size(0)
         )
         base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
         for no_editable in (False, True):
