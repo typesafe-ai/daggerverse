@@ -81,6 +81,21 @@ def _base() -> Container:
     )
 
 
+def _go_test(module: str) -> Container:
+    """Run a Go module's unit tests, on the Go image its Dagger entrypoint builds with."""
+    return (
+        core()
+        .container()
+        .from_("golang:1.26.1-alpine")
+        .with_mounted_cache("/go/pkg/mod", core().cache_volume("go-mod"))
+        .with_mounted_cache("/root/.cache/go-build", core().cache_volume("go-build"))
+        .with_env_variable("CGO_ENABLED", "0")
+        .with_directory("/src", _src(module))
+        .with_workdir("/src")
+        .with_exec(["go", "test", "./..."])
+    )
+
+
 def _assert_modules_script(present: list[str], absent: list[str]) -> str:
     return (
         "import importlib, sys\n"
@@ -138,17 +153,12 @@ class TypesafeDaggerverse:
     ) -> Directory:
         """Build a module's static docs site and return the generated `site/` dir.
 
-        Built on the same base as the tests, with the module installed and its
-        `docs` uv group (which ships zensical) synced, so docs that introspect
-        the codebase can import it. `build` only copies each package's `src/`, so
-        the docs sources are supplied separately by `_zensical_site`.
+        Built on the same base as the tests with the module's `docs` uv group
+        (which ships zensical) synced and no package installed, as the docs
+        don't import the code. `_zensical_site` supplies the docs sources.
         """
         src = _src(module)
-        ctr = (
-            await uv(src.as_workspace())
-            .workspace(".")
-            .install(package=[module], base_container=_base(), group=["docs"])
-        )
+        ctr = await uv(src.as_workspace()).workspace(".").install(base_container=_base(), group=["docs"])
         return await self._zensical_site(ctr, src)
 
     async def _landing(self) -> Directory:
@@ -286,7 +296,7 @@ class TypesafeDaggerverse:
                 _run, "full_workspace_all_extras_all_groups", self.uv_workspace_full_workspace_all_extras_all_groups
             )
             tg.start_soon(_run, "build_self", self.uv_workspace_build_self)
-            tg.start_soon(_run, "pytest_self", self.uv_workspace_pytest_self)
+            tg.start_soon(_run, "go_test", self.uv_go_test)
             tg.start_soon(_run, "build_partial_workspace", self.uv_workspace_build_partial_workspace)
             tg.start_soon(_run, "build_nested_standalone", self.uv_workspace_build_nested_standalone)
             tg.start_soon(_run, "auto_install_uv", self.uv_workspace_auto_install_uv)
@@ -911,9 +921,9 @@ print("LAYER_CACHE_OK")
 
     @function
     async def uv_workspace_build_self(self) -> None:
-        """Build the uv module from its own source on a fresh tree."""
-        ctr = await uv(_fixture("uv")).workspace(".").install(package=["uv"], base_container=_base())
-        await ctr.with_exec(["python", "-c", "import uv"]).stdout()
+        """Build a Python Dagger module (`deptry`) from its own source on a fresh tree."""
+        ctr = await uv(_fixture("deptry")).workspace(".").install(package=["deptry"], base_container=_base())
+        await ctr.with_exec(["python", "-c", "import deptry"]).stdout()
 
     @check
     @function
@@ -937,19 +947,9 @@ print("LAYER_CACHE_OK")
         await tg.ctr().with_exec(["twingated", "--version"]).sync()
 
     @function
-    async def uv_workspace_pytest_self(self) -> None:
-        """Run the uv module's own pytest suite inside a freshly built container.
-
-        `install()` only copies `src/` for each package (to keep layer
-        granularity tight). `tests/` has to be mounted explicitly so
-        pytest can find them. Without it, `pytest -q` collects nothing
-        and exits with code 5 (NO_TESTS_COLLECTED).
-        """
-        ctr = await uv(_fixture("uv")).workspace(".").install(package=["uv"], base_container=_base(), all_groups=True)
-        workdir = await ctr.workdir()
-        tests = _src("uv/tests")
-        ctr = ctr.with_directory(f"{workdir}/tests", tests)
-        await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
+    async def uv_go_test(self) -> None:
+        """Run the uv module's Go unit tests."""
+        await _go_test("uv").sync()
 
     def _ruff_dirty_source(self) -> Directory:
         return (
@@ -1112,7 +1112,7 @@ print("LAYER_CACHE_OK")
     async def all_pyproject(self) -> None:
         """Run all checks for the `pyproject` module in parallel."""
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.pyproject_pytest_self)
+            tg.start_soon(self.pyproject_go_test)
             tg.start_soon(self.pyproject_discovers_projects_and_workspaces)
             tg.start_soon(self.pyproject_workspace_markers)
             tg.start_soon(self.pyproject_respects_gitignore)
@@ -1121,16 +1121,9 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.pyproject_workspace_source_and_manifests)
 
     @function
-    async def pyproject_pytest_self(self) -> None:
-        """Run the pyproject module's own pytest suite (the discovery logic, engine-free)."""
-        ctr = (
-            await uv(_fixture("pyproject"))
-            .workspace(".")
-            .install(package=["pyproject"], base_container=_base(), all_groups=True)
-        )
-        workdir = await ctr.workdir()
-        ctr = ctr.with_directory(f"{workdir}/tests", _src("pyproject/tests"))
-        await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
+    async def pyproject_go_test(self) -> None:
+        """Run the pyproject module's Go unit tests (the discovery logic, engine-free)."""
+        await _go_test("pyproject").sync()
 
     @function
     async def pyproject_discovers_projects_and_workspaces(self) -> None:

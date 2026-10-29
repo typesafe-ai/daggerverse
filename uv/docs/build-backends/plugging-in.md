@@ -22,9 +22,10 @@ Implement the following functions:
 | `setup(container)`    | Prepares the container before the build, e.g. mounts caches                  |
 | `teardown(container)` | Cleans the container up after the build                                      |
 
-Returning `None` from `module_name`, `module_paths`, or `source_paths` falls back to
-the conventional layout: the module named after the distribution, under `src/` or
-at the package root.
+Returning an empty `module_name` falls back to the conventional layout: the module
+named after the distribution, under `src/` or at the package root. Empty
+`module_paths` or `source_paths` fall back the same way only where the module's
+built-in support for the package's backend would; otherwise they mean none.
 
 !!! example "Custom `setuptools` handler"
     This handler supports setuptools packages that set `[tool.setuptools] package-dir`:
@@ -43,16 +44,16 @@ at the package root.
             return "setuptools.build_meta"
 
         @function
-        async def module_name(self, pyproject: str, name: str) -> str | None:
-            return None
+        async def module_name(self, pyproject: str, name: str) -> str:
+            return ""
 
         @function
-        async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        async def module_paths(self, pyproject: str, name: str) -> list[str]:
             setuptools = tomllib.loads(pyproject)["tool"]["setuptools"]
             return [f"{setuptools['package-dir']['']}/{p}" for p in setuptools["packages"]]
 
         @function
-        async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        async def source_paths(self, pyproject: str, name: str) -> list[str]:
             return [tomllib.loads(pyproject)["tool"]["setuptools"]["package-dir"][""]]
 
         @function

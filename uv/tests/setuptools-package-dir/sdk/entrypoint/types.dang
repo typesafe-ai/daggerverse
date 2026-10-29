@@ -13,12 +13,12 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
-          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+          function("module_name", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
-          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+          function("module_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
@@ -28,7 +28,7 @@ type ModuleTypes {
             .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
         )
         .withFunction(
-          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+          function("source_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
