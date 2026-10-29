@@ -13,9 +13,10 @@ The module reads the native settings of these build backends:
 - [pdm-backend](pdm-backend.md)
 - [flit_core](flit.md)
 - [poetry-core](poetry.md)
+- [maturin](maturin.md)
 
 !!! tip "Your build backend is not supported?"
-    No worries! Learn how to [implement your own](custom.md)
+    [Plug it in](plugging-in.md) with a handler from your own module.
 
 !!! note "Backend-agnostic settings"
     Files defined in `[project.readme]`, `[project.license-files]`, and
@@ -27,11 +28,7 @@ The module reads the native settings of these build backends:
 !!! warning "Limitations"
     - Namespace packages are not supported.
     - Type-stub (`-stubs`) packages are not supported.
-    - Versions read from git fail, because the build has no `.git` directory.
-
-    Each backend page lists its own limitations. Supply missing inputs before
-    `with_local_dependencies()` when using such settings; a full project copy after
-    installation is too late for files the backend needs while building.
+    - Versions taken from VCS (`git`) are not supported.
 
 ## Unknown build backends
 

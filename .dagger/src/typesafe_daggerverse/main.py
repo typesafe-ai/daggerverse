@@ -276,7 +276,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "build_workspace_app", self.uv_workspace_build_workspace_app)
             tg.start_soon(_run, "build_workspace_flat", self.uv_workspace_build_workspace_flat)
             tg.start_soon(_run, "uv_build_layouts", self.uv_build_layouts)
-            tg.start_soon(_run, "uv_build_backend_plugin", self.uv_build_backend_plugin)
+            tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
@@ -567,9 +567,9 @@ class TypesafeDaggerverse:
         )
 
     @function
-    async def uv_build_backend_plugin(self) -> None:
-        """A `BuildBackend` plug-in module (`setuptools-package-dir`) lays out a package the built-in backends can't."""
-        source = _src("uv/tests/_packages/plugin-backend")
+    async def uv_build_backend_handler(self) -> None:
+        """Another module's handler (`setuptools-package-dir`) builds a package the built-in backends can't."""
+        source = _src("uv/tests/_packages/custom-handler")
         script = (
             "from importlib.metadata import version\n"
             "import plugged\n"
@@ -578,15 +578,15 @@ class TypesafeDaggerverse:
         )
         for no_editable in (False, True):
             ctr = (
-                uv(source.as_workspace(), build_backends=[setuptools_package_dir()])
+                uv(source.as_workspace())
                 .workspace(".")
-                .install(no_editable=no_editable)
+                .install(no_editable=no_editable, build_backend_handlers=[setuptools_package_dir()])
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
             )
-            # The plug-in's `setup` ran before the build and its `teardown` after it.
+            # The handler's `setup` ran before the build and its `teardown` after it.
             await ctr.file("/tmp/setuptools-package-dir-setup").sync()
             if await ctr.env_variable("SETUPTOOLS_PACKAGE_DIR"):
-                raise AssertionError("expected the plug-in's teardown to remove SETUPTOOLS_PACKAGE_DIR")
+                raise AssertionError("expected the handler's teardown to remove SETUPTOOLS_PACKAGE_DIR")
 
     @function
     async def uv_license_files(self) -> None:
@@ -692,13 +692,26 @@ class TypesafeDaggerverse:
                     tomllib.loads(await source.file(f"{path}/pyproject.toml").contents())["project"]["name"]
                     for path in project["packages"]
                 ]
-                ctr = await (
-                    uv(source.as_workspace())
-                    .workspace(".")
-                    .install(package=names, no_editable=no_editable, **project.get("install", {}))
+                base = core().container().from_(project["base"]) if "base" in project else None
+                project_uv = uv(source.as_workspace())
+                builtin = project_uv.build_backend_handlers()
+                handlers = []
+                for backend, packages in project.get("handlers", {}).items():
+                    handler = getattr(builtin, backend)()
+                    for name, extra_build_inputs in packages.items():
+                        handler = handler.with_package_config(name=name, extra_build_inputs=extra_build_inputs)
+                    handlers.append(handler)
+                ctr = await project_uv.workspace(".").install(
+                    package=names,
+                    no_editable=no_editable,
+                    base_container=base,
+                    build_backend_handlers=handlers,
+                    **project.get("install", {}),
                 )
                 script = "".join(f"import {module}\n" for module in project["imports"])
-                await ctr.with_exec(["uv", "run", "--no-sync", "python", "-c", script]).sync()
+                # Isolated (`-I`), so the installed package is imported rather than the source
+                # in the working directory, which lacks a compiled extension.
+                await ctr.with_exec(["uv", "run", "--no-sync", "python", "-I", "-c", script]).sync()
 
         async with anyio.create_task_group() as tg:
             for project in projects:

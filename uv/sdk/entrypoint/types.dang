@@ -3,10 +3,10 @@
 type ModuleTypes {
   pub all: [TypeDef!]! {
     [
-      typeDef.withInterface("BuildBackend", description: "A build backend this module doesn't support natively, or one whose built-in support it replaces.\n\nEvery function except `build_backend` receives the package's `pyproject.toml`\ncontents and its distribution name. Returning None from `module_name`,\n`module_paths`, or `source_paths` falls back to the generic layout: the\nmodule named after the distribution, under `src/` or at the package root.")
+      typeDef.withInterface("BuildBackendHandler", description: "Tells the module how a build backend builds the packages that use it.\n\nEvery function except `build_backend`, `setup` and `teardown` receives the\npackage's `pyproject.toml` contents and its distribution name.\nReturning None from `module_name`, `module_paths`, or `source_paths` falls\nback to the generic layout: the module named after the distribution, under\n`src/` or at the package root.")
         .withFunction(
           function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("The `[build-system].build-backend` value this implementation handles, e.g. `setuptools.build_meta`.")
+            .withDescription("The `[build-system].build-backend` value this handler handles, e.g. `setuptools.build_meta`.")
         )
         .withFunction(
           function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
@@ -28,7 +28,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("setup", typeDef.withObject("Container"))
-            .withDescription("Prepare the container before the local packages build, e.g. mount caches, set variables or secrets.\n\nRuns once per build, before the `uv sync` that builds every local package\nusing this backend. Return `container` unchanged when nothing is needed.")
+            .withDescription("Prepare the container before the local packages build, e.g. mount caches, set variables or secrets.\n\nRuns once per build, before the `uv sync` that builds every local package\nthis handler handles. Return `container` unchanged when nothing is needed.")
             .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
         )
         .withFunction(
@@ -42,11 +42,234 @@ type ModuleTypes {
             .withDescription("Remove what `setup` added that shouldn't stay in the final container, e.g. variables or secrets.\n\nRuns right after that `uv sync`. Return `container` unchanged when nothing is needed.")
             .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
         ),
-      typeDef.withObject("BuildBackendLayout", description: "A package layout resolved from a `BuildBackend` plug-in.")
+      typeDef.withObject("BuildBackendLayout", description: "A package layout resolved from a `BuildBackendHandler`.")
         .withField("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Import name for the generic layout, if declared")
         .withField("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Import directories (or `.py` modules) to scaffold")
         .withField("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Directories (or files) to copy")
         .withField("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Files (or globs) the backend reads while building"),
+      typeDef.withObject("UvBuildHandler", description: "Handles packages built with `uv_build`.")
+        .withFunction(
+          function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `[build-system].build-backend` value this handler handles.")
+        )
+        .withFunction(
+          function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        ),
+      typeDef.withObject("HatchlingHandler", description: "Handles packages built with Hatchling.")
+        .withFunction(
+          function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `[build-system].build-backend` value this handler handles.")
+        )
+        .withFunction(
+          function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        ),
+      typeDef.withObject("PdmBackendHandler", description: "Handles packages built with pdm-backend.")
+        .withFunction(
+          function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `[build-system].build-backend` value this handler handles.")
+        )
+        .withFunction(
+          function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        ),
+      typeDef.withObject("FlitCoreHandler", description: "Handles packages built with flit_core.")
+        .withFunction(
+          function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `[build-system].build-backend` value this handler handles.")
+        )
+        .withFunction(
+          function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        ),
+      typeDef.withObject("PoetryCoreHandler", description: "Handles packages built with poetry-core.")
+        .withFunction(
+          function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `[build-system].build-backend` value this handler handles.")
+        )
+        .withFunction(
+          function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        ),
+      typeDef.withObject("MaturinHandler", description: "Handles packages built with maturin.")
+        .withFunction(
+          function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `[build-system].build-backend` value this handler handles.")
+        )
+        .withFunction(
+          function("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
+          function("with_package_config", typeDef.withObject("MaturinHandler"))
+            .withDescription("Configure how the package `name` builds, e.g. with the crates its Cargo workspace keeps above it.")
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("extra_build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Files (or globs) the package's build reads on top of the defaults: package-relative, or workspace-root-relative with `/`.")
+        ),
+      typeDef.withObject("BuildBackendHandlers", description: "Handlers for the module's built-in backends, to pass as `build_backend_handlers` to `build`, `install` or `venv`.\n\nUse them to configure a backend for some packages, e.g. maturin with the\ncrates a package's Cargo workspace keeps above it.")
+        .withFunction(
+          function("flit_core", typeDef.withObject("FlitCoreHandler"))
+        )
+        .withFunction(
+          function("hatchling", typeDef.withObject("HatchlingHandler"))
+        )
+        .withFunction(
+          function("maturin", typeDef.withObject("MaturinHandler"))
+        )
+        .withFunction(
+          function("pdm_backend", typeDef.withObject("PdmBackendHandler"))
+        )
+        .withFunction(
+          function("poetry_core", typeDef.withObject("PoetryCoreHandler"))
+        )
+        .withFunction(
+          function("uv_build", typeDef.withObject("UvBuildHandler"))
+        ),
       typeDef.withObject("ProjectSource", description: "A project's files: the project and its local dependencies, at workspace-root-relative paths.")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Project root, relative to the workspace root")
         .withField("source", typeDef.withObject("Directory"), description: "The project's files and those of its local dependencies"),
@@ -57,7 +280,8 @@ type ModuleTypes {
         .withField("flat", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Flat layout (module at package root) vs src layout (module under src/)")
         .withField("pyproject_contents", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Already-read package metadata used when creating a dependency scaffold")
         .withField("source", typeDef.withObject("Directory"), description: "The package's files and those of its local dependencies, at workspace-root-relative paths")
-        .withField("layout", typeDef.withOptional(true).withObject("BuildBackendLayout"), description: "Layout resolved from a `BuildBackend` plug-in, replacing built-in backend settings"),
+        .withField("layout", typeDef.withOptional(true).withObject("BuildBackendLayout"), description: "Layout resolved from a build backend handler, replacing the built-in backend settings")
+        .withField("handler", typeDef.withOptional(true).withKind(TypeDefKind.INTEGER_KIND), description: "Index of the plan's `handlers` entry for this package's backend; null for built-in support"),
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
         .withField("ws_dir", typeDef.withObject("Directory"), description: "The workspace root's manifests: uv.lock, uv.toml and pyproject.toml files")
         .withField("source_dir", typeDef.withObject("Directory"), description: "Every member's files; read only for files outside the needed packages, e.g. symlink targets")
@@ -67,8 +291,7 @@ type ModuleTypes {
         .withField("flat_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Virtual/deps-only packages: pyproject scaffolded, source skipped")
         .withField("uv_sync_args", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Precomputed uv sync argv")
         .withField("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Local packages installed non-editable (source baked into site-packages, not path-linked)")
-        .withField("build_backends", typeDef.withListOf(typeDef.withInterface("BuildBackend")), description: "Plug-in build backends, whose hooks run around the local packages' build")
-        .withField("plugin_names", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The `[build-system].build-backend` value each of `build_backends` handles"),
+        .withField("handlers", typeDef.withListOf(typeDef.withInterface("BuildBackendHandler")), description: "Build backend handlers, whose hooks run around the local packages' build"),
       typeDef.withObject("UvVenv", description: "A relocatable uv virtual environment bundled with the uv-managed Python it needs.\n\nA venv never contains the standard library: `.venv/bin/python` resolves to\na base interpreter whose `lib/` provides it. This pairs the venv with that\ninterpreter so the two can be dropped into a fresh container (one without any\nPython of its own) and run without uv.\n\nOnly valid for a venv created with `build(venv_relocatable=True)` against a\n*uv-managed* (standalone) Python: uv's standalone Pythons are themselves\nrelocatable, and a relocatable venv keeps working when its directory is moved.\nThe venv may be mounted at any path, but the Python must be remounted at\n`python_path` (the absolute location its `pyvenv.cfg` records).\n\nThe bundled Python is the python-build-standalone variant uv selected for the\nbase image's platform/libc (set by `base_container` at build time), so the\ntarget container must match it: a Debian (glibc) base exports to glibc targets,\nan Alpine (musl) base to musl/alpine targets.")
         .withField("venv", typeDef.withObject("Directory"), description: "The relocatable `.venv` directory.")
         .withField("python", typeDef.withObject("Directory"), description: "uv's managed-Python store (the interpreter the venv links against, plus uv's version symlinks).")
@@ -161,7 +384,6 @@ type ModuleTypes {
         .withField("manifests", typeDef.withObject("Directory"), description: "Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files.")
         .withField("projects", typeDef.withListOf(typeDef.withObject("ProjectSource")), description: "Each member's and local dependency's files, loaded only when a build installs that project.")
         .withField("src_init_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The projects' `src/*/__init__.py` files, which mark a `src` layout.")
-        .withField("build_backends", typeDef.withListOf(typeDef.withInterface("BuildBackend")), description: "Plug-in build backends, which take precedence over the built-in ones.")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace.")
         .withFunction(
           function("audit", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -182,6 +404,7 @@ type ModuleTypes {
             .withArg("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every workspace member; maps to `uv sync --all-packages`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("build_backend_handlers", typeDef.withOptional(true).withListOf(typeDef.withInterface("BuildBackendHandler")).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
             .withArg("venv_relocatable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Create a relocatable `.venv` (`uv venv --relocatable`) before installing, even when the base sets `UV_PROJECT_ENVIRONMENT`. Needed to copy the environment into another image (see `venv`).", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("activate_venv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "When the build uses a `.venv`, activate it in the container: set `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain `python` runs the installed environment.", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("auto_install_uv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.", defaultValue: ("true" :: Dagger.JSON!))
@@ -203,6 +426,7 @@ type ModuleTypes {
             .withArg("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every workspace member; maps to `uv sync --all-packages`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("build_backend_handlers", typeDef.withOptional(true).withListOf(typeDef.withInterface("BuildBackendHandler")).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
             .withArg("prune_cache", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Whether to run `uv cache prune --ci` after installing remote dependencies. Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("max_cache_size", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Prune the uv cache only once it grows past this many GiB.", defaultValue: ("100" :: Dagger.JSON!))
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
@@ -235,6 +459,7 @@ type ModuleTypes {
             .withArg("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every workspace member; maps to `uv sync --all-packages`", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.", defaultValue: ("false" :: Dagger.JSON!))
             .withArg("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("build_backend_handlers", typeDef.withOptional(true).withListOf(typeDef.withInterface("BuildBackendHandler")).withOptional(true), defaultValue: ("null" :: Dagger.JSON!))
             .withArg("prune_cache", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Whether to run `uv cache prune --ci` after installing remote dependencies. Learn more about the reasoning in [uv docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-continuous-integration).", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("max_cache_size", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Prune the uv cache only once it grows past this many GiB.", defaultValue: ("100" :: Dagger.JSON!))
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
@@ -250,7 +475,11 @@ type ModuleTypes {
             .withDescription("The uv workspace rooted at `path`.")
             .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Path to the uv workspace root (holding uv.lock and pyproject.toml), relative to the workspace root.")
         ),
-      typeDef.withObject("Uv", description: "Entrypoint for the `uv` module.\n\nHands out one `UvWorkspaceSource` per uv workspace, as the `pyproject`\nmodule discovers them.\nUse `workspace` to grab a single workspace by path or `workspaces` to get them all.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).")
+      typeDef.withObject("Uv", description: "Entrypoint for the `uv` module.\n\nHands out one `UvWorkspaceSource` per uv workspace, as the `pyproject`\nmodule discovers them.\nUse `workspace` to grab a single workspace by path or `workspaces` to get them all,\nand `build_backend_handlers` for handlers that configure the built-in backends.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).")
+        .withFunction(
+          function("build_backend_handlers", typeDef.withObject("BuildBackendHandlers"))
+            .withDescription("Handlers for the module's built-in build backends, to configure them for some packages.\n\nPass them as `build_backend_handlers` to `build`, `install` or `venv`, e.g. a\nmaturin handler with the crates a package's Cargo workspace keeps above it.")
+        )
         .withFunction(
           function("workspace", typeDef.withObject("UvWorkspaceSource"))
             .withDescription("A single uv workspace at `path`, relative to the workspace root.\n\nThe returned `UvWorkspaceSource` can `audit` its locked dependencies or\n`build` a minimal container for a package.")
@@ -264,7 +493,6 @@ type ModuleTypes {
           function("", typeDef.withObject("Uv"))
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("exclude", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("build_backends", typeDef.withOptional(true).withListOf(typeDef.withInterface("BuildBackend")).withOptional(true), description: "Custom build backend handlers.", defaultValue: ("null" :: Dagger.JSON!))
         ),
     ]
   }

@@ -20,8 +20,8 @@ A workspace package usually depends on sibling packages by path, and those have 
 present and installed in the right order before the package itself can be installed.
 
 The module reads your `uv.lock`, works out which local members the target needs, and
-stages them, so one call turns a monorepo package into a minimal container. Packages
-built with `uv_build`, Hatchling, and pdm-backend are supported; see
+stages them, so one call turns a monorepo package into a minimal container.
+It also understands and handles native configuration for the
 [supported build backends](build-backends/index.md).
 
 It can also:

@@ -39,9 +39,9 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 
 
 @_runtime_checkable
-class UvBuildBackend(_Protocol):
-    """ A build backend this module doesn't support natively, or one whose
-    built-in support it replaces.  Every function except `build_backend`
+class UvBuildBackendHandler(_Protocol):
+    """ Tells the module how a build backend builds the packages that use
+    it.  Every function except `build_backend`, `setup` and `teardown`
     receives the package's `pyproject.toml` contents and its distribution
     name. Returning None from `module_name`, `module_paths`, or
     `source_paths` falls back to the generic layout: the module named
@@ -49,7 +49,7 @@ class UvBuildBackend(_Protocol):
 
     async def build_backend(self) -> str:
         """
-        The `[build-system].build-backend` value this implementation handles, e.g. `setuptools.build_meta`.
+        The `[build-system].build-backend` value this handler handles, e.g. `setuptools.build_meta`.
 
         """
 
@@ -76,7 +76,7 @@ class UvBuildBackend(_Protocol):
         Prepare the container before the local packages build, e.g. mount caches, set variables or secrets.
 
         Runs once per build, before the `uv sync` that builds every local package
-        using this backend. Return `container` unchanged when nothing is needed.
+        this handler handles. Return `container` unchanged when nothing is needed.
 
         """
 
@@ -95,17 +95,17 @@ class UvBuildBackend(_Protocol):
         """
 
 
-class _UvBuildBackendClient(_Type):
-    """Concrete client for UvBuildBackend interface."""
+class _UvBuildBackendHandlerClient(_Type):
+    """Concrete client for UvBuildBackendHandler interface."""
 
     @classmethod
     def _graphql_name(cls) -> str:
-        return "UvBuildBackend"
+        return "UvBuildBackendHandler"
 
     async def build_backend(self) -> str:
         """
-        The `[build-system].build-backend` value this implementation handles,
-        e.g. `setuptools.build_meta`.
+        The `[build-system].build-backend` value this handler handles, e.g.
+        `setuptools.build_meta`.
 
         Returns
         -------
@@ -145,9 +145,9 @@ class _UvBuildBackendClient(_Type):
             If the API returns an error.
         """
         if not (isinstance(pyproject, str)):
-            raise _type_error("UvBuildBackend.build_inputs", "pyproject", pyproject, "str")
+            raise _type_error("UvBuildBackendHandler.build_inputs", "pyproject", pyproject, "str")
         if not (isinstance(name, str)):
-            raise _type_error("UvBuildBackend.build_inputs", "name", name, "str")
+            raise _type_error("UvBuildBackendHandler.build_inputs", "name", name, "str")
         _args = [
             _Arg("pyproject", pyproject),
             _Arg("name", name),
@@ -156,7 +156,7 @@ class _UvBuildBackendClient(_Type):
         return await _ctx.execute(list[str])
 
     async def id(self) -> str:
-        """A unique identifier for this UvBuildBackend.
+        """A unique identifier for this UvBuildBackendHandler.
 
         Note
         ----
@@ -203,9 +203,9 @@ class _UvBuildBackendClient(_Type):
             If the API returns an error.
         """
         if not (isinstance(pyproject, str)):
-            raise _type_error("UvBuildBackend.module_name", "pyproject", pyproject, "str")
+            raise _type_error("UvBuildBackendHandler.module_name", "pyproject", pyproject, "str")
         if not (isinstance(name, str)):
-            raise _type_error("UvBuildBackend.module_name", "name", name, "str")
+            raise _type_error("UvBuildBackendHandler.module_name", "name", name, "str")
         _args = [
             _Arg("pyproject", pyproject),
             _Arg("name", name),
@@ -232,9 +232,9 @@ class _UvBuildBackendClient(_Type):
             If the API returns an error.
         """
         if not (isinstance(pyproject, str)):
-            raise _type_error("UvBuildBackend.module_paths", "pyproject", pyproject, "str")
+            raise _type_error("UvBuildBackendHandler.module_paths", "pyproject", pyproject, "str")
         if not (isinstance(name, str)):
-            raise _type_error("UvBuildBackend.module_paths", "name", name, "str")
+            raise _type_error("UvBuildBackendHandler.module_paths", "name", name, "str")
         _args = [
             _Arg("pyproject", pyproject),
             _Arg("name", name),
@@ -249,7 +249,7 @@ class _UvBuildBackendClient(_Type):
 
         Runs once per build, before the `uv sync` that builds every local
         package
-        using this backend. Return `container` unchanged when nothing is
+        this handler handles. Return `container` unchanged when nothing is
         needed.
 
         Parameters
@@ -258,7 +258,7 @@ class _UvBuildBackendClient(_Type):
             An OCI-compatible container, also known as a Docker container.
         """
         if not (isinstance(container, Container)):
-            raise _type_error("UvBuildBackend.setup", "container", container, "Container")
+            raise _type_error("UvBuildBackendHandler.setup", "container", container, "Container")
         _args = [
             _Arg("container", container),
         ]
@@ -285,9 +285,9 @@ class _UvBuildBackendClient(_Type):
             If the API returns an error.
         """
         if not (isinstance(pyproject, str)):
-            raise _type_error("UvBuildBackend.source_paths", "pyproject", pyproject, "str")
+            raise _type_error("UvBuildBackendHandler.source_paths", "pyproject", pyproject, "str")
         if not (isinstance(name, str)):
-            raise _type_error("UvBuildBackend.source_paths", "name", name, "str")
+            raise _type_error("UvBuildBackendHandler.source_paths", "name", name, "str")
         _args = [
             _Arg("pyproject", pyproject),
             _Arg("name", name),
@@ -309,7 +309,7 @@ class _UvBuildBackendClient(_Type):
             An OCI-compatible container, also known as a Docker container.
         """
         if not (isinstance(container, Container)):
-            raise _type_error("UvBuildBackend.teardown", "container", container, "Container")
+            raise _type_error("UvBuildBackendHandler.teardown", "container", container, "Container")
         _args = [
             _Arg("container", container),
         ]
@@ -321,8 +321,23 @@ class Uv(_Type):
     """ Entrypoint for the `uv` module.  Hands out one `UvWorkspaceSource`
     per uv workspace, as the `pyproject` module discovers them. Use
     `workspace` to grab a single workspace by path or `workspaces` to get
-    them all.  Learn more in the
+    them all, and `build_backend_handlers` for handlers that configure the
+    built-in backends.  Learn more in the
     [docs](https://daggerverse.docs.typesafe.ai/uv/).  """
+
+    def build_backend_handlers(self) -> "UvBuildBackendHandlers":
+        """
+        Handlers for the module's built-in build backends, to configure them
+        for some packages.
+
+        Pass them as `build_backend_handlers` to `build`, `install` or `venv`,
+        e.g. a
+        maturin handler with the crates a package's Cargo workspace keeps
+        above it.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackendHandlers", _args)
+        return UvBuildBackendHandlers(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this Uv.
@@ -384,8 +399,73 @@ class Uv(_Type):
         return UvWorkspaces(_ctx)
 
 
+class UvBuildBackendHandlers(_Type):
+    """ Handlers for the module's built-in backends, to pass as
+    `build_backend_handlers` to `build`, `install` or `venv`.  Use them to
+    configure a backend for some packages, e.g. maturin with the crates a
+    package's Cargo workspace keeps above it.  """
+
+    def flit_core(self) -> "UvFlitCoreHandler":
+        _args: list[_Arg] = []
+        _ctx = self._select("flitCore", _args)
+        return UvFlitCoreHandler(_ctx)
+
+    def hatchling(self) -> "UvHatchlingHandler":
+        _args: list[_Arg] = []
+        _ctx = self._select("hatchling", _args)
+        return UvHatchlingHandler(_ctx)
+
+    async def id(self) -> str:
+        """A unique identifier for this UvBuildBackendHandlers.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    def maturin(self) -> "UvMaturinHandler":
+        _args: list[_Arg] = []
+        _ctx = self._select("maturin", _args)
+        return UvMaturinHandler(_ctx)
+
+    def pdm_backend(self) -> "UvPdmBackendHandler":
+        _args: list[_Arg] = []
+        _ctx = self._select("pdmBackend", _args)
+        return UvPdmBackendHandler(_ctx)
+
+    def poetry_core(self) -> "UvPoetryCoreHandler":
+        _args: list[_Arg] = []
+        _ctx = self._select("poetryCore", _args)
+        return UvPoetryCoreHandler(_ctx)
+
+    def uv_build(self) -> "UvBuildHandler":
+        _args: list[_Arg] = []
+        _ctx = self._select("uvBuild", _args)
+        return UvBuildHandler(_ctx)
+
+
 class UvBuildBackendLayout(_Type):
-    """ A package layout resolved from a `BuildBackend` plug-in.  """
+    """ A package layout resolved from a `BuildBackendHandler`.  """
 
     async def build_inputs(self) -> list[str]:
         """Files (or globs) the backend reads while building
@@ -498,6 +578,564 @@ class UvBuildBackendLayout(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("sourcePaths", _args)
         return await _ctx.execute(list[str] | None)
+
+
+class UvBuildHandler(_Type):
+    """ Handles packages built with `uv_build`.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this handler handles.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildHandler.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildHandler.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvBuildHandler.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildHandler.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildHandler.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildHandler.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildHandler.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def setup(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvBuildHandler.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildHandler.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildHandler.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvBuildHandler.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
+
+
+class UvFlitCoreHandler(_Type):
+    """ Handles packages built with flit_core.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this handler handles.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvFlitCoreHandler.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvFlitCoreHandler.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvFlitCoreHandler.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvFlitCoreHandler.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvFlitCoreHandler.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvFlitCoreHandler.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvFlitCoreHandler.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def setup(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvFlitCoreHandler.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvFlitCoreHandler.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvFlitCoreHandler.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvFlitCoreHandler.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
+
+
+class UvHatchlingHandler(_Type):
+    """ Handles packages built with Hatchling.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this handler handles.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvHatchlingHandler.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvHatchlingHandler.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvHatchlingHandler.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvHatchlingHandler.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvHatchlingHandler.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvHatchlingHandler.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvHatchlingHandler.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def setup(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvHatchlingHandler.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvHatchlingHandler.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvHatchlingHandler.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvHatchlingHandler.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
 
 
 class UvIndex(_Type):
@@ -704,6 +1342,28 @@ class UvLocalPackage(_Type):
         _ctx = self._select("flat", _args)
         return await _ctx.execute(bool)
 
+    async def handler(self) -> int | None:
+        """Index of the plan's `handlers` entry for this package's backend; null
+        for built-in support
+
+        Returns
+        -------
+        int | None
+            The `Int` scalar type represents non-fractional signed whole
+            numeric values. Int can represent values between -(2^31) and 2^31
+            - 1.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("handler", _args)
+        return await _ctx.execute(int | None)
+
     async def id(self) -> str:
         """A unique identifier for this UvLocalPackage.
 
@@ -733,7 +1393,7 @@ class UvLocalPackage(_Type):
         return await _ctx.execute(str)
 
     def layout(self) -> UvBuildBackendLayout:
-        """Layout resolved from a `BuildBackend` plug-in, replacing built-in
+        """Layout resolved from a build backend handler, replacing the built-in
         backend settings
         """
         _args: list[_Arg] = []
@@ -831,6 +1491,223 @@ class UvLocalPackage(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
+
+
+class UvMaturinHandler(_Type):
+    """ Handles packages built with maturin.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this handler handles.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvMaturinHandler.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvMaturinHandler.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvMaturinHandler.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvMaturinHandler.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvMaturinHandler.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvMaturinHandler.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvMaturinHandler.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def setup(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvMaturinHandler.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvMaturinHandler.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvMaturinHandler.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvMaturinHandler.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
+
+    def with_package_config(self, name: str, extra_build_inputs: list[str],) -> _Self:
+        """
+        Configure how the package `name` builds, e.g. with the crates its
+        Cargo workspace keeps above it.
+
+        Parameters
+        ----------
+        name:
+        extra_build_inputs:
+            Files (or globs) the package's build reads on top of the defaults:
+            package-relative, or workspace-root-relative with `/`.
+        """
+        if not (isinstance(name, str)):
+            raise _type_error("UvMaturinHandler.with_package_config", "name", name, "str")
+        if not (isinstance(extra_build_inputs, list) and all(isinstance(_v0, str) for _v0 in extra_build_inputs)):
+            raise _type_error("UvMaturinHandler.with_package_config", "extra_build_inputs", extra_build_inputs, "list[str]")
+        _args = [
+            _Arg("name", name),
+            _Arg("extraBuildInputs", extra_build_inputs),
+        ]
+        _ctx = self._select("withPackageConfig", _args)
+        return UvMaturinHandler(_ctx)
+
+    def with_(self, cb: _Callable[["UvMaturinHandler"], "UvMaturinHandler"]) -> "UvMaturinHandler":
+        """Call the provided callable with current UvMaturinHandler.
+
+        This is useful for reusability and readability by not breaking the calling chain.
+        """
+        return cb(self)
+
 
 
 class UvPackageSource(_Type):
@@ -939,6 +1816,378 @@ class UvPackageSource(_Type):
         return await _ctx.execute(str)
 
 
+class UvPdmBackendHandler(_Type):
+    """ Handles packages built with pdm-backend.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this handler handles.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPdmBackendHandler.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPdmBackendHandler.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvPdmBackendHandler.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPdmBackendHandler.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPdmBackendHandler.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPdmBackendHandler.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPdmBackendHandler.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def setup(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvPdmBackendHandler.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPdmBackendHandler.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPdmBackendHandler.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvPdmBackendHandler.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
+
+
+class UvPoetryCoreHandler(_Type):
+    """ Handles packages built with poetry-core.  """
+
+    async def build_backend(self) -> str:
+        """
+        The `[build-system].build-backend` value this handler handles.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("buildBackend", _args)
+        return await _ctx.execute(str)
+
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPoetryCoreHandler.build_inputs", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPoetryCoreHandler.build_inputs", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("buildInputs", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvPoetryCoreHandler.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def module_name(self, pyproject: str, name: str) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPoetryCoreHandler.module_name", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPoetryCoreHandler.module_name", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("moduleName", _args)
+        return await _ctx.execute(str | None)
+
+    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPoetryCoreHandler.module_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPoetryCoreHandler.module_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("modulePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def setup(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvPoetryCoreHandler.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
+    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPoetryCoreHandler.source_paths", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPoetryCoreHandler.source_paths", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("sourcePaths", _args)
+        return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("UvPoetryCoreHandler.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
+
+
 class UvProjectSource(_Type):
     """ A project's files: the project and its local dependencies, at
     workspace-root-relative paths.  """
@@ -1008,14 +2257,6 @@ class UvSyncPlan(_Type):
         _ctx = self._select("allLocal", _args)
         return await _ctx.execute_object_list(UvLocalPackage)
 
-    async def build_backends(self) -> list[UvBuildBackend]:
-        """Plug-in build backends, whose hooks run around the local packages'
-        build
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("buildBackends", _args)
-        return await _ctx.execute_object_list(_UvBuildBackendClient)
-
     async def flat_packages(self) -> list[str]:
         """Virtual/deps-only packages: pyproject scaffolded, source skipped
 
@@ -1036,6 +2277,14 @@ class UvSyncPlan(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("flatPackages", _args)
         return await _ctx.execute(list[str])
+
+    async def handlers(self) -> list[UvBuildBackendHandler]:
+        """Build backend handlers, whose hooks run around the local packages'
+        build
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("handlers", _args)
+        return await _ctx.execute_object_list(_UvBuildBackendHandlerClient)
 
     async def id(self) -> str:
         """A unique identifier for this UvSyncPlan.
@@ -1090,28 +2339,6 @@ class UvSyncPlan(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("noEditable", _args)
         return await _ctx.execute(bool)
-
-    async def plugin_names(self) -> list[str]:
-        """The `[build-system].build-backend` value each of `build_backends`
-        handles
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("pluginNames", _args)
-        return await _ctx.execute(list[str])
 
     def source_dir(self) -> Directory:
         """Every member's files; read only for files outside the needed packages,
@@ -1654,7 +2881,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
         """
         Prepare a build for this workspace without installing anything yet.
 
@@ -1706,6 +2933,7 @@ class UvWorkspaceSource(_Type):
             Skip the default dependency groups (`[tool.uv] default-groups`,
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
+        build_backend_handlers:
         venv_relocatable:
             Create a relocatable `.venv` (`uv venv --relocatable`) before
             installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
@@ -1736,6 +2964,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.build", "no_editable", no_editable, "bool")
         if not (isinstance(no_default_groups, bool)):
             raise _type_error("UvWorkspaceSource.build", "no_default_groups", no_default_groups, "bool")
+        if not (build_backend_handlers is None or (isinstance(build_backend_handlers, list) and all(isinstance(_v0, UvBuildBackendHandler) for _v0 in build_backend_handlers))):
+            raise _type_error("UvWorkspaceSource.build", "build_backend_handlers", build_backend_handlers, "list[UvBuildBackendHandler] | None")
         if not (isinstance(venv_relocatable, bool)):
             raise _type_error("UvWorkspaceSource.build", "venv_relocatable", venv_relocatable, "bool")
         if not (isinstance(activate_venv, bool)):
@@ -1752,18 +2982,13 @@ class UvWorkspaceSource(_Type):
             _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("buildBackendHandlers", build_backend_handlers, None),
             _Arg("venvRelocatable", venv_relocatable, False),
             _Arg("activateVenv", activate_venv, True),
             _Arg("autoInstallUv", auto_install_uv, True),
         ]
         _ctx = self._select("build", _args)
         return UvWorkspaceBuild(_ctx)
-
-    async def build_backends(self) -> list[UvBuildBackend]:
-        """Plug-in build backends, which take precedence over the built-in ones."""
-        _args: list[_Arg] = []
-        _ctx = self._select("buildBackends", _args)
-        return await _ctx.execute_object_list(_UvBuildBackendClient)
 
     async def id(self) -> str:
         """A unique identifier for this UvWorkspaceSource.
@@ -1820,7 +3045,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> Container:
+    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> Container:
         """
         Build a minimal container with deps installed for the given
         package(s).
@@ -1856,6 +3081,7 @@ class UvWorkspaceSource(_Type):
             Skip the default dependency groups (`[tool.uv] default-groups`,
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
+        build_backend_handlers:
         prune_cache:
             Whether to run `uv cache prune --ci` after installing remote
             dependencies. Learn more about the reasoning in [uv
@@ -1896,6 +3122,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.install", "no_editable", no_editable, "bool")
         if not (isinstance(no_default_groups, bool)):
             raise _type_error("UvWorkspaceSource.install", "no_default_groups", no_default_groups, "bool")
+        if not (build_backend_handlers is None or (isinstance(build_backend_handlers, list) and all(isinstance(_v0, UvBuildBackendHandler) for _v0 in build_backend_handlers))):
+            raise _type_error("UvWorkspaceSource.install", "build_backend_handlers", build_backend_handlers, "list[UvBuildBackendHandler] | None")
         if not (isinstance(prune_cache, bool)):
             raise _type_error("UvWorkspaceSource.install", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
@@ -1918,6 +3146,7 @@ class UvWorkspaceSource(_Type):
             _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("buildBackendHandlers", build_backend_handlers, None),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
@@ -2070,7 +3299,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("uvVersion", _args)
         return await _ctx.execute(str)
 
-    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
+    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
         """
         Install into a relocatable venv and export it with the Python it links
         against.
@@ -2108,6 +3337,7 @@ class UvWorkspaceSource(_Type):
             Skip the default dependency groups (`[tool.uv] default-groups`,
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
+        build_backend_handlers:
         prune_cache:
             Whether to run `uv cache prune --ci` after installing remote
             dependencies. Learn more about the reasoning in [uv
@@ -2140,6 +3370,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.venv", "no_editable", no_editable, "bool")
         if not (isinstance(no_default_groups, bool)):
             raise _type_error("UvWorkspaceSource.venv", "no_default_groups", no_default_groups, "bool")
+        if not (build_backend_handlers is None or (isinstance(build_backend_handlers, list) and all(isinstance(_v0, UvBuildBackendHandler) for _v0 in build_backend_handlers))):
+            raise _type_error("UvWorkspaceSource.venv", "build_backend_handlers", build_backend_handlers, "list[UvBuildBackendHandler] | None")
         if not (isinstance(prune_cache, bool)):
             raise _type_error("UvWorkspaceSource.venv", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
@@ -2158,6 +3390,7 @@ class UvWorkspaceSource(_Type):
             _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("buildBackendHandlers", build_backend_handlers, None),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
@@ -2258,14 +3491,16 @@ class UvWorkspaces(_Type):
 
 
 
-def uv(ws: Workspace, *, exclude: list[str] | None = None, build_backends: list[UvBuildBackend] | None = None, session: _Session | None = None,) -> Uv:
+def uv(ws: Workspace, *, exclude: list[str] | None = None, session: _Session | None = None,) -> Uv:
     """
     Entrypoint for the `uv` module.
 
     Hands out one `UvWorkspaceSource` per uv workspace, as the `pyproject`
     module discovers them.
     Use `workspace` to grab a single workspace by path or `workspaces` to
-    get them all.
+    get them all,
+    and `build_backend_handlers` for handlers that configure the built-in
+    backends.
 
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).
 
@@ -2277,30 +3512,32 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, build_backends: list[
     exclude:
         Glob patterns of workspace paths to leave out of workspaces, e.g.
         **/tests/_packages/**.
-    build_backends:
-        Custom build backend handlers.
     """
     if not (isinstance(ws, Workspace)):
         raise _type_error("uv", "ws", ws, "Workspace")
     if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
         raise _type_error("uv", "exclude", exclude, "list[str] | None")
-    if not (build_backends is None or (isinstance(build_backends, list) and all(isinstance(_v0, UvBuildBackend) for _v0 in build_backends))):
-        raise _type_error("uv", "build_backends", build_backends, "list[UvBuildBackend] | None")
     _args = [
         _Arg("ws", ws),
         _Arg("exclude", exclude, None),
-        _Arg("buildBackends", build_backends, None),
     ]
     return _client_root(Uv, _TARGET, "uv", _args, session=session)
 
 
 __all__ = [
     "Uv",
-    "UvBuildBackend",
+    "UvBuildBackendHandler",
+    "UvBuildBackendHandlers",
     "UvBuildBackendLayout",
+    "UvBuildHandler",
+    "UvFlitCoreHandler",
+    "UvHatchlingHandler",
     "UvIndex",
     "UvLocalPackage",
+    "UvMaturinHandler",
     "UvPackageSource",
+    "UvPdmBackendHandler",
+    "UvPoetryCoreHandler",
     "UvProjectSource",
     "UvSyncPlan",
     "UvVenv",

@@ -1,3 +1,4 @@
+import asyncio
 import posixpath
 import tomllib
 from collections import OrderedDict
@@ -17,7 +18,7 @@ from uv.utils import (
     selected_groups,
 )
 from uv.workspace.build_backends import PackageBackend
-from uv.workspace.build_backends.plugin import BuildBackend, BuildBackendLayout
+from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendLayout
 
 
 def _match_reachable(
@@ -33,6 +34,19 @@ def _match_reachable(
         if resolved in existing:
             result[name] = path
     return result
+
+
+def handlers_by_backend(backends: list[str]) -> dict[str, int]:
+    """The index of each backend's handler in `backends`, the backends the handlers handle.
+
+    Raises when two handlers handle the same backend: one handler configures every
+    package that uses it.
+    """
+    duplicates = sorted({backend for backend in backends if backends.count(backend) > 1})
+    if duplicates:
+        msg = f"more than one build backend handler for {', '.join(duplicates)}; pass one per backend."
+        raise ValueError(msg)
+    return {backend: i for i, backend in enumerate(backends)}
 
 
 _MODULE_NAME_OVERRIDES: dict[str, str] = {
@@ -126,7 +140,11 @@ class LocalPackage:
     ] = field()
     layout: Annotated[
         BuildBackendLayout | None,
-        Doc("Layout resolved from a `BuildBackend` plug-in, replacing built-in backend settings"),
+        Doc("Layout resolved from a build backend handler, replacing the built-in backend settings"),
+    ] = field(default=None)
+    handler: Annotated[
+        int | None,
+        Doc("Index of the plan's `handlers` entry for this package's backend; null for built-in support"),
     ] = field(default=None)
 
     @property
@@ -201,14 +219,9 @@ class UvSyncPlan:
         Doc("Local packages installed non-editable (source baked into site-packages, not path-linked)"),
     ] = field(default=False)
 
-    build_backends: Annotated[
-        list[BuildBackend],
-        Doc("Plug-in build backends, whose hooks run around the local packages' build"),
-    ] = field(default=list)
-
-    plugin_names: Annotated[
-        list[str],
-        Doc("The `[build-system].build-backend` value each of `build_backends` handles"),
+    handlers: Annotated[
+        list[BuildBackendHandler],
+        Doc("Build backend handlers, whose hooks run around the local packages' build"),
     ] = field(default=list)
 
     @classmethod
@@ -227,7 +240,7 @@ class UvSyncPlan:
         all_packages: bool = False,
         no_editable: bool = False,
         no_default_groups: bool = False,
-        build_backends: list[BuildBackend] | None = None,
+        handlers: list[BuildBackendHandler] | None = None,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front.
 
@@ -259,8 +272,8 @@ class UvSyncPlan:
         # dependency resolution). This holds whether the package is a build target
         # or a transitive workspace dependency (e.g. a Pulumi program whose code
         # lives at the package root, with no src/ or module dir to copy).
-        plugin_names = [await backend.build_backend() for backend in build_backends or []]
-        plugins = dict(zip(plugin_names, build_backends or [], strict=True))
+        handlers = handlers or []
+        by_backend = handlers_by_backend(list(await asyncio.gather(*(h.build_backend() for h in handlers))))
         flat_packages: list[str] = []
         local_packages: dict[str, LocalPackage] = {}
         with get_tracer().start_as_current_span("resolve local package layouts") as span:
@@ -274,8 +287,10 @@ class UvSyncPlan:
                 )
                 if virtual:
                     flat_packages.append(name)
-                plugin = plugins.get(metadata.get("build-system", {}).get("build-backend"))
-                layout = await BuildBackendLayout.resolve(plugin, contents, name) if plugin else None
+                handler = by_backend.get(metadata.get("build-system", {}).get("build-backend"))
+                layout = (
+                    await BuildBackendLayout.resolve(handlers[handler], contents, name) if handler is not None else None
+                )
                 module = PackageBackend.from_pyproject(metadata, name, layout).module_name or _module_name(name)
                 # A src layout has the module's top-level package under `src/`.
                 top = module.split(".", 1)[0]
@@ -287,6 +302,7 @@ class UvSyncPlan:
                     pyproject_contents=contents,
                     source=project_sources.get(resolved, source_dir),
                     layout=layout,
+                    handler=handler,
                 )
                 local_packages[name] = pkg
                 span.add_event(
@@ -296,7 +312,7 @@ class UvSyncPlan:
                         "package.path": pkg_path,
                         "package.backend": metadata.get("build-system", {}).get("build-backend", "none"),
                         "package.backend_supported": pkg.build_backend.settings is not None,
-                        "package.backend_plugin": layout is not None,
+                        "package.backend_handler": handler is not None,
                         "package.virtual": virtual,
                         "package.module_paths": [] if virtual else pkg.module_paths,
                         "package.source_paths": [] if virtual else pkg.source_paths,
@@ -323,6 +339,5 @@ class UvSyncPlan:
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
             no_editable=no_editable,
-            build_backends=list(plugins.values()),
-            plugin_names=list(plugins),
+            handlers=handlers,
         )
