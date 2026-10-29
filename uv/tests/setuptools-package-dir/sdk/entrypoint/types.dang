@@ -23,9 +23,18 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
+          function("setup", typeDef.withObject("Container"))
+            .withDescription("Leave a marker the check looks for, and a variable `teardown` removes.")
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
+        )
+        .withFunction(
           function("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
+          function("teardown", typeDef.withObject("Container"))
+            .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
         )
         .withConstructor(
           function("", typeDef.withObject("SetuptoolsPackageDir"))

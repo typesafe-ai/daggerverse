@@ -8,6 +8,7 @@ the Python SDK can't pass a module's own objects to its dependencies.
 import tomllib
 
 from dagger import function, object_type
+from dagger_clients.core import Container
 
 
 @object_type
@@ -34,4 +35,16 @@ class SetuptoolsPackageDir:
     @function
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
         dynamic = tomllib.loads(pyproject)["tool"]["setuptools"].get("dynamic", {})
-        return [entry["file"] for entry in dynamic.values() if "file" in entry]
+        # Workspace-root-relative: the check's workspace root is the package itself.
+        return [f"/{entry['file']}" for entry in dynamic.values() if "file" in entry]
+
+    @function
+    def setup(self, container: Container) -> Container:
+        """Leave a marker the check looks for, and a variable `teardown` removes."""
+        return container.with_new_file("/tmp/setuptools-package-dir-setup", "").with_env_variable(
+            "SETUPTOOLS_PACKAGE_DIR", "1"
+        )
+
+    @function
+    def teardown(self, container: Container) -> Container:
+        return container.without_env_variable("SETUPTOOLS_PACKAGE_DIR")

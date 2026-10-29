@@ -201,6 +201,16 @@ class UvSyncPlan:
         Doc("Local packages installed non-editable (source baked into site-packages, not path-linked)"),
     ] = field(default=False)
 
+    build_backends: Annotated[
+        list[BuildBackend],
+        Doc("Plug-in build backends, whose hooks run around the local packages' build"),
+    ] = field(default=list)
+
+    plugin_names: Annotated[
+        list[str],
+        Doc("The `[build-system].build-backend` value each of `build_backends` handles"),
+    ] = field(default=list)
+
     @classmethod
     async def create(
         cls,
@@ -249,7 +259,8 @@ class UvSyncPlan:
         # dependency resolution). This holds whether the package is a build target
         # or a transitive workspace dependency (e.g. a Pulumi program whose code
         # lives at the package root, with no src/ or module dir to copy).
-        plugins = {await backend.build_backend(): backend for backend in build_backends or []}
+        plugin_names = [await backend.build_backend() for backend in build_backends or []]
+        plugins = dict(zip(plugin_names, build_backends or [], strict=True))
         flat_packages: list[str] = []
         local_packages: dict[str, LocalPackage] = {}
         with get_tracer().start_as_current_span("resolve local package layouts") as span:
@@ -312,4 +323,6 @@ class UvSyncPlan:
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
             no_editable=no_editable,
+            build_backends=list(plugins.values()),
+            plugin_names=list(plugins),
         )

@@ -8,6 +8,7 @@
 ["","git-sha",["github.com/dagger/python-sdk","main"],"dfb188732b665097c3976dfb38437ebde191f9f3"]
 ["","git-sha",["github.com/dagger/python-sdk","refs/tags/v1.2.0"],"eb9c4aa175054d8d27109afec8ab4cc9818cf2e5"]
 ["","git-sha",["github.com/dagger/sdk-helpers","refs/tags/v1.0.6"],"16e5bf2837eb1dc840a1c9ad7d6dba385f0038d3"]
+["","oci-sha",["docker.io/alpine/git:v2.49.1"],"sha256:c0280cf9572316299b08544065d3bf35db65043d5e3963982ec50647d2746e26"]
 ["","oci-sha",["docker.io/library/busybox:1.38.0"],"sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e"]
 ["","oci-sha",["docker.io/library/debian:bookworm-slim"],"sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8"]
 ["","oci-sha",["docker.io/library/golang:1.25-alpine"],"sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59"]

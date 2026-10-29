@@ -19,9 +19,5 @@ dagger-clients-core = { workspace = true }
 dagger-io = "dagger"
 dagger-clients-core = "dagger_clients"
 
-# `dagger generate` adds the core client, but this module only uses the SDK.
-[tool.deptry.per_rule_ignores]
-DEP002 = ["dagger-clients-core"]
-
 [tool.uv.workspace]
 members = ["sdk", "clients/core"]

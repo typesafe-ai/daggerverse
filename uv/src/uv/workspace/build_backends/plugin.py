@@ -10,6 +10,7 @@ import asyncio
 from typing import Annotated, Protocol, Self
 
 from dagger import Doc, field, function, interface, object_type
+from dagger_clients.core import Container
 
 
 @interface
@@ -44,7 +45,24 @@ class BuildBackend(Protocol):
 
     @function
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
-        """Package-relative files (or globs) the backend reads while building."""
+        """Files (or globs) the backend reads while building: package-relative, or workspace-root-relative with `/`."""
+        ...
+
+    @function
+    def setup(self, container: Container) -> Container:
+        """Prepare the container before the local packages build, e.g. mount caches, set variables or secrets.
+
+        Runs once per build, before the `uv sync` that builds every local package
+        using this backend. Return `container` unchanged when nothing is needed.
+        """
+        ...
+
+    @function
+    def teardown(self, container: Container) -> Container:
+        """Remove what `setup` added that shouldn't stay in the final container, e.g. variables or secrets.
+
+        Runs right after that `uv sync`. Return `container` unchanged when nothing is needed.
+        """
         ...
 
 

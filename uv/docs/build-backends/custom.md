@@ -15,12 +15,14 @@ precedence over the built-in one for the same `build-backend` value.
 implementation handles. The other functions receive the package's
 `pyproject.toml` contents and distribution name, and describe the package's layout:
 
-| Function       | Returns                                                       |
-| -------------- | ------------------------------------------------------------- |
-| `module_name`  | The import name, dotted for a module inside namespace packages |
-| `module_paths` | Package-relative import directories (or `.py` modules)        |
-| `source_paths` | Package-relative directories (or files) to copy               |
-| `build_inputs` | Files (or globs) the backend reads while building             |
+| Function              | Description                                                          |
+| --------------------- | -------------------------------------------------------------------- |
+| `module_name`         | Names the import package; dotted inside namespace packages           |
+| `module_paths`        | Lists the package-relative import directories (or `.py` modules) to stub |
+| `source_paths`        | Lists the package-relative directories (or files) to copy            |
+| `build_inputs`        | Lists the files (or globs) the build reads; `/` starts at the workspace root |
+| `setup(container)`    | Prepares the container before the build, e.g. mounts caches          |
+| `teardown(container)` | Cleans the container up after the build                              |
 
 Returning None from `module_name`, `module_paths`, or `source_paths` falls back to
 the conventional layout: the module named after the distribution, under `src/` or
@@ -34,6 +36,7 @@ This module supports setuptools packages that set `[tool.setuptools] package-dir
 import tomllib
 
 from dagger import function, object_type
+from dagger_clients.core import Container
 
 
 @object_type
@@ -59,6 +62,14 @@ class SetuptoolsPackageDir:
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
         dynamic = tomllib.loads(pyproject)["tool"]["setuptools"].get("dynamic", {})
         return [entry["file"] for entry in dynamic.values() if "file" in entry]
+
+    @function
+    def setup(self, container: Container) -> Container:
+        return container
+
+    @function
+    def teardown(self, container: Container) -> Container:
+        return container
 ```
 
 !!! warning "Separate module"

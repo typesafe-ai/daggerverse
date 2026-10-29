@@ -8,6 +8,7 @@ from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
 from uv.workspace import UvWorkspaceSource
+from uv.workspace.build_backends.plugin import BuildBackend
 from uv.workspace.plan import ProjectSource
 
 # A uv workspace is a directory holding a uv.lock.
@@ -70,6 +71,10 @@ class Uv:
             list[str] | None,
             Doc("Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**."),
         ] = None,
+        build_backends: Annotated[
+            list[BuildBackend] | None,
+            Doc("Custom build backend handlers."),
+        ] = None,
     ) -> Self:
         discovered = pyproject(ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
         found, projects = await asyncio.gather(discovered.workspaces().list_(), discovered.projects().list_())
@@ -80,6 +85,9 @@ class Uv:
         async def project_source(project) -> ProjectSource:
             path, include, exclude = await asyncio.gather(project.path(), project.include(), project.exclude())
             return ProjectSource(path=path, source=ws.directory("/", include=include, exclude=exclude, gitignore=True))
+
+        plugin_names = await asyncio.gather(*(backend.build_backend() for backend in build_backends or []))
+        plugins = dict(zip(plugin_names, build_backends or [], strict=True))
 
         async def workspace_source(workspace) -> UvWorkspaceSource:
             path, members, dependencies, include, exclude, manifest_include, manifest_exclude = await asyncio.gather(
@@ -99,6 +107,7 @@ class Uv:
                 projects=[sources[root] for root in roots if root in sources],
                 # `<root>/src/<module>/__init__.py` marks a project's src layout.
                 src_init_paths=[init for init in src_inits if _project_of_src_init(init) in roots],
+                build_backends=list(plugins.values()),
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.

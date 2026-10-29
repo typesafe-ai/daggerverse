@@ -9,6 +9,7 @@ from dagger_clients.core import Container, Directory, ExistsType, core
 
 from uv.args import LockTimeout, MaxCacheSize, PruneCache
 from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
+from uv.workspace.build_backends import BackendHooks
 from uv.workspace.build_backends.paths import is_file
 from uv.workspace.plan import LocalPackage, UvSyncPlan
 from uv.workspace.venv import UvVenv
@@ -227,15 +228,42 @@ class UvWorkspaceBuild:
             # A single-file module is stubbed as itself, a package by its `__init__.py`.
             stub = module_path if is_file(module_path) else posixpath.join(module_path, "__init__.py")
             overlay = overlay.with_new_file(posixpath.join(ctr_base, stub).lstrip("/"), "")
-        if pkg.build_inputs:
-            # Editable installs build metadata from the scaffold before sources are copied.
+        # Editable installs build metadata from the scaffold before sources are copied.
+        package_inputs = [path for path in pkg.build_inputs if not path.startswith("/")]
+        root_inputs = [path.lstrip("/") for path in pkg.build_inputs if path.startswith("/")]
+        if package_inputs:
             resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
             overlay = overlay.with_directory(
                 ctr_base.lstrip("/"),
                 pkg.source.directory(resolved),
-                include=pkg.build_inputs,
+                include=package_inputs,
+            )
+        if root_inputs:
+            # Workspace-root-relative inputs, e.g. a Cargo workspace above the package.
+            overlay = overlay.with_directory(
+                self._root_path(workdir).lstrip("/") or ".", self.plan.source_dir, include=root_inputs
             )
         return overlay
+
+    def _root_path(self, workdir: str) -> str:
+        """Where the workspace root sits in the container, which mirrors it with the uv workspace at `workdir`."""
+        return posixpath.normpath(posixpath.join(workdir, posixpath.relpath(".", self.plan.workspace_path)))
+
+    def _hooks(self) -> dict[str, BackendHooks]:
+        """Each backend's `setup`/`teardown`, once, for the local packages this build installs.
+
+        A plug-in always has them; built-in settings only when the backend needs them.
+        """
+        plugins = dict(zip(self.plan.plugin_names, self.plan.build_backends, strict=True))
+        hooks: dict[str, BackendHooks] = {}
+        for pkg in self.plan.needed_local:
+            backend = pkg.build_backend
+            if pkg.name in self.plan.flat_packages or backend.name is None or backend.name in hooks:
+                continue
+            hook = plugins.get(backend.name) or backend.settings
+            if isinstance(hook, BackendHooks):
+                hooks[backend.name] = hook
+        return hooks
 
     async def _scaffold(
         self,
@@ -351,19 +379,25 @@ class UvWorkspaceBuild:
                         overlay = overlay.without_file(link).with_file(link, source.file(source_path))
 
     async def _sync_local(self, ctr: Container) -> Container:
+        """Build and install the local packages, with the backends' hooks around the `uv sync`."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
+            hooks = self._hooks()
             span.set_attribute("uv.sync_args", self.plan.uv_sync_args)
+            span.set_attribute("build.backend_hooks", list(hooks))
+            for hook in hooks.values():
+                ctr = hook.setup(ctr)
+            # Set SOURCE_DATE_EPOCH for this sync only, keeping a value the base sets.
+            set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
+            if set_epoch:
+                ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
+            ctr = ctr.with_exec(self.plan.uv_sync_args)
+            if set_epoch:
+                ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
+            for hook in reversed(hooks.values()):
+                ctr = hook.teardown(ctr)
             # `with_exec` is lazy; sync() inside the span so it captures the actual
             # install rather than just the query-graph construction.
-            # Set SOURCE_DATE_EPOCH for this sync only, keeping a value the base sets.
-            if await ctr.env_variable("SOURCE_DATE_EPOCH"):
-                return await ctr.with_exec(self.plan.uv_sync_args).sync()
-            return await (
-                ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
-                .with_exec(self.plan.uv_sync_args)
-                .without_env_variable("SOURCE_DATE_EPOCH")
-                .sync()
-            )
+            return await ctr.sync()
 
     @function
     async def with_local_dependencies(self) -> Container:

@@ -13,7 +13,9 @@ API types. Other modules can add or replace backends through the
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol, Self
+from typing import Protocol, Self, runtime_checkable
+
+from dagger_clients.core import Container
 
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
@@ -47,7 +49,23 @@ class BackendSettings(Protocol):
 
     @property
     def build_inputs(self) -> list[str]:
-        """Package-relative files (or globs) the backend reads while building."""
+        """Files (or globs) the backend reads while building.
+
+        Relative to the package, or to the workspace root with a leading `/`.
+        """
+        ...
+
+
+@runtime_checkable
+class BackendHooks(Protocol):
+    """What runs around the local packages' build: a plug-in, or settings of a backend that needs it."""
+
+    def setup(self, container: Container) -> Container:
+        """Prepare the container before the local packages build, e.g. mount caches or set variables."""
+        ...
+
+    def teardown(self, container: Container) -> Container:
+        """Undo what `setup` shouldn't leave in the final container, e.g. variables or secrets."""
         ...
 
 
