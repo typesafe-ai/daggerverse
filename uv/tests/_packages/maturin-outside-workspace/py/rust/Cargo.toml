@@ -1,0 +1,14 @@
+[package]
+name = "outside-app"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Outside the uv workspace (`py/`), like a Cargo workspace kept above it.
+outside-core = { path = "../../crates/core" }
+pyo3 = "0.29"

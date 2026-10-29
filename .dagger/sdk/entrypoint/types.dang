@@ -182,6 +182,10 @@ type ModuleTypes {
             .withDescription("Declared license globs are available for editable and non-editable builds.")
         )
         .withFunction(
+          function("uv_maturin_outside_workspace", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A maturin crate builds against a crate outside its uv workspace, staged from the workspace root.")
+        )
+        .withFunction(
           function("uv_no_editable_bakes_local_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`no_editable=True` bakes real local-package *source* into site-packages.\n\nRegression test for the editable-only copy-last optimization in\n`with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from\nwhatever source is on disk at sync time, so real source must be copied in\n*before* the sync. Otherwise the empty scaffold stubs get baked into\nsite-packages. We export the venv into a fresh Python-less container (so\nleftover workspace source can't mask the install) and assert each local\npackage's `hello()` returns its real string. Asserting the *return value*,\nnot just importability, is the point: an empty stub still imports fine.")
         )

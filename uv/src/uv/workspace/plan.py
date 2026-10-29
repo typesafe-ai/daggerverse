@@ -225,6 +225,16 @@ class UvSyncPlan:
         Doc("Build backend handlers, whose hooks run around the local packages' build"),
     ] = field(default=list)
 
+    root_inputs_dir: Annotated[
+        Directory | None,
+        Doc("The files the local packages' `/`-prefixed build inputs name, at workspace-root-relative paths"),
+    ] = field(default=None)
+
+    @property
+    def root_inputs(self) -> list[str]:
+        """The local packages' `/`-prefixed build inputs, relative to the workspace root."""
+        return sorted({path.lstrip("/") for pkg in self.all_local for path in pkg.build_inputs if path.startswith("/")})
+
     @classmethod
     async def create(
         cls,

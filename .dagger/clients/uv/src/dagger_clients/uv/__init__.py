@@ -2340,6 +2340,14 @@ class UvSyncPlan(_Type):
         _ctx = self._select("noEditable", _args)
         return await _ctx.execute(bool)
 
+    def root_inputs_dir(self) -> Directory:
+        """The files the local packages' `/`-prefixed build inputs name, at
+        workspace-root-relative paths
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("rootInputsDir", _args)
+        return Directory(_ctx)
+
     def source_dir(self) -> Directory:
         """Every member's files; read only for files outside the needed packages,
         e.g. symlink targets
@@ -2881,7 +2889,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, ws: Workspace | None = None, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
         """
         Prepare a build for this workspace without installing anything yet.
 
@@ -2934,6 +2942,10 @@ class UvWorkspaceSource(_Type):
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
         build_backend_handlers:
+        ws:
+            Where the build backend handlers' `/`-prefixed build inputs are
+            read from. Defaults to the current workspace; pass the one given
+            to `uv()` when it differs.
         venv_relocatable:
             Create a relocatable `.venv` (`uv venv --relocatable`) before
             installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
@@ -2966,6 +2978,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.build", "no_default_groups", no_default_groups, "bool")
         if not (build_backend_handlers is None or (isinstance(build_backend_handlers, list) and all(isinstance(_v0, UvBuildBackendHandler) for _v0 in build_backend_handlers))):
             raise _type_error("UvWorkspaceSource.build", "build_backend_handlers", build_backend_handlers, "list[UvBuildBackendHandler] | None")
+        if not (ws is None or isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.build", "ws", ws, "Workspace | None")
         if not (isinstance(venv_relocatable, bool)):
             raise _type_error("UvWorkspaceSource.build", "venv_relocatable", venv_relocatable, "bool")
         if not (isinstance(activate_venv, bool)):
@@ -2983,6 +2997,7 @@ class UvWorkspaceSource(_Type):
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
             _Arg("buildBackendHandlers", build_backend_handlers, None),
+            _Arg("ws", ws, None),
             _Arg("venvRelocatable", venv_relocatable, False),
             _Arg("activateVenv", activate_venv, True),
             _Arg("autoInstallUv", auto_install_uv, True),
@@ -3045,7 +3060,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("indices", _args)
         return await _ctx.execute_object_list(UvIndex)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> Container:
+    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, ws: Workspace | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> Container:
         """
         Build a minimal container with deps installed for the given
         package(s).
@@ -3082,6 +3097,10 @@ class UvWorkspaceSource(_Type):
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
         build_backend_handlers:
+        ws:
+            Where the build backend handlers' `/`-prefixed build inputs are
+            read from. Defaults to the current workspace; pass the one given
+            to `uv()` when it differs.
         prune_cache:
             Whether to run `uv cache prune --ci` after installing remote
             dependencies. Learn more about the reasoning in [uv
@@ -3124,6 +3143,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.install", "no_default_groups", no_default_groups, "bool")
         if not (build_backend_handlers is None or (isinstance(build_backend_handlers, list) and all(isinstance(_v0, UvBuildBackendHandler) for _v0 in build_backend_handlers))):
             raise _type_error("UvWorkspaceSource.install", "build_backend_handlers", build_backend_handlers, "list[UvBuildBackendHandler] | None")
+        if not (ws is None or isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.install", "ws", ws, "Workspace | None")
         if not (isinstance(prune_cache, bool)):
             raise _type_error("UvWorkspaceSource.install", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
@@ -3147,6 +3168,7 @@ class UvWorkspaceSource(_Type):
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
             _Arg("buildBackendHandlers", build_backend_handlers, None),
+            _Arg("ws", ws, None),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
@@ -3300,7 +3322,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("uvVersion", _args)
         return await _ctx.execute(str)
 
-    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
+    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, build_backend_handlers: list[UvBuildBackendHandler] | None = None, ws: Workspace | None = None, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
         """
         Install into a relocatable venv and export it with the Python it links
         against.
@@ -3339,6 +3361,10 @@ class UvWorkspaceSource(_Type):
             `dev` unless set); maps to `uv sync --no-default-groups`. Groups
             passed with `group` are still installed.
         build_backend_handlers:
+        ws:
+            Where the build backend handlers' `/`-prefixed build inputs are
+            read from. Defaults to the current workspace; pass the one given
+            to `uv()` when it differs.
         prune_cache:
             Whether to run `uv cache prune --ci` after installing remote
             dependencies. Learn more about the reasoning in [uv
@@ -3373,6 +3399,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.venv", "no_default_groups", no_default_groups, "bool")
         if not (build_backend_handlers is None or (isinstance(build_backend_handlers, list) and all(isinstance(_v0, UvBuildBackendHandler) for _v0 in build_backend_handlers))):
             raise _type_error("UvWorkspaceSource.venv", "build_backend_handlers", build_backend_handlers, "list[UvBuildBackendHandler] | None")
+        if not (ws is None or isinstance(ws, Workspace)):
+            raise _type_error("UvWorkspaceSource.venv", "ws", ws, "Workspace | None")
         if not (isinstance(prune_cache, bool)):
             raise _type_error("UvWorkspaceSource.venv", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
@@ -3392,6 +3420,7 @@ class UvWorkspaceSource(_Type):
             _Arg("noEditable", no_editable, False),
             _Arg("noDefaultGroups", no_default_groups, False),
             _Arg("buildBackendHandlers", build_backend_handlers, None),
+            _Arg("ws", ws, None),
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
