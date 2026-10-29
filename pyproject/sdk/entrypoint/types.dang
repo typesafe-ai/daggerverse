@@ -10,6 +10,8 @@ type ModuleTypes {
         .withField("workspace", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Root of the workspace that installs this project as a member, or null when none does.")
         .withField("nested", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Roots of the topmost projects nested inside this one, whose files are their own.")
         .withField("local_dependencies", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Roots of the projects this one depends on through `[tool.uv.sources]` (path and workspace sources, transitively), wherever they live.")
+        .withField("include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of what `source` loads: the project and its local dependencies.")
+        .withField("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects.")
         .withFunction(
           function("files", typeDef.withObject("Directory"))
             .withDescription("The files this project owns, at their workspace-root-relative paths.\n\nIts tree less the projects nested in it, caches, virtualenvs, build\noutput and gitignored files. This is what a tool that works on one\nproject's own code, such as a linter, should see.")
@@ -40,6 +42,10 @@ type ModuleTypes {
         .withField("lockfiles", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Workspace markers found at the root, e.g. `uv.lock`.")
         .withField("members", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Roots of the member projects, the root project first.")
         .withField("local_dependencies", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Roots of the projects the members depend on through path sources, outside the membership.")
+        .withField("include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of what `source` loads: every member and their local dependencies.")
+        .withField("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects.")
+        .withField("manifest_include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of what `manifests` loads: lockfiles, `uv.toml`, `pyproject.toml` and `.python-version`.")
+        .withField("manifest_exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `manifests` leaves out.")
         .withFunction(
           function("manifests", typeDef.withObject("Directory"))
             .withDescription("What resolving this workspace's dependencies reads, and nothing else.\n\nThe markers (lockfiles), `uv.toml`, and every member's and local\ndependency's `pyproject.toml` and `.python-version`, at their\nworkspace-root-relative paths. A source edit changes none of them, so\na dependency layer built from this stays cached across source edits.")

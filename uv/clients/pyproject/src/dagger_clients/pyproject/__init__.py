@@ -96,6 +96,28 @@ class PyprojectProject(_Type):
     file belongs to the deepest project containing it, so a project's own
     files stop at the projects nested inside it (`nested`).  """
 
+    async def exclude(self) -> list[str]:
+        """Glob patterns `source` leaves out: caches, virtualenvs, build output
+        and unrelated nested projects.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("exclude", _args)
+        return await _ctx.execute(list[str])
+
     def files(self, ws: Workspace) -> Directory:
         """
         The files this project owns, at their workspace-root-relative paths.
@@ -165,6 +187,28 @@ class PyprojectProject(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
+
+    async def include(self) -> list[str]:
+        """Glob patterns of what `source` loads: the project and its local
+        dependencies.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("include", _args)
+        return await _ctx.execute(list[str])
 
     async def local_dependencies(self) -> list[str]:
         """Roots of the projects this one depends on through `[tool.uv.sources]`
@@ -414,6 +458,28 @@ class PyprojectWorkspace(_Type):
     its `[tool.uv.workspace]` selects; any other workspace has its root
     project alone, or none for a bare lockfile.  """
 
+    async def exclude(self) -> list[str]:
+        """Glob patterns `source` leaves out: caches, virtualenvs, build output
+        and unrelated nested projects.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("exclude", _args)
+        return await _ctx.execute(list[str])
+
     async def id(self) -> str:
         """A unique identifier for this PyprojectWorkspace.
 
@@ -441,6 +507,28 @@ class PyprojectWorkspace(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
+
+    async def include(self) -> list[str]:
+        """Glob patterns of what `source` loads: every member and their local
+        dependencies.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("include", _args)
+        return await _ctx.execute(list[str])
 
     async def local_dependencies(self) -> list[str]:
         """Roots of the projects the members depend on through path sources,
@@ -483,6 +571,49 @@ class PyprojectWorkspace(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("lockfiles", _args)
+        return await _ctx.execute(list[str])
+
+    async def manifest_exclude(self) -> list[str]:
+        """Glob patterns `manifests` leaves out.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("manifestExclude", _args)
+        return await _ctx.execute(list[str])
+
+    async def manifest_include(self) -> list[str]:
+        """Glob patterns of what `manifests` loads: lockfiles, `uv.toml`,
+        `pyproject.toml` and `.python-version`.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("manifestInclude", _args)
         return await _ctx.execute(list[str])
 
     def manifests(self, ws: Workspace) -> Directory:

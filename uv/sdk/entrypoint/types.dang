@@ -37,16 +37,20 @@ type ModuleTypes {
         .withField("module_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Import directories (or `.py` modules) to scaffold")
         .withField("source_paths", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Directories (or files) to copy")
         .withField("build_inputs", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Files (or globs) the backend reads while building"),
+      typeDef.withObject("ProjectSource", description: "A project's files: the project and its local dependencies, at workspace-root-relative paths.")
+        .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Project root, relative to the workspace root")
+        .withField("source", typeDef.withObject("Directory"), description: "The project's files and those of its local dependencies"),
       typeDef.withObject("LocalPackage", description: "A local (editable/directory/virtual) package in a uv workspace.\n\n``pyproject_contents`` is captured while resolving the plan so scaffold\nlayers depend on package metadata, not on the whole source directory.")
         .withField("name", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Package name")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace-relative path")
         .withField("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Python import name; dotted for a module inside namespace packages")
         .withField("flat", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Flat layout (module at package root) vs src layout (module under src/)")
         .withField("pyproject_contents", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Already-read package metadata used when creating a dependency scaffold")
+        .withField("source", typeDef.withObject("Directory"), description: "The package's files and those of its local dependencies, at workspace-root-relative paths")
         .withField("layout", typeDef.withOptional(true).withObject("BuildBackendLayout"), description: "Layout resolved from a `BuildBackend` plug-in, replacing built-in backend settings"),
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
-        .withField("ws_dir", typeDef.withObject("Directory"), description: "Resolved workspace directory")
-        .withField("source_dir", typeDef.withObject("Directory"), description: "Full source directory")
+        .withField("ws_dir", typeDef.withObject("Directory"), description: "The workspace root's manifests: uv.lock, uv.toml and pyproject.toml files")
+        .withField("source_dir", typeDef.withObject("Directory"), description: "Every member's files; read only for files outside the needed packages, e.g. symlink targets")
         .withField("workspace_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace path within the source directory")
         .withField("all_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Every local package in the workspace (sorted by name)")
         .withField("needed_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Local packages the target transitively depends on (sorted by name)")
@@ -131,18 +135,20 @@ type ModuleTypes {
         .withField("explicit", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "When true, packages are only installed from this index if explicitly pinned to it.")
         .withField("authenticate", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Credential handling: 'always', 'never', or null (try unauthenticated first, then authenticate).")
         .withField("format", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Index format: 'flat' for flat directories/HTML lists, null for standard PEP 503 registries."),
-      typeDef.withObject("UvPackageSource", description: "A single member package within a uv workspace.\n\nCarries the workspace source tree, the workspace root path, and the\nmember's own path so it can read both workspace-level and package-level\nindex configuration.")
-        .withField("source", typeDef.withObject("Directory"), description: "Source tree containing the workspace.")
-        .withField("workspace_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path within source (`.` for a root workspace).")
+      typeDef.withObject("UvPackageSource", description: "A single member package within a uv workspace.\n\nCarries the workspace's manifests, the workspace root path, and the\nmember's own path so it can read both workspace-level and package-level\nindex configuration.")
+        .withField("manifests", typeDef.withObject("Directory"), description: "The workspace's manifests: uv.lock, uv.toml and pyproject.toml files.")
+        .withField("workspace_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path within the manifests (`.` for a root workspace).")
         .withField("package_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Package path relative to the workspace root.")
         .withFunction(
           function("indices", typeDef.withListOf(typeDef.withObject("UvIndex")))
             .withDescription("The package indices configured in this member's `pyproject.toml`.\n\nReads `[[tool.uv.index]]` from the member's own `pyproject.toml`.\nWhen `include_from_workspace` is set, also reads workspace-level\nindices and merges them (package-level entries win on name collision).")
             .withArg("include_from_workspace", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Merge indices from the workspace root's configuration. When True, workspace-level indices are included alongside the package's own indices (deduplicated by name, package wins).", defaultValue: ("false" :: Dagger.JSON!))
         ),
-      typeDef.withObject("UvWorkspaceSource", description: "A self-contained uv workspace: the source files rooted at a `uv.lock`.\n\nCarries the source tree and the workspace's path within it (`\".\"` for a\nroot workspace), relative to the Dagger workspace root. From those it derives everything it needs to `audit` the\nlocked dependencies or `build` a minimal container for a package, so\nthe parent `Uv` stays a thin, container-free entrypoint.\n\n`source` keeps workspace-root-relative paths and holds the members plus\ntheir path dependencies, wherever they live, so builds can reach a\nsibling like `../my-dep` in a nested workspace. Projects nested in those\ntrees that nothing needs (e.g. test fixtures) are left out, so their edits\ndon't invalidate this workspace's builds.\n\nNamed `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with\nthe top-level `Uv` constructor when composed in a parent module.")
+      typeDef.withObject("UvWorkspaceSource", description: "A self-contained uv workspace: the source files rooted at a `uv.lock`.\n\nCarries the source tree and the workspace's path within it (`\".\"` for a\nroot workspace), relative to the Dagger workspace root. From those it derives everything it needs to `audit` the\nlocked dependencies or `build` a minimal container for a package, so\nthe parent `Uv` stays a thin, container-free entrypoint.\n\nEvery directory keeps workspace-root-relative paths, so builds can reach a\nsibling like `../my-dep` in a nested workspace. They are lazy: resolving\nand planning read only `manifests`, and a build loads only the `projects`\nit installs. Projects nested in those trees that nothing needs (e.g. test\nfixtures) are left out, so their edits don't invalidate this workspace's\nbuilds.\n\nNamed `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with\nthe top-level `Uv` constructor when composed in a parent module.")
         .withField("source", typeDef.withObject("Directory"), description: "The workspace's members and their path dependencies, at workspace-root-relative paths.")
         .withField("manifests", typeDef.withObject("Directory"), description: "Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files.")
+        .withField("projects", typeDef.withListOf(typeDef.withObject("ProjectSource")), description: "Each member's and local dependency's files, loaded only when a build installs that project.")
+        .withField("src_init_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The projects' `src/*/__init__.py` files, which mark a `src` layout.")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace.")
         .withFunction(
           function("audit", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

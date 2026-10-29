@@ -41,7 +41,7 @@ from uv.workspace.build import UvWorkspaceBuild
 from uv.workspace.build_backends.plugin import BuildBackend
 from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_workspace_indices
 from uv.workspace.package import UvPackageSource
-from uv.workspace.plan import UvSyncPlan
+from uv.workspace.plan import ProjectSource, UvSyncPlan
 from uv.workspace.venv import UvVenv
 
 BuildBackends: TypeAlias = Annotated[
@@ -69,11 +69,12 @@ class UvWorkspaceSource:
     locked dependencies or `build` a minimal container for a package, so
     the parent `Uv` stays a thin, container-free entrypoint.
 
-    `source` keeps workspace-root-relative paths and holds the members plus
-    their path dependencies, wherever they live, so builds can reach a
-    sibling like `../my-dep` in a nested workspace. Projects nested in those
-    trees that nothing needs (e.g. test fixtures) are left out, so their edits
-    don't invalidate this workspace's builds.
+    Every directory keeps workspace-root-relative paths, so builds can reach a
+    sibling like `../my-dep` in a nested workspace. They are lazy: resolving
+    and planning read only `manifests`, and a build loads only the `projects`
+    it installs. Projects nested in those trees that nothing needs (e.g. test
+    fixtures) are left out, so their edits don't invalidate this workspace's
+    builds.
 
     Named `UvWorkspaceSource` (not `UvWorkspace`) to avoid colliding with
     the top-level `Uv` constructor when composed in a parent module.
@@ -89,13 +90,23 @@ class UvWorkspaceSource:
         Doc("Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files."),
     ] = field()
 
+    projects: Annotated[
+        list[ProjectSource],
+        Doc("Each member's and local dependency's files, loaded only when a build installs that project."),
+    ] = field(default=list)
+
+    src_init_paths: Annotated[
+        list[str],
+        Doc("The projects' `src/*/__init__.py` files, which mark a `src` layout."),
+    ] = field(default=list)
+
     path: Annotated[
         str,
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
 
     def _ws_dir(self) -> Directory:
-        return self.source if self.path == "." else self.source.directory(self.path)
+        return self.manifests if self.path == "." else self.manifests.directory(self.path)
 
     async def _uv_toml(self) -> File | None:
         ws = self._ws_dir()
@@ -222,7 +233,7 @@ class UvWorkspaceSource:
     ) -> UvPackageSource:
         """A single member package within this workspace."""
         return UvPackageSource(
-            source=self.source,
+            manifests=self.manifests,
             workspace_path=self.path,
             package_path=path,
         )
@@ -418,6 +429,9 @@ class UvWorkspaceSource:
 
             plan = await UvSyncPlan.create(
                 source_dir=self.source,
+                manifests_dir=self.manifests,
+                projects=self.projects,
+                src_init_paths=self.src_init_paths,
                 workspace_path=self.path,
                 package=package,
                 extra=extra,
