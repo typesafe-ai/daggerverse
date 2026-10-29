@@ -1,7 +1,7 @@
 """Backend settings determine scaffold paths and the files copied for installation."""
 
 import pytest
-from uv.workspace.build_backends import BuildBackend, BuildBackendKind
+from uv.workspace.build_backends import BuildBackend
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
 from uv.workspace.build_backends.pdm import PdmSettings
@@ -27,20 +27,20 @@ def _pdm(pdm: dict, name: str = "example") -> BuildBackend:
 
 
 @pytest.mark.parametrize(
-    ("backend", "kind", "settings"),
+    ("backend", "settings"),
     [
-        ("uv_build", BuildBackendKind.UV_BUILD, UvBuildSettings),
-        ("hatchling.build", BuildBackendKind.HATCHLING, HatchlingSettings),
-        ("pdm.backend", BuildBackendKind.PDM, PdmSettings),
-        ("flit_core.buildapi", BuildBackendKind.FLIT, FlitSettings),
-        ("poetry.core.masonry.api", BuildBackendKind.POETRY, PoetrySettings),
-        ("setuptools.build_meta", BuildBackendKind.OTHER, type(None)),
-        (None, BuildBackendKind.OTHER, type(None)),
+        ("uv_build", UvBuildSettings),
+        ("hatchling.build", HatchlingSettings),
+        ("pdm.backend", PdmSettings),
+        ("flit_core.buildapi", FlitSettings),
+        ("poetry.core.masonry.api", PoetrySettings),
+        ("setuptools.build_meta", type(None)),
+        (None, type(None)),
     ],
 )
-def test_kind_discriminates_settings(backend, kind, settings):
+def test_registry_selects_settings(backend, settings):
     system = BuildBackend.from_pyproject({"build-system": {"build-backend": backend}}, "example")
-    assert system.kind is kind
+    assert system.name == backend
     assert type(system.settings) is settings
 
 

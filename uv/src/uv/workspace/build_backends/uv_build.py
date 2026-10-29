@@ -35,6 +35,10 @@ class UvBuildSettings:
         )
 
     @property
+    def module_name(self) -> None:
+        return None
+
+    @property
     def module_paths(self) -> list[str]:
         return [posixpath.join(self.module_root, name.replace(".", "/")) for name in self.module_names]
 

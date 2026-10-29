@@ -19,7 +19,7 @@ class PdmSettings:
     """`[tool.pdm]` settings that determine the import layout and build inputs."""
 
     # Import name derived from the distribution name.
-    module_name: str
+    import_name: str
     # `[tool.pdm.build].package-dir`; None leaves pdm's `src/`-or-root discovery to the generic layout.
     package_dir: str | None = None
     # Literal (non-glob) `[tool.pdm.build].includes` paths; None when unset.
@@ -40,7 +40,7 @@ class PdmSettings:
             includes = [posixpath.normpath(path) for path in includes if not any(c in path for c in "*?[")]
         package_dir = build.get("package-dir")
         return cls(
-            module_name=name.lower().replace("-", "_").replace(".", "_"),
+            import_name=name.lower().replace("-", "_").replace(".", "_"),
             package_dir=posixpath.normpath(package_dir) if package_dir is not None else None,
             includes=includes,
             custom_hook=build.get("custom-hook", _DEFAULT_CUSTOM_HOOK),
@@ -48,11 +48,15 @@ class PdmSettings:
         )
 
     @property
+    def module_name(self) -> None:
+        return None
+
+    @property
     def module_paths(self) -> list[str] | None:
         if self.includes is not None:
             return [path for path in self.includes if is_module(path)]
         if self.package_dir is not None:
-            return [posixpath.normpath(posixpath.join(self.package_dir, self.module_name))]
+            return [posixpath.normpath(posixpath.join(self.package_dir, self.import_name))]
         return None
 
     @property

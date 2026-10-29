@@ -38,7 +38,7 @@ class HatchlingSettings:
     version_path: str | None = None
 
     @classmethod
-    def from_pyproject(cls, metadata: dict) -> Self:
+    def from_pyproject(cls, metadata: dict, name: str) -> Self:
         hatch = metadata.get("tool", {}).get("hatch", {})
         build = hatch.get("build", {})
         wheel = build.get("targets", {}).get("wheel", {})
@@ -80,6 +80,10 @@ class HatchlingSettings:
         if self.packages is None and self.only_include is None:
             return [] if self.bypass_selection else None
         return [*(self.packages or []), *(self.only_include or [])]
+
+    @property
+    def module_name(self) -> None:
+        return None
 
     @property
     def module_paths(self) -> list[str] | None:
