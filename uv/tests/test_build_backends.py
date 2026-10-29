@@ -5,6 +5,7 @@ from uv.workspace.build_backends import BuildBackend, BuildBackendKind
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.hatchling import HatchlingSettings
 from uv.workspace.build_backends.pdm import PdmSettings
+from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
 
 
@@ -32,6 +33,7 @@ def _pdm(pdm: dict, name: str = "example") -> BuildBackend:
         ("hatchling.build", BuildBackendKind.HATCHLING, HatchlingSettings),
         ("pdm.backend", BuildBackendKind.PDM, PdmSettings),
         ("flit_core.buildapi", BuildBackendKind.FLIT, FlitSettings),
+        ("poetry.core.masonry.api", BuildBackendKind.POETRY, PoetrySettings),
         ("setuptools.build_meta", BuildBackendKind.OTHER, type(None)),
         (None, BuildBackendKind.OTHER, type(None)),
     ],
@@ -277,6 +279,56 @@ def test_flit_external_data():
     assert _flit({"external-data": {"directory": "data"}}).build_inputs == ["data", "data/**"]
 
 
-@pytest.mark.parametrize("backend", ["uv_build", "hatchling.build", "pdm.backend", "setuptools.build_meta"])
+@pytest.mark.parametrize(
+    "backend", ["uv_build", "hatchling.build", "pdm.backend", "poetry.core.masonry.api", "setuptools.build_meta"]
+)
 def test_only_flit_declares_a_module_name(backend):
     assert _system(backend).module_name is None
+
+
+# ---- poetry-core ----
+
+
+def _poetry(poetry: dict) -> BuildBackend:
+    return _system("poetry.core.masonry.api", {"poetry": poetry})
+
+
+def test_poetry_defaults_use_the_generic_layout():
+    backend = _poetry({})
+    assert backend.module_paths is None
+    assert backend.source_paths is None
+    assert backend.build_inputs == []
+
+
+def test_poetry_packages_join_from_and_skip_sdist_only_entries():
+    backend = _poetry(
+        {
+            "packages": [
+                {"include": "cleo", "from": "src"},
+                {"include": "extra/**/*.py"},
+                {"include": "docs_only", "format": "sdist"},
+                {"include": "both", "format": ["sdist", "wheel"]},
+                {"include": "single.py"},
+            ]
+        }
+    )
+    assert backend.module_paths == backend.source_paths == ["src/cleo", "extra", "both", "single.py"]
+
+
+def test_poetry_empty_packages_ship_no_modules():
+    assert _poetry({"packages": []}).module_paths == []
+
+
+def test_poetry_wheel_includes_readme_and_build_script():
+    backend = _poetry(
+        {
+            "readme": ["README.md", "CHANGELOG.md"],
+            "include": ["pkg/py.typed", "data", "*.cfg", {"path": "tests", "format": "sdist"}],
+            "build": {"script": "build.py"},
+        }
+    )
+    assert backend.build_inputs == ["pkg/py.typed", "data", "data/**", "*.cfg", "README.md", "CHANGELOG.md", "build.py"]
+
+
+def test_poetry_legacy_build_string():
+    assert _poetry({"build": "build.py"}).build_inputs == ["build.py"]

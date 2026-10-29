@@ -26,6 +26,13 @@
   packages: [.]
   imports: [openai]
 
+# poetry-core with PEP 621 metadata, flat layout, `[tool.poetry] include` of a
+# file inside the package.
+- repo: python-poetry/tomlkit
+  rev: a0b15ebb09167ede584fc36ad5362fc3039b0530 # 0.15.2
+  packages: [.]
+  imports: [tomlkit]
+
 # One member of a ~130-member workspace. Its runtime closure mixes flit_core
 # providers (dotted `[tool.flit.module]` names under `src/`), hatchling wheel
 # `packages`, and a `bypass-selection` root; `_shared` modules are symlinks into

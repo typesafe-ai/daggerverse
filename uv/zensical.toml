@@ -21,6 +21,7 @@ nav = [
     { "Hatchling" = "build-backends/hatchling.md" },
     { "pdm-backend" = "build-backends/pdm-backend.md" },
     { "flit_core" = "build-backends/flit.md" },
+    { "poetry-core" = "build-backends/poetry.md" },
   ] },
 ]
 

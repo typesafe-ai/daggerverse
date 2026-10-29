@@ -12,6 +12,7 @@ The module reads the native settings of these build backends:
 - [Hatchling](hatchling.md)
 - [pdm-backend](pdm-backend.md)
 - [flit_core](flit.md)
+- [poetry-core](poetry.md)
 
 For every backend, the files named in `[project]` (`readme`, `license-files`, and
 `license = { file = ... }`) are included as well. License patterns support globs such
@@ -22,7 +23,7 @@ their dependencies are installed, but the member itself is not.
 
 ## Other backends
 
-Packages using any other backend (`setuptools`, `poetry-core`, ...) build
+Packages using any other backend (such as `setuptools`) build
 when their module is named after the distribution (lowercased, with dashes replaced by
 underscores) and sits under `src/` or at the package root.
 

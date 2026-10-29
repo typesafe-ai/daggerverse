@@ -123,7 +123,7 @@ When the cache grows past 100 GiB, the module runs `uv cache prune --ci`. This i
 
 ## Supported build backends
 
-The module supports Python build backends such as `uv_build`, `hatchling`, `pdm-backend`, or `flit_core`.
+The module supports Python build backends such as `uv_build`, `hatchling`, `pdm-backend`, `flit_core`, or `poetry-core`.
 See the full list [here](build-backends/index.md).
 
 The module parses their native configuration files and copies files required to build the package before installing it, ensuring optimal caching.
