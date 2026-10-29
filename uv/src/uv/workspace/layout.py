@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from dagger_clients.core import Directory, Workspace
 
+from uv.audit import CooldownPolicy, UpdateStrategy
 from uv.workspace.build_backends.handler import BuildBackendHandler
 from uv.workspace.plan import ProjectSource, UvSyncPlan
 from uv.workspace.workspace import UvWorkspaceSource
@@ -31,6 +32,8 @@ class UvWorkspaceLayout:
     manifest_exclude: list[str]
     projects: list[UvProjectLayout]
     src_paths: list[str]
+    audit_strategy: UpdateStrategy = UpdateStrategy.LATEST
+    audit_cooldown: CooldownPolicy = CooldownPolicy.RESPECT
 
     def _projects(self, load: _Loader) -> list[ProjectSource]:
         return [
@@ -78,4 +81,6 @@ class UvWorkspaceLayout:
             src_paths=self.src_paths,
             build_backend_handlers=handlers,
             inputs_dir=inputs,
+            audit_strategy=self.audit_strategy,
+            audit_cooldown=self.audit_cooldown,
         )

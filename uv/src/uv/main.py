@@ -8,6 +8,7 @@ from dagger_clients.core import Workspace
 from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
+from uv.audit import AuditCooldown, AuditStrategy, CooldownPolicy, UpdateStrategy
 from uv.workspace import UvWorkspaceSource
 from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendHandlers
 from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
@@ -40,7 +41,7 @@ def _project_of_src_path(path: str) -> str:
 class UvWorkspaces:
     """Every uv workspace in the source tree (one per uv.lock), keyed by its path.
 
-    `audit` runs once per selected workspace, so each workspace is its own check
+    `audit` runs once per selected workspace, so each workspace is its own generator
     that can be selected or skipped on its own.
     """
 
@@ -90,6 +91,8 @@ class Uv:
             list[str] | None,
             Doc("Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**."),
         ] = None,
+        audit_strategy: AuditStrategy = UpdateStrategy.LATEST,
+        audit_cooldown: AuditCooldown = CooldownPolicy.RESPECT,
     ) -> Self:
         # A workspace made from a directory and passed to a module is keyed by its
         # contents, so discovery stays cached until one of the files it reads changes.
@@ -123,6 +126,8 @@ class Uv:
                 projects=[layouts[root] for root in roots if root in layouts],
                 # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.
                 src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
+                audit_strategy=audit_strategy,
+                audit_cooldown=audit_cooldown,
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.
@@ -163,7 +168,7 @@ class Uv:
     async def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """A single uv workspace at `path`, relative to the workspace root.
 
-        The returned `UvWorkspaceSource` can `audit` its locked dependencies or
+        The returned `UvWorkspaceSource` can `audit` (and upgrade) its locked dependencies or
         get a `builder` for its packages.
         """
         return await _load(self.ws, self.layouts, self.handlers, path)

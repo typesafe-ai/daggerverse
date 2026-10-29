@@ -135,11 +135,27 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_audit_detects_vulnerability", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Auditing a workspace with a known-vulnerable dependency fails.\n\n(The audit report itself is folded into the check's error by\n`UvWorkspaceSource.audit`; the message construction is covered by the\n`format_audit_failure` unit tests.)")
+            .withDescription("Auditing a workspace with a known-vulnerable dependency fails.\n\nIts only fix needs a looser constraint than `urllib3==2.6.3`, so there's nothing to\ngenerate. (The audit report itself is folded into the error by\n`UvWorkspaceSource.audit`; the message construction is covered by the\n`format_audit_failure` unit tests.)")
+        )
+        .withFunction(
+          function("uv_audit_exempts_cooldown", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`audit_cooldown=EXEMPT` admits just the fixing version past the cooldown, and records why.")
+        )
+        .withFunction(
+          function("uv_audit_respects_cooldown", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A fix the cooldown holds back stays unapplied, but the partial upgrade before the cutoff is kept.")
         )
         .withFunction(
           function("uv_audit_subset", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A `subset` of the workspaces audits only those, so a vulnerable-but-unselected tree passes.")
+        )
+        .withFunction(
+          function("uv_audit_upgrades_latest", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`audit` upgrades a vulnerable package within its constraints, leaving the settings alone.")
+        )
+        .withFunction(
+          function("uv_audit_upgrades_minimal", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`audit_strategy=MINIMAL` upgrades to the lowest version that fixes every advisory.")
         )
         .withFunction(
           function("uv_build_backend_handler", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
