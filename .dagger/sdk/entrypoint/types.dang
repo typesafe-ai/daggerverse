@@ -72,7 +72,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("docs_site", typeDef.withObject("Directory"))
-            .withDescription("Build a module's static docs site and return the generated `site/` dir.\n\nBuilt on the same base as the tests, with the module installed and its\n`docs` uv group (which ships zensical) synced, so docs that introspect\nthe codebase can import it. `build` only copies each package's `src/`, so\nthe docs sources are supplied separately by `_zensical_site`.")
+            .withDescription("Build a module's static docs site and return the generated `site/` dir.\n\nBuilt on the same base as the tests with the module's `docs` uv group\n(which ships zensical) synced and no package installed, as the docs\ndon't import the code. `_zensical_site` supplies the docs sources.")
             .withArg("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Module directory whose docs to build (e.g. 'uv')")
         )
         .withFunction(
@@ -85,16 +85,16 @@ type ModuleTypes {
             .withDescription("Every pyproject.toml is a project and every uv.lock a workspace, less `exclude`.")
         )
         .withFunction(
+          function("pyproject_go_test", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run the pyproject module's Go unit tests (the discovery logic, engine-free).")
+        )
+        .withFunction(
           function("pyproject_project_files", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A project's files stop at the projects nested in it, needed or not.")
         )
         .withFunction(
           function("pyproject_project_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A project's source holds its own files and its local dependencies', and nothing else.")
-        )
-        .withFunction(
-          function("pyproject_pytest_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run the pyproject module's own pytest suite (the discovery logic, engine-free).")
         )
         .withFunction(
           function("pyproject_respects_gitignore", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -170,6 +170,10 @@ type ModuleTypes {
             .withDescription("`workspaces` finds one workspace per uv.lock in the source tree.")
         )
         .withFunction(
+          function("uv_go_test", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run the uv module's Go unit tests.")
+        )
+        .withFunction(
           function("uv_install_venv", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`install(venv_relocatable=True)` creates an activated relocatable venv, then syncs into it.\n\nExercises the bare-image default (uv provisions Python) and local-package\nscaffolding; plain `python` resolves to the activated venv.")
         )
@@ -217,7 +221,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_workspace_build_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Build the uv module from its own source on a fresh tree.")
+            .withDescription("Build a Python Dagger module (`deptry`) from its own source on a fresh tree.")
         )
         .withFunction(
           function("uv_workspace_build_standalone", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -242,10 +246,6 @@ type ModuleTypes {
         .withFunction(
           function("uv_workspace_layer_cache", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Keep workspace metadata/dependencies stable when only package source changes.")
-        )
-        .withFunction(
-          function("uv_workspace_pytest_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run the uv module's own pytest suite inside a freshly built container.\n\n`install()` only copies `src/` for each package (to keep layer\ngranularity tight). `tests/` has to be mounted explicitly so\npytest can find them. Without it, `pytest -q` collects nothing\nand exits with code 5 (NO_TESTS_COLLECTED).")
         )
         .withFunction(
           function("uv_workspace_standalone_all_extras", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

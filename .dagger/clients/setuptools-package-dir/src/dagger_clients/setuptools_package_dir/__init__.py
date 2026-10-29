@@ -112,10 +112,10 @@ class SetuptoolsPackageDir(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -136,12 +136,12 @@ class SetuptoolsPackageDir(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -162,7 +162,7 @@ class SetuptoolsPackageDir(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """
@@ -181,10 +181,10 @@ class SetuptoolsPackageDir(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -205,7 +205,7 @@ class SetuptoolsPackageDir(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters

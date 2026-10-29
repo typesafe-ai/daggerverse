@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": {
+    "cmd/uv-dispatch/main.go": "0f15a93d8aa4dfdd817b996afbcdf40583ec749c07bc4d73855d5d7d8f47381e",
+    "dagger.gen.go": "3ead388af62691c9dd7d326f1931d4f653d95b9f95a56f1d90b42346023f9226",
+    "internal/dagger/dagger.gen.go": "7de8f1662111ce810e6e9a2dd9df8c1fe789784d52407f112cb659491559f09c",
+    "internal/dagger/entrypoint/main.dang": "6cd022d988b06ed3330a6eae65bc77ba9d75120fd1ebbe7040904bf6dc34cc8c",
+    "internal/dagger/entrypoint/runtime/dagger.gen.go.src": "3d2231e4bec66465bf3267f106f43bd2db59162955fb0af10c3f02b6a3044534",
+    "internal/dagger/entrypoint/runtime/main.go.src": "70d368cc36c9474b560dd261386177b5ad8ae281d15fea58135f1e892e881d79",
+    "internal/dagger/uv.gen.go": "d48affeed4290c9774a0a2d40e1a2f06d7e9b5cb7812d6918b7d8849347b16c6"
+  }
+}

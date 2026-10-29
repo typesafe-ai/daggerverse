@@ -1,9 +1,11 @@
 version: 2
 updates:
-  # Each module pins the images it uses by default in src/<package>/images/<name>/Dockerfile.
+  # Each module pins the images it uses by default in images/<name>/Dockerfile:
+  # under src/<package>/ for Python modules, at the module root for Go modules.
   - package-ecosystem: docker
     directories:
       - "/*/src/*/images/*"
+      - "/*/images/*"
     schedule:
       interval: weekly
     cooldown:

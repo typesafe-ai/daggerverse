@@ -43,9 +43,11 @@ class UvBuildBackendHandler(_Protocol):
     """ Tells the module how a build backend builds the packages that use
     it.  Every function except `build_backend`, `setup` and `teardown`
     receives the package's `pyproject.toml` contents and its distribution
-    name. Returning None from `module_name`, `module_paths`, or
-    `source_paths` falls back to the generic layout: the module named
-    after the distribution, under `src/` or at the package root.  """
+    name. Returning an empty `module_name` falls back to the generic
+    layout: the module named after the distribution, under `src/` or at
+    the package root. Empty `module_paths` or `source_paths` fall back the
+    same way only where the module's built-in support for the package's
+    backend would.  """
 
     async def build_backend(self) -> str:
         """
@@ -59,13 +61,13 @@ class UvBuildBackendHandler(_Protocol):
 
         """
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """
         The import name for the generic layout, dotted for a module inside namespace packages.
 
         """
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """
         Package-relative import directories (or `.py` modules) to scaffold.
 
@@ -80,7 +82,7 @@ class UvBuildBackendHandler(_Protocol):
 
         """
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """
         Package-relative directories (or files) to copy as the package's source.
 
@@ -183,14 +185,14 @@ class _UvBuildBackendHandlerClient(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """
         The import name for the generic layout, dotted for a module inside
         namespace packages.
 
         Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -211,15 +213,15 @@ class _UvBuildBackendHandlerClient(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """
         Package-relative import directories (or `.py` modules) to scaffold.
 
         Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -240,7 +242,7 @@ class _UvBuildBackendHandlerClient(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """
@@ -265,14 +267,14 @@ class _UvBuildBackendHandlerClient(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """
         Package-relative directories (or files) to copy as the package's
         source.
 
         Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -293,7 +295,7 @@ class _UvBuildBackendHandlerClient(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """
@@ -537,12 +539,12 @@ class UvBuildBackendLayout(_Type):
         _ctx = self._select("moduleName", _args)
         return await _ctx.execute(str | None)
 
-    async def module_paths(self) -> list[str] | None:
+    async def module_paths(self) -> list[str]:
         """Import directories (or `.py` modules) to scaffold
 
         Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -556,14 +558,14 @@ class UvBuildBackendLayout(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
-    async def source_paths(self) -> list[str] | None:
+    async def source_paths(self) -> list[str]:
         """Directories (or files) to copy
 
         Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -577,7 +579,7 @@ class UvBuildBackendLayout(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
 
 class UvBuildHandler(_Type):
@@ -659,10 +661,10 @@ class UvBuildHandler(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -683,12 +685,12 @@ class UvBuildHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -709,7 +711,7 @@ class UvBuildHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """Parameters
@@ -725,10 +727,10 @@ class UvBuildHandler(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -749,7 +751,7 @@ class UvBuildHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters
@@ -845,10 +847,10 @@ class UvFlitCoreHandler(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -869,12 +871,12 @@ class UvFlitCoreHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -895,7 +897,7 @@ class UvFlitCoreHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """Parameters
@@ -911,10 +913,10 @@ class UvFlitCoreHandler(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -935,7 +937,7 @@ class UvFlitCoreHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters
@@ -1031,10 +1033,10 @@ class UvHatchlingHandler(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1055,12 +1057,12 @@ class UvHatchlingHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1081,7 +1083,7 @@ class UvHatchlingHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """Parameters
@@ -1097,10 +1099,10 @@ class UvHatchlingHandler(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1121,7 +1123,7 @@ class UvHatchlingHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters
@@ -1572,10 +1574,10 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1596,12 +1598,12 @@ class UvMaturinHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1622,7 +1624,7 @@ class UvMaturinHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """Parameters
@@ -1638,10 +1640,10 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1662,7 +1664,7 @@ class UvMaturinHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters
@@ -1895,10 +1897,10 @@ class UvPdmBackendHandler(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1919,12 +1921,12 @@ class UvPdmBackendHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1945,7 +1947,7 @@ class UvPdmBackendHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """Parameters
@@ -1961,10 +1963,10 @@ class UvPdmBackendHandler(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -1985,7 +1987,7 @@ class UvPdmBackendHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters
@@ -2081,10 +2083,10 @@ class UvPoetryCoreHandler(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    async def module_name(self, pyproject: str, name: str) -> str | None:
+    async def module_name(self, pyproject: str, name: str) -> str:
         """Returns
         -------
-        str | None
+        str
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -2105,12 +2107,12 @@ class UvPoetryCoreHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("moduleName", _args)
-        return await _ctx.execute(str | None)
+        return await _ctx.execute(str)
 
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -2131,7 +2133,7 @@ class UvPoetryCoreHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("modulePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def setup(self, container: Container) -> Container:
         """Parameters
@@ -2147,10 +2149,10 @@ class UvPoetryCoreHandler(_Type):
         _ctx = self._select("setup", _args)
         return Container(_ctx)
 
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         """Returns
         -------
-        list[str] | None
+        list[str]
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -2171,7 +2173,7 @@ class UvPoetryCoreHandler(_Type):
             _Arg("name", name),
         ]
         _ctx = self._select("sourcePaths", _args)
-        return await _ctx.execute(list[str] | None)
+        return await _ctx.execute(list[str])
 
     def teardown(self, container: Container) -> Container:
         """Parameters

@@ -20,16 +20,17 @@ class SetuptoolsPackageDir:
         return "setuptools.build_meta"
 
     @function
-    async def module_name(self, pyproject: str, name: str) -> str | None:
-        return None
+    async def module_name(self, pyproject: str, name: str) -> str:
+        # The uv module's Go interface can't declare a nullable return, so "" stands for None.
+        return ""
 
     @function
-    async def module_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def module_paths(self, pyproject: str, name: str) -> list[str]:
         setuptools = tomllib.loads(pyproject)["tool"]["setuptools"]
         return [f"{setuptools['package-dir']['']}/{package}" for package in setuptools["packages"]]
 
     @function
-    async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
+    async def source_paths(self, pyproject: str, name: str) -> list[str]:
         return [tomllib.loads(pyproject)["tool"]["setuptools"]["package-dir"][""]]
 
     @function

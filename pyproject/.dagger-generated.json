@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": {
+    "cmd/pyproject-dispatch/main.go": "4d80025b97650c51c04c0012187c6038df7018b365ebac2dafdfc68db88a38ac",
+    "dagger.gen.go": "950da5450a1819f206ab9524baff57ff93a0360aa5bc8314176b99f3286bb01d",
+    "internal/dagger/dagger.gen.go": "ec5819ffa1f86afb1ee70a17878594c0f3ea395609675f36bdd90f02db67ca11",
+    "internal/dagger/entrypoint/main.dang": "e7cefd078ecaaccaf45c935a37ea13a05b62eed7fd9ffd404d961209cfae1b67",
+    "internal/dagger/entrypoint/runtime/dagger.gen.go.src": "864c9db45cd99281804298faa70b6625b536f51ef941b43379162d6d99e11b6a",
+    "internal/dagger/entrypoint/runtime/main.go.src": "7357d644c37dde305fbe5a901280208c7a8c513d52ae3be3be4cdf0755f76c0e",
+    "internal/dagger/pyproject.gen.go": "8885cf97d1072107ef25558255989ca27a1885507b218f8d3e1da1a948646e4d"
+  }
+}

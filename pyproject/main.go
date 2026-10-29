@@ -1,0 +1,368 @@
+package pyproject
+
+import (
+	"context"
+	"fmt"
+	"slices"
+
+	"golang.org/x/sync/errgroup"
+
+	"dagger/pyproject/internal/dagger"
+)
+
+// A Python project: a directory holding a `pyproject.toml`.
+//
+// Every file belongs to the deepest project containing it, so a project's own
+// files stop at the projects nested inside it (`nested`).
+type PyprojectProject struct {
+	// Project root, relative to the workspace root. `.` for the root.
+	Path string
+	// `[project].name`, or null for a project without one.
+	Name *string
+	// Whether Dagger generated this project (`[tool.dagger] generated`), such as a module's `sdk/` or `clients/*`.
+	Generated bool
+	// Root of the workspace that installs this project as a member, or null when none does.
+	Workspace *string
+	// Roots of the topmost projects nested inside this one, whose files are their own.
+	Nested []string
+	// Roots of the projects this one depends on through `[tool.uv.sources]` (path and workspace sources, transitively), wherever they live.
+	LocalDependencies []string
+	// Glob patterns of what `source` loads: the project and its local dependencies.
+	Include []string
+	// Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects.
+	Exclude []string
+}
+
+func newProject(p *discoveredProject) *PyprojectProject {
+	return &PyprojectProject{
+		Path:              p.path,
+		Name:              p.name,
+		Generated:         p.generated,
+		Workspace:         p.workspace,
+		Nested:            p.nested,
+		LocalDependencies: p.localDependencies,
+		Include:           p.include,
+		Exclude:           p.exclude,
+	}
+}
+
+// This project's `pyproject.toml`.
+func (m *PyprojectProject) Pyproject(
+	// A Dagger workspace detected from the current working directory or constructed from a Directory.
+	ws *dagger.Workspace,
+) *dagger.File {
+	return ws.File("/" + join(m.Path, "pyproject.toml"))
+}
+
+// The files this project owns, at their workspace-root-relative paths.
+//
+// Its tree less the projects nested in it, caches, virtualenvs, build
+// output and gitignored files. This is what a tool that works on one
+// project's own code, such as a linter, should see.
+func (m *PyprojectProject) Files(
+	// A Dagger workspace detected from the current working directory or constructed from a Directory.
+	ws *dagger.Workspace,
+) *dagger.Directory {
+	exclude := slices.Clone(sourceExclude)
+	for _, nested := range m.Nested {
+		exclude = append(exclude, tree(nested)...)
+	}
+	return ws.Directory("/", dagger.WorkspaceDirectoryOpts{Include: tree(m.Path), Exclude: exclude, Gitignore: true})
+}
+
+// What building or installing this project reads, at its workspace-root-relative paths.
+//
+// The project's own files and those of its local dependencies, so a path
+// source like `../lib` resolves when the directory is mounted as the
+// workspace root. Projects nested inside those trees that none of them
+// needs are left out, as are caches, virtualenvs, build output and
+// gitignored files.
+func (m *PyprojectProject) Source(
+	// A Dagger workspace detected from the current working directory or constructed from a Directory.
+	ws *dagger.Workspace,
+) *dagger.Directory {
+	return ws.Directory("/", dagger.WorkspaceDirectoryOpts{Include: m.Include, Exclude: m.Exclude, Gitignore: true})
+}
+
+// Python projects, keyed by root.
+//
+// +collection
+type PyprojectProjects struct {
+	// Project roots, relative to the workspace root.
+	// +keys
+	Paths []string
+	// +private
+	Items []*PyprojectProject
+}
+
+// The project rooted at `path`.
+//
+// +get
+func (m *PyprojectProjects) Project(
+	// Project root (holding pyproject.toml), relative to the workspace root. `.` for the root.
+	path string,
+) (*PyprojectProject, error) {
+	for _, item := range m.Items {
+		if item.Path == path {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("no project at '%s'", path)
+}
+
+// A workspace: a directory holding a workspace marker, such as a lockfile.
+//
+// It is the environment root that installs its members and their local
+// dependencies. A uv workspace's members are the projects its
+// `[tool.uv.workspace]` selects; any other workspace has its root project
+// alone, or none for a bare lockfile.
+type PyprojectWorkspace struct {
+	// Workspace root, relative to the workspace root. `.` for the root.
+	Path string
+	// Workspace markers found at the root, e.g. `uv.lock`.
+	Lockfiles []string
+	// Roots of the member projects, the root project first.
+	Members []string
+	// Roots of the projects the members depend on through path sources, outside the membership.
+	LocalDependencies []string
+	// +private
+	MemberItems []*PyprojectProject
+	// Glob patterns of what `source` loads: every member and their local dependencies.
+	Include []string
+	// Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects.
+	Exclude []string
+	// Glob patterns of what `manifests` loads: lockfiles, `uv.toml`, `pyproject.toml` and `.python-version`.
+	ManifestInclude []string
+	// Glob patterns `manifests` leaves out.
+	ManifestExclude []string
+}
+
+// This workspace's member projects.
+func (m *PyprojectWorkspace) Projects() *PyprojectProjects {
+	return &PyprojectProjects{Paths: m.Members, Items: m.MemberItems}
+}
+
+// What building or installing this workspace reads, at its workspace-root-relative paths.
+//
+// Every member's files and those of their local dependencies, wherever
+// they live. Projects nested inside those trees that none of them needs
+// are left out, as are caches, virtualenvs, build output and gitignored
+// files.
+func (m *PyprojectWorkspace) Source(
+	// A Dagger workspace detected from the current working directory or constructed from a Directory.
+	ws *dagger.Workspace,
+) *dagger.Directory {
+	return ws.Directory("/", dagger.WorkspaceDirectoryOpts{Include: m.Include, Exclude: m.Exclude, Gitignore: true})
+}
+
+// What resolving this workspace's dependencies reads, and nothing else.
+//
+// The markers (lockfiles), `uv.toml`, and every member's and local
+// dependency's `pyproject.toml` and `.python-version`, at their
+// workspace-root-relative paths. A source edit changes none of them, so
+// a dependency layer built from this stays cached across source edits.
+func (m *PyprojectWorkspace) Manifests(
+	// A Dagger workspace detected from the current working directory or constructed from a Directory.
+	ws *dagger.Workspace,
+) *dagger.Directory {
+	return ws.Directory("/", dagger.WorkspaceDirectoryOpts{Include: m.ManifestInclude, Exclude: m.ManifestExclude})
+}
+
+// Python workspaces, keyed by root.
+//
+// +collection
+type PyprojectWorkspaces struct {
+	// Workspace roots, relative to the workspace root.
+	// +keys
+	Paths []string
+	// +private
+	Items []*PyprojectWorkspace
+}
+
+// The workspace rooted at `path`.
+//
+// +get
+func (m *PyprojectWorkspaces) Workspace(
+	// Workspace root (holding a workspace marker), relative to the workspace root.
+	path string,
+) (*PyprojectWorkspace, error) {
+	for _, item := range m.Items {
+		if item.Path == path {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("no workspace at '%s'", path)
+}
+
+// Discovers the Python projects and workspaces in a Dagger workspace.
+//
+// A project is a directory holding a `pyproject.toml`; a workspace is a
+// directory holding a workspace marker (`uv.lock` or `pylock.toml` by
+// default). Each comes with the scoped source it needs, so tools built on
+// this load one project's files instead of the whole repository.
+//
+// Learn more in the [docs](https://daggerverse.docs.typesafe.ai/pyproject/).
+type Pyproject struct {
+	// +private
+	ProjectItems []*PyprojectProject
+	// +private
+	WorkspaceItems []*PyprojectWorkspace
+}
+
+// Discovers the Python projects and workspaces in a Dagger workspace.
+//
+// A project is a directory holding a `pyproject.toml`; a workspace is a
+// directory holding a workspace marker (`uv.lock` or `pylock.toml` by
+// default). Each comes with the scoped source it needs, so tools built on
+// this load one project's files instead of the whole repository.
+//
+// Learn more in the [docs](https://daggerverse.docs.typesafe.ai/pyproject/).
+func New(
+	ctx context.Context,
+	// A Dagger workspace detected from the current working directory or constructed from a Directory.
+	ws *dagger.Workspace,
+	// Glob patterns of project and workspace roots to leave out, e.g. `**/tests/_packages/**`. Excluded projects still bound the projects around them and still count as dependencies.
+	// +optional
+	exclude []string,
+	// File names that make a directory a workspace, e.g. `pylock.prod.toml` for a named PEP 751 lock.
+	// +default=["uv.lock", "pylock.toml"]
+	workspaceMarkers []string,
+) (*Pyproject, error) {
+	cwd, err := ws.Cwd(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Discovery walks the workspace on the host; only manifests and .gitignore files are read.
+	roots := func(ctx context.Context, marker string) ([]string, error) {
+		found, err := ws.FindRoots(ctx, []string{marker}, dagger.WorkspaceFindRootsOpts{Start: "/", Exclude: sourceExclude})
+		if err != nil {
+			return nil, err
+		}
+		for i, root := range found {
+			found[i] = rootRelative(cwd, root)
+		}
+		return sortedUnique(found), nil
+	}
+	var ignoreDirs, projectPaths []string
+	marked := make([][]string, len(workspaceMarkers))
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) { ignoreDirs, err = roots(gctx, ".gitignore"); return })
+	g.Go(func() (err error) { projectPaths, err = roots(gctx, "pyproject.toml"); return })
+	for i, marker := range workspaceMarkers {
+		g.Go(func() (err error) { marked[i], err = roots(gctx, marker); return })
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	ignoreTexts, err := contents(ctx, ws, ignoreDirs, ".gitignore")
+	if err != nil {
+		return nil, err
+	}
+	ignored := newGitignore(ignoreTexts)
+	projectPaths = slices.DeleteFunc(projectPaths, func(p string) bool { return ignored.ignores(join(p, "pyproject.toml")) })
+	texts, err := contents(ctx, ws, projectPaths, "pyproject.toml")
+	if err != nil {
+		return nil, err
+	}
+	lockfiles := map[string][]string{}
+	for i, marker := range workspaceMarkers {
+		for _, p := range marked[i] {
+			if !ignored.ignores(join(p, marker)) {
+				lockfiles[p] = append(lockfiles[p], marker)
+			}
+		}
+	}
+
+	found := newDiscovery(texts, lockfiles)
+	projects := map[string]*PyprojectProject{}
+	project := func(p string) (*PyprojectProject, error) {
+		if _, ok := projects[p]; !ok {
+			discovered, err := found.project(p)
+			if err != nil {
+				return nil, err
+			}
+			projects[p] = newProject(discovered)
+		}
+		return projects[p], nil
+	}
+
+	workspaces := []*PyprojectWorkspace{}
+	for _, p := range found.workspacePaths {
+		if matches(p, exclude) {
+			continue
+		}
+		workspace, err := found.workspace(p)
+		if err != nil {
+			return nil, err
+		}
+		memberItems := make([]*PyprojectProject, len(workspace.members))
+		for i, member := range workspace.members {
+			if memberItems[i], err = project(member); err != nil {
+				return nil, err
+			}
+		}
+		workspaces = append(workspaces, &PyprojectWorkspace{
+			Path:              workspace.path,
+			Lockfiles:         workspace.lockfiles,
+			Members:           workspace.members,
+			LocalDependencies: workspace.localDependencies,
+			MemberItems:       memberItems,
+			Include:           workspace.include,
+			Exclude:           workspace.exclude,
+			ManifestInclude:   workspace.manifestInclude,
+			ManifestExclude:   sourceExclude,
+		})
+	}
+	projectItems := []*PyprojectProject{}
+	for _, p := range found.projectPaths {
+		if matches(p, exclude) {
+			continue
+		}
+		item, err := project(p)
+		if err != nil {
+			return nil, err
+		}
+		projectItems = append(projectItems, item)
+	}
+	return &Pyproject{ProjectItems: projectItems, WorkspaceItems: workspaces}, nil
+}
+
+// contents reads each directory's file called name, concurrently, keyed by directory.
+func contents(ctx context.Context, ws *dagger.Workspace, dirs []string, name string) (map[string]string, error) {
+	texts := make([]string, len(dirs))
+	g, gctx := errgroup.WithContext(ctx)
+	for i, dir := range dirs {
+		g.Go(func() (err error) {
+			texts[i], err = ws.File("/" + join(dir, name)).Contents(gctx)
+			return
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(dirs))
+	for i, dir := range dirs {
+		out[dir] = texts[i]
+	}
+	return out, nil
+}
+
+// Every Python project in the workspace, less those matching `exclude`.
+func (m *Pyproject) Projects() *PyprojectProjects {
+	paths := make([]string, len(m.ProjectItems))
+	for i, p := range m.ProjectItems {
+		paths[i] = p.Path
+	}
+	return &PyprojectProjects{Paths: paths, Items: m.ProjectItems}
+}
+
+// Every workspace in the workspace, less those matching `exclude`.
+func (m *Pyproject) Workspaces() *PyprojectWorkspaces {
+	paths := make([]string, len(m.WorkspaceItems))
+	for i, w := range m.WorkspaceItems {
+		paths[i] = w.Path
+	}
+	return &PyprojectWorkspaces{Paths: paths, Items: m.WorkspaceItems}
+}

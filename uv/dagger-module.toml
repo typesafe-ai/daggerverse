@@ -2,4 +2,4 @@ name = "uv"
 
 [entrypoint]
   kind = "dang"
-  source = "./sdk/entrypoint"
+  source = "./internal/dagger/entrypoint"
