@@ -84,6 +84,30 @@ class SetuptoolsPackageDir(_Type):
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
 
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("SetuptoolsPackageDir.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("SetuptoolsPackageDir.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
+
     async def id(self) -> str:
         """A unique identifier for this SetuptoolsPackageDir.
 

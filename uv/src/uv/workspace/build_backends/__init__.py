@@ -49,6 +49,15 @@ class BackendSettings(Protocol):
         ...
 
     @property
+    def editable_writes_source(self) -> bool:
+        """Whether an editable build writes into the source tree (e.g. a compiled extension).
+
+        uv caches only the editable wheel, so such packages are rebuilt rather
+        than installed from a cached build.
+        """
+        ...
+
+    @property
     def build_inputs(self) -> list[str]:
         """Files (or globs) the backend reads while building.
 
@@ -128,6 +137,11 @@ class PackageBackend:
     def source_paths(self) -> list[str] | None:
         """Declared directories (or files) to copy, or None to fall back to the generic layout."""
         return self.settings.source_paths if self.settings else None
+
+    @property
+    def editable_writes_source(self) -> bool:
+        """Whether the backend's editable build writes into the source tree, which a cached build would skip."""
+        return self.settings.editable_writes_source if self.settings else False
 
     @property
     def build_inputs(self) -> list[str]:

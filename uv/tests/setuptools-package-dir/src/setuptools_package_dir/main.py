@@ -39,6 +39,10 @@ class SetuptoolsPackageDir:
         return [f"/{entry['file']}" for entry in dynamic.values() if "file" in entry]
 
     @function
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        return False
+
+    @function
     def setup(self, container: Container) -> Container:
         """Leave a marker the check looks for, and a variable `teardown` removes."""
         return container.with_new_file("/tmp/setuptools-package-dir-setup", "").with_env_variable(

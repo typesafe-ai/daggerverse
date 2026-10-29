@@ -59,6 +59,15 @@ class UvBuildBackendHandler(_Protocol):
 
         """
 
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """
+        Whether an editable build writes into the package's source tree, e.g. a compiled extension.
+
+        uv caches only the editable wheel, so such packages are rebuilt every time
+        instead of installed from a cached build that would leave that out.
+
+        """
+
     async def module_name(self, pyproject: str, name: str) -> str | None:
         """
         The import name for the generic layout, dotted for a module inside namespace packages.
@@ -154,6 +163,38 @@ class _UvBuildBackendHandlerClient(_Type):
         ]
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
+
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """
+        Whether an editable build writes into the package's source tree, e.g.
+        a compiled extension.
+
+        uv caches only the editable wheel, so such packages are rebuilt every
+        time
+        instead of installed from a cached build that would leave that out.
+
+        Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildBackendHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildBackendHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
 
     async def id(self) -> str:
         """A unique identifier for this UvBuildBackendHandler.
@@ -488,6 +529,25 @@ class UvBuildBackendLayout(_Type):
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
 
+    async def editable_writes_source(self) -> bool:
+        """Whether an editable build writes into the package's source tree
+
+        Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
+
     async def id(self) -> str:
         """A unique identifier for this UvBuildBackendLayout.
 
@@ -630,6 +690,30 @@ class UvBuildHandler(_Type):
         ]
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
+
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvBuildHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvBuildHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
 
     async def id(self) -> str:
         """A unique identifier for this UvBuildHandler.
@@ -817,6 +901,30 @@ class UvFlitCoreHandler(_Type):
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
 
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvFlitCoreHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvFlitCoreHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
+
     async def id(self) -> str:
         """A unique identifier for this UvFlitCoreHandler.
 
@@ -1002,6 +1110,30 @@ class UvHatchlingHandler(_Type):
         ]
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
+
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvHatchlingHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvHatchlingHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
 
     async def id(self) -> str:
         """A unique identifier for this UvHatchlingHandler.
@@ -1544,6 +1676,30 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
 
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvMaturinHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvMaturinHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
+
     async def id(self) -> str:
         """A unique identifier for this UvMaturinHandler.
 
@@ -1886,6 +2042,30 @@ class UvPdmBackendHandler(_Type):
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
 
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPdmBackendHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPdmBackendHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
+
     async def id(self) -> str:
         """A unique identifier for this UvPdmBackendHandler.
 
@@ -2071,6 +2251,30 @@ class UvPoetryCoreHandler(_Type):
         ]
         _ctx = self._select("buildInputs", _args)
         return await _ctx.execute(list[str])
+
+    async def editable_writes_source(self, pyproject: str, name: str) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(pyproject, str)):
+            raise _type_error("UvPoetryCoreHandler.editable_writes_source", "pyproject", pyproject, "str")
+        if not (isinstance(name, str)):
+            raise _type_error("UvPoetryCoreHandler.editable_writes_source", "name", name, "str")
+        _args = [
+            _Arg("pyproject", pyproject),
+            _Arg("name", name),
+        ]
+        _ctx = self._select("editableWritesSource", _args)
+        return await _ctx.execute(bool)
 
     async def id(self) -> str:
         """A unique identifier for this UvPoetryCoreHandler.

@@ -13,6 +13,11 @@ type ModuleTypes {
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
         )
         .withFunction(
+          function("editable_writes_source", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+            .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))
+        )
+        .withFunction(
           function("module_name", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND))
             .withArg("pyproject", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withArg("name", typeDef.withKind(TypeDefKind.STRING_KIND))

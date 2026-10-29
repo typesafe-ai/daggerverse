@@ -49,5 +49,10 @@ class UvBuildSettings:
         return [self.module_root] if self.module_root else self.module_paths
 
     @property
+    def editable_writes_source(self) -> bool:
+        # Pure Python: an editable build is just a `.pth`.
+        return False
+
+    @property
     def build_inputs(self) -> list[str]:
         return [path for data_dir in self.data_dirs for path in tree(data_dir)]
