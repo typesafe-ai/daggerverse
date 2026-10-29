@@ -3249,8 +3249,9 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
-    async def src_init_paths(self) -> list[str]:
-        """The projects' `src/*/__init__.py` files, which mark a `src` layout.
+    async def src_paths(self) -> list[str]:
+        """The entries directly under the projects' `src/`, which mark a `src`
+        layout.
 
         Returns
         -------
@@ -3267,7 +3268,7 @@ class UvWorkspaceSource(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("srcInitPaths", _args)
+        _ctx = self._select("srcPaths", _args)
         return await _ctx.execute(list[str])
 
     async def uv_version(self) -> str:
