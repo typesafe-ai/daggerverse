@@ -28,7 +28,7 @@ It can also:
 
 - **Package** a project as a relocatable virtual environment that runs in a fresh
   container with no Python of its own.
-- **Audit** the locked dependencies of every workspace in a source tree.
+- **Audit** the locked dependencies of every workspace in a source tree, and upgrade the vulnerable ones.
 
 !!! info "Each workspace knows its own `uv` version"
 
@@ -39,8 +39,8 @@ It can also:
 
 ## Installation
 
-Install it into your workspace, which makes its checks (one `audit` per uv workspace)
-available to `dagger check`:
+Install it into your workspace, which makes its generators (one `audit` per uv workspace)
+available to `dagger generate` and `dagger check --generated`:
 
 ```console
 $ dagger install github.com/typesafe-ai/daggerverse/uv
@@ -62,10 +62,11 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     $ dagger call uv workspace --path . install --package my-app
     ```
 
-    Audit every workspace in the source tree:
+    Audit every workspace in the source tree, then upgrade the vulnerable dependencies:
 
     ```console
-    $ dagger check --uv
+    $ dagger check --generated --uv
+    $ dagger generate --uv
     ```
 
 === "Python SDK"
@@ -97,7 +98,7 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
       for one workspace by path (`workspace`) or for the collection of every workspace
       it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
+      you can read the required `uv` version, `audit` it (a generator), `build` a container step by step, or
       `install` everything in one call.
     - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
       environment ready, plus the resolved sync plan. It exposes the individual pipeline steps so you can run your own steps
@@ -110,5 +111,5 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
 
 - [Building containers](building.md) — assemble a monorepo package's build context and install it.
 - [Virtual environments](virtual-environments.md) — export a portable, relocatable venv.
-- [Auditing dependencies](checks/audit.md) — scan locked dependencies for known vulnerabilities.
+- [Auditing dependencies](checks/audit.md) — scan locked dependencies for known vulnerabilities and upgrade them.
 - [SDK reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv)

@@ -385,12 +385,14 @@ type ModuleTypes {
         .withField("projects", typeDef.withListOf(typeDef.withObject("ProjectSource")), description: "Each member's and local dependency's files, loaded only when a build installs that project.")
         .withField("src_init_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The projects' `src/*/__init__.py` files, which mark a `src` layout.")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace.")
+        .withField("audit_strategy", typeDef.withEnum("UpdateStrategy", description: "How far `audit` upgrades a vulnerable package."), description: "How far `audit` upgrades a vulnerable package: as far as `LATEST` allowed, or to the `MINIMAL` fix.")
+        .withField("audit_cooldown", typeDef.withEnum("CooldownPolicy", description: "What `audit` does when the workspace's cooldown (`exclude-newer`) holds back a fix."), description: "What `audit` does when the cooldown (`exclude-newer`) holds back a fix: `RESPECT` it, or `EXEMPT` the fixing version in `exclude-newer-package` until the cooldown catches up.")
         .withFunction(
-          function("audit", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run `uv audit --frozen` on this workspace's locked dependencies.\n\nAudits straight from the committed uv.lock without re-resolving against\npackage indexes (`--frozen`); vulnerability data comes from the public\nOSV service, so no index credentials are required. Only `manifests` is\nmounted, so a source edit leaves the audit cached.\n\nThe image is resolved here: explicit `image` > `image_ref(uv_version)` >\nthe version detected from the workspace.")
-            .withCheck
-            .withArg("uv_version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "uv version (image tag) to audit with. Defaults to the version detected from the workspace; ignored when `image` is set.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("image", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Full uv image reference to audit with. Overrides `uv_version`.", defaultValue: ("null" :: Dagger.JSON!))
+          function("audit", typeDef.withObject("Changeset"))
+            .withDescription("Audit this workspace's locked dependencies and upgrade the vulnerable ones.\n\nRuns `uv audit --frozen` on the committed uv.lock (vulnerability data comes\nfrom the public OSV service), then relocks each vulnerable package that has a\nfix with `uv lock --upgrade-package`, per `audit_strategy` and `audit_cooldown`. Returns\nthe uv.lock (and, for cooldown exemptions, uv settings) changes.\n\nFails when vulnerabilities remain and nothing could be fixed, so its staleness\ncheck (`dagger check --generated`) passes only for a clean workspace.\n\nOnly `manifests` is mounted, so a source edit leaves the audit cached.")
+            .withGenerator
+            .withArg("uv_version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "uv version (Debian image tag) to audit and relock with. Defaults to the version detected from the workspace; ignored when `base_container` is set.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("base_container", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container with uv on PATH to audit and relock in, e.g. one carrying private index credentials. Defaults to the Debian uv image at `uv_version`.", defaultValue: ("null" :: Dagger.JSON!))
         )
         .withFunction(
           function("build", typeDef.withObject("UvWorkspaceBuild"))
@@ -465,7 +467,7 @@ type ModuleTypes {
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
             .withArg("auto_install_uv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.", defaultValue: ("true" :: Dagger.JSON!))
         ),
-      typeDef.withObject("UvWorkspaces", description: "Every uv workspace in the source tree (one per uv.lock), keyed by its path.\n\n`audit` runs once per selected workspace, so each workspace is its own check\nthat can be selected or skipped on its own.")
+      typeDef.withObject("UvWorkspaces", description: "Every uv workspace in the source tree (one per uv.lock), keyed by its path.\n\n`audit` runs once per selected workspace, so each workspace is its own generator\nthat can be selected or skipped on its own.")
         .withCollection
         .withField("paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root.")
         .withCollectionKeys("paths")
@@ -482,7 +484,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("workspace", typeDef.withObject("UvWorkspaceSource"))
-            .withDescription("A single uv workspace at `path`, relative to the workspace root.\n\nThe returned `UvWorkspaceSource` can `audit` its locked dependencies or\n`build` a minimal container for a package.")
+            .withDescription("A single uv workspace at `path`, relative to the workspace root.\n\nThe returned `UvWorkspaceSource` can `audit` (and upgrade) its locked dependencies or\n`build` a minimal container for a package.")
             .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Path to the uv workspace root (holding uv.lock and pyproject.toml), relative to the workspace root.")
         )
         .withFunction(
@@ -493,7 +495,15 @@ type ModuleTypes {
           function("", typeDef.withObject("Uv"))
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("exclude", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("audit_strategy", typeDef.withEnum("UpdateStrategy", description: "How far `audit` upgrades a vulnerable package."), description: "How far `audit` upgrades a vulnerable package: as far as `LATEST` allowed, or to the `MINIMAL` fix.", defaultValue: ("\"LATEST\"" :: Dagger.JSON!))
+            .withArg("audit_cooldown", typeDef.withEnum("CooldownPolicy", description: "What `audit` does when the workspace's cooldown (`exclude-newer`) holds back a fix."), description: "What `audit` does when the cooldown (`exclude-newer`) holds back a fix: `RESPECT` it, or `EXEMPT` the fixing version in `exclude-newer-package` until the cooldown catches up.", defaultValue: ("\"RESPECT\"" :: Dagger.JSON!))
         ),
+      typeDef.withEnum("UpdateStrategy", description: "How far `audit` upgrades a vulnerable package.")
+        .withEnumMember("LATEST", value: "latest", description: "The newest version the workspace's constraints (and cooldown) allow.")
+        .withEnumMember("MINIMAL", value: "minimal", description: "The lowest version that fixes every advisory against the package."),
+      typeDef.withEnum("CooldownPolicy", description: "What `audit` does when the workspace's cooldown (`exclude-newer`) holds back a fix.")
+        .withEnumMember("RESPECT", value: "respect", description: "Leave the cooldown alone: a fix newer than the cutoff stays unapplied and the audit fails.")
+        .withEnumMember("EXEMPT", value: "exempt", description: "Exempt just the fix: pin the package's `exclude-newer-package` cutoff to the fixing\nversion's upload time. The exemption is removed once the cooldown catches up with it."),
     ]
   }
 }
