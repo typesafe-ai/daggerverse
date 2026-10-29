@@ -5,8 +5,10 @@
 [[repos]]
 repo = "builtin"
 hooks = [
-    { id = "trailing-whitespace" },
-    { id = "end-of-file-fixer" },
+    # Generated SDKs and clients are rewritten by `dagger generate`; editing them
+    # makes the `python-sdk/generate/stale` check fail.
+    { id = "trailing-whitespace", exclude = '(^|/)(sdk|clients)/' },
+    { id = "end-of-file-fixer", exclude = '(^|/)(sdk|clients)/' },
     { id = "check-added-large-files" },
 ]
 

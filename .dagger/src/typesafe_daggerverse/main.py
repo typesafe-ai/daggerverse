@@ -13,6 +13,7 @@ from dagger_clients.deptry import deptry
 from dagger_clients.github import github
 from dagger_clients.pyproject import pyproject
 from dagger_clients.ruff import ruff
+from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
 from dagger_clients.uv import uv
 
@@ -273,6 +274,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "build_workspace_app", self.uv_workspace_build_workspace_app)
             tg.start_soon(_run, "build_workspace_flat", self.uv_workspace_build_workspace_flat)
             tg.start_soon(_run, "uv_build_layouts", self.uv_build_layouts)
+            tg.start_soon(_run, "uv_build_backend_plugin", self.uv_build_backend_plugin)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
@@ -515,6 +517,25 @@ class TypesafeDaggerverse:
             .with_exec(["uv", "sync", "--frozen", "--all-packages"])
             .sync()
         )
+
+    @function
+    async def uv_build_backend_plugin(self) -> None:
+        """A `BuildBackend` plug-in module (`setuptools-package-dir`) lays out a package the built-in backends can't."""
+        source = _src("uv/tests/_packages/plugin-backend")
+        script = (
+            "from importlib.metadata import version\n"
+            "import plugged\n"
+            "assert plugged.VALUE == 'real source'\n"
+            "assert version('plugged-app') == '0.1.0'\n"
+        )
+        for no_editable in (False, True):
+            await (
+                uv(source.as_workspace())
+                .workspace(".")
+                .install(no_editable=no_editable, build_backends=[setuptools_package_dir()])
+                .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
+                .sync()
+            )
 
     @function
     async def uv_license_files(self) -> None:

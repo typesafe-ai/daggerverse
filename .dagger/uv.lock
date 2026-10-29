@@ -10,6 +10,7 @@ members = [
     "dagger-clients-pyproject",
     "dagger-clients-pytest",
     "dagger-clients-ruff",
+    "dagger-clients-setuptools-package-dir",
     "dagger-clients-twingate",
     "dagger-clients-uv",
     "dagger-clients-zizmor",
@@ -192,6 +193,21 @@ requires-dist = [
 name = "dagger-clients-ruff"
 version = "0.0.0"
 source = { editable = "clients/ruff" }
+dependencies = [
+    { name = "dagger-clients-core" },
+    { name = "dagger-io" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagger-clients-core", editable = "clients/core" },
+    { name = "dagger-io", editable = "sdk" },
+]
+
+[[package]]
+name = "dagger-clients-setuptools-package-dir"
+version = "0.0.0"
+source = { editable = "clients/setuptools-package-dir" }
 dependencies = [
     { name = "dagger-clients-core" },
     { name = "dagger-io" },
@@ -617,6 +633,7 @@ dependencies = [
     { name = "dagger-clients-pyproject" },
     { name = "dagger-clients-pytest" },
     { name = "dagger-clients-ruff" },
+    { name = "dagger-clients-setuptools-package-dir" },
     { name = "dagger-clients-twingate" },
     { name = "dagger-clients-uv" },
     { name = "dagger-clients-zizmor" },
@@ -633,6 +650,7 @@ requires-dist = [
     { name = "dagger-clients-pyproject", editable = "clients/pyproject" },
     { name = "dagger-clients-pytest", editable = "clients/pytest" },
     { name = "dagger-clients-ruff", editable = "clients/ruff" },
+    { name = "dagger-clients-setuptools-package-dir", editable = "clients/setuptools-package-dir" },
     { name = "dagger-clients-twingate", editable = "clients/twingate" },
     { name = "dagger-clients-uv", editable = "clients/uv" },
     { name = "dagger-clients-zizmor", editable = "clients/zizmor" },
