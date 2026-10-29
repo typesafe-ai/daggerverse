@@ -246,6 +246,11 @@ def test_pdm_package_dir(package_dir, module_paths, source_paths):
     assert system.source_paths == source_paths
 
 
+def test_pdm_package_dir_stubs_package_keeps_suffix():
+    system = _pdm({"build": {"package-dir": "src"}}, name="my-pkg-stubs")
+    assert system.module_paths == ["src/my_pkg-stubs"]
+
+
 def test_pdm_includes_ignore_globs_and_split_modules_from_files():
     system = _pdm({"build": {"includes": ["src/pkg/", "src/pkg/**/*.json", "tool.py", "LICENSE.txt"]}})
     assert system.module_paths == ["src/pkg", "tool.py"]

@@ -236,6 +236,12 @@ def normalize_package_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
+def import_name(name: str) -> str:
+    """The import name a distribution's module defaults to; type-stub packages keep their `-stubs` suffix."""
+    module = name.lower().replace("-", "_").replace(".", "_")
+    return module.removesuffix("_stubs") + "-stubs" if module.endswith("_stubs") else module
+
+
 def require_package_selection(packages: list[str], all_packages: bool, default_package: str | None) -> None:
     """Ensure there is a package to install, else raise.
 

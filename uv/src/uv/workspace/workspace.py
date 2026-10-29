@@ -95,9 +95,9 @@ class UvWorkspaceSource:
         Doc("Each member's and local dependency's files, loaded only when a build installs that project."),
     ] = field(default=list)
 
-    src_init_paths: Annotated[
+    src_paths: Annotated[
         list[str],
-        Doc("The projects' `src/*/__init__.py` files, which mark a `src` layout."),
+        Doc("The entries directly under the projects' `src/`, which mark a `src` layout."),
     ] = field(default=list)
 
     path: Annotated[
@@ -431,7 +431,7 @@ class UvWorkspaceSource:
                 source_dir=self.source,
                 manifests_dir=self.manifests,
                 projects=self.projects,
-                src_init_paths=self.src_init_paths,
+                src_paths=self.src_paths,
                 workspace_path=self.path,
                 package=package,
                 extra=extra,

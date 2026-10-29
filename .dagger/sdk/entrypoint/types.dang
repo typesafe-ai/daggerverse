@@ -147,7 +147,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_build_layouts", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Virtual members, renamed modules, multiple modules, custom roots, namespace and stub packages build together.")
+            .withDescription("Virtual members, renamed modules, multiple modules, custom roots, namespace and stub packages build together.\n\nBesides uv_build members, flit and pdm-backend members find a namespace and a stub package under `src/`.")
         )
         .withFunction(
           function("uv_detect_version_default", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

@@ -2,7 +2,7 @@
 name = "virtual-app"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["renamed-dist", "namespaced-dist", "vendor-sdk-stubs"]
+dependencies = ["renamed-dist", "namespaced-dist", "vendor-sdk-stubs", "flit-namespaced-dist", "pdm-sdk-stubs"]
 
 [build-system]
 requires = ["uv_build>=0.11.11,<0.12"]
@@ -15,3 +15,5 @@ package = false
 renamed-dist = { workspace = true }
 namespaced-dist = { workspace = true }
 vendor-sdk-stubs = { workspace = true }
+flit-namespaced-dist = { workspace = true }
+pdm-sdk-stubs = { workspace = true }

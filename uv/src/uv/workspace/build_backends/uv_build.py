@@ -7,6 +7,7 @@ import posixpath
 from dataclasses import dataclass, field
 from typing import Self
 
+from uv.utils import import_name
 from uv.workspace.build_backends.paths import tree
 
 
@@ -24,11 +25,7 @@ class UvBuildSettings:
     @classmethod
     def from_pyproject(cls, metadata: dict, name: str) -> Self:
         backend = metadata.get("tool", {}).get("uv", {}).get("build-backend", {})
-        default = name.lower().replace("-", "_").replace(".", "_")
-        # Type-stub packages keep their `-stubs` suffix.
-        if default.endswith("_stubs"):
-            default = default.removesuffix("_stubs") + "-stubs"
-        names = backend.get("module-name", default)
+        names = backend.get("module-name", import_name(name))
         if isinstance(names, str):
             names = [names]
         root = posixpath.normpath(backend.get("module-root", "src"))
