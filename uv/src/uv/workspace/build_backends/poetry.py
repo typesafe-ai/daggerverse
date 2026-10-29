@@ -45,7 +45,7 @@ class PoetrySettings:
     build_script: str | None = None
 
     @classmethod
-    def from_pyproject(cls, metadata: dict) -> Self:
+    def from_pyproject(cls, metadata: dict, name: str) -> Self:
         poetry = metadata.get("tool", {}).get("poetry", {})
         packages = None
         if "packages" in poetry:
@@ -69,6 +69,10 @@ class PoetrySettings:
             readme=[readme] if isinstance(readme, str) else readme,
             build_script=build.get("script") if isinstance(build, dict) else build,
         )
+
+    @property
+    def module_name(self) -> None:
+        return None
 
     @property
     def module_paths(self) -> list[str] | None:

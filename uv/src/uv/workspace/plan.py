@@ -261,7 +261,7 @@ class UvSyncPlan:
                         "package.name": name,
                         "package.path": pkg_path,
                         "package.backend": metadata.get("build-system", {}).get("build-backend", "none"),
-                        "package.backend_kind": pkg.build_backend.kind.name,
+                        "package.backend_supported": pkg.build_backend.settings is not None,
                         "package.virtual": virtual,
                         "package.module_paths": [] if virtual else pkg.module_paths,
                         "package.source_paths": [] if virtual else pkg.source_paths,
