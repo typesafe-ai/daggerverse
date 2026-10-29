@@ -7,9 +7,11 @@ extra files (readme, license files, version source, hook scripts) the build read
 Each supported backend lives in its own module and is registered in
 `BACKENDS` under its `[build-system].build-backend` value. These are plain
 Python types derived from a package's `pyproject.toml` on demand, not Dagger
-API types.
+API types. Other modules can add or replace backends through the
+`BuildBackend` interface (see `plugin`).
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol, Self
 
@@ -27,9 +29,6 @@ class BackendSettings(Protocol):
     generic layout: the module named after the distribution, under `src/` or at
     the package root.
     """
-
-    @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self: ...
 
     @property
     def module_name(self) -> str | None:
@@ -52,33 +51,36 @@ class BackendSettings(Protocol):
         ...
 
 
-BACKENDS: dict[str, type[BackendSettings]] = {
-    "uv_build": UvBuildSettings,
-    "hatchling.build": HatchlingSettings,
-    "pdm.backend": PdmSettings,
-    "flit_core.buildapi": FlitSettings,
-    "poetry.core.masonry.api": PoetrySettings,
+# Each backend's settings, parsed from the package's metadata and distribution name.
+BACKENDS: dict[str, Callable[[dict, str], BackendSettings]] = {
+    "uv_build": UvBuildSettings.from_pyproject,
+    "hatchling.build": HatchlingSettings.from_pyproject,
+    "pdm.backend": PdmSettings.from_pyproject,
+    "flit_core.buildapi": FlitSettings.from_pyproject,
+    "poetry.core.masonry.api": PoetrySettings.from_pyproject,
 }
 
 
 @dataclass(frozen=True)
-class BuildBackend:
+class PackageBackend:
     """A package's build backend together with the settings that shape its staging."""
 
     # `[build-system].build-backend`, if declared.
     name: str | None = None
-    # Settings of a supported backend; None for any other backend.
+    # Settings of a supported or plugged-in backend; None for any other backend.
     settings: BackendSettings | None = None
     # `[project]` readme and license files, which every backend reads.
     project_inputs: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict, name: str, settings: BackendSettings | None = None) -> Self:
+        """The package's backend; `settings` (resolved from a plug-in) replaces the built-in ones."""
         backend = metadata.get("build-system", {}).get("build-backend")
-        settings_type = BACKENDS.get(backend) if backend else None
+        if settings is None and (parse := BACKENDS.get(backend) if backend else None):
+            settings = parse(metadata, name)
         return cls(
             name=backend,
-            settings=settings_type.from_pyproject(metadata, name) if settings_type else None,
+            settings=settings,
             project_inputs=_project_inputs(metadata.get("project", {})),
         )
 

@@ -16,7 +16,8 @@ from uv.utils import (
     require_package_selection,
     selected_groups,
 )
-from uv.workspace.build_backends import BuildBackend
+from uv.workspace.build_backends import PackageBackend
+from uv.workspace.build_backends.plugin import BuildBackend, BuildBackendLayout
 
 
 def _match_reachable(
@@ -120,11 +121,15 @@ class LocalPackage:
         str,
         Doc("Already-read package metadata used when creating a dependency scaffold"),
     ] = field()
+    layout: Annotated[
+        BuildBackendLayout | None,
+        Doc("Layout resolved from a `BuildBackend` plug-in, replacing built-in backend settings"),
+    ] = field(default=None)
 
     @property
-    def build_backend(self) -> BuildBackend:
+    def build_backend(self) -> PackageBackend:
         """Build backend and its settings, derived from the captured package metadata."""
-        return BuildBackend.from_pyproject(tomllib.loads(self.pyproject_contents), self.name)
+        return PackageBackend.from_pyproject(tomllib.loads(self.pyproject_contents), self.name, self.layout)
 
     @property
     def module_paths(self) -> list[str]:
@@ -206,6 +211,7 @@ class UvSyncPlan:
         all_packages: bool = False,
         no_editable: bool = False,
         no_default_groups: bool = False,
+        build_backends: list[BuildBackend] | None = None,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front."""
         ws_dir = source_dir if workspace_path == "." else source_dir.directory(workspace_path)
@@ -231,6 +237,7 @@ class UvSyncPlan:
         # dependency resolution). This holds whether the package is a build target
         # or a transitive workspace dependency (e.g. a Pulumi program whose code
         # lives at the package root, with no src/ or module dir to copy).
+        plugins = {await backend.build_backend(): backend for backend in build_backends or []}
         flat_packages: list[str] = []
         local_packages: dict[str, LocalPackage] = {}
         with get_tracer().start_as_current_span("resolve local package layouts") as span:
@@ -244,7 +251,9 @@ class UvSyncPlan:
                 )
                 if virtual:
                     flat_packages.append(name)
-                module = BuildBackend.from_pyproject(metadata, name).module_name or _module_name(name)
+                plugin = plugins.get(metadata.get("build-system", {}).get("build-backend"))
+                layout = await BuildBackendLayout.resolve(plugin, contents, name) if plugin else None
+                module = PackageBackend.from_pyproject(metadata, name, layout).module_name or _module_name(name)
                 # A src layout has the module's top-level package under `src/`.
                 top = module.split(".", 1)[0]
                 pkg = LocalPackage(
@@ -253,6 +262,7 @@ class UvSyncPlan:
                     module=module,
                     flat=posixpath.normpath(posixpath.join(resolved, "src", top, "__init__.py")) not in src_init_paths,
                     pyproject_contents=contents,
+                    layout=layout,
                 )
                 local_packages[name] = pkg
                 span.add_event(
@@ -262,6 +272,7 @@ class UvSyncPlan:
                         "package.path": pkg_path,
                         "package.backend": metadata.get("build-system", {}).get("build-backend", "none"),
                         "package.backend_supported": pkg.build_backend.settings is not None,
+                        "package.backend_plugin": layout is not None,
                         "package.virtual": virtual,
                         "package.module_paths": [] if virtual else pkg.module_paths,
                         "package.source_paths": [] if virtual else pkg.source_paths,
