@@ -33,7 +33,7 @@ everything in an order that caches well, so you don't assemble the build context
       for one workspace by path (`workspace`) or for the collection of every workspace
       it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
+      you can read the required `uv` version, `audit` it (a generator), `build` a container step by step, or
       `install` everything in one call.
     - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
       environment ready, plus the resolved sync plan. It exposes the individual pipeline steps so you can run your own steps

@@ -7,6 +7,7 @@ from dagger_clients.core import Workspace
 from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
+from uv.audit import AuditCooldown, AuditStrategy, CooldownPolicy, UpdateStrategy
 from uv.workspace import UvWorkspaceSource
 from uv.workspace.build_backends.handler import BuildBackendHandlers
 from uv.workspace.plan import ProjectSource
@@ -33,7 +34,7 @@ def _project_of_src_init(path: str) -> str:
 class UvWorkspaces:
     """Every uv workspace in the source tree (one per uv.lock), keyed by its path.
 
-    `audit` runs once per selected workspace, so each workspace is its own check
+    `audit` runs once per selected workspace, so each workspace is its own generator
     that can be selected or skipped on its own.
     """
 
@@ -72,6 +73,8 @@ class Uv:
             list[str] | None,
             Doc("Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**."),
         ] = None,
+        audit_strategy: AuditStrategy = UpdateStrategy.LATEST,
+        audit_cooldown: AuditCooldown = CooldownPolicy.RESPECT,
     ) -> Self:
         discovered = pyproject(ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
         found, projects = await asyncio.gather(discovered.workspaces().list_(), discovered.projects().list_())
@@ -101,6 +104,8 @@ class Uv:
                 projects=[sources[root] for root in roots if root in sources],
                 # `<root>/src/<module>/__init__.py` marks a project's src layout.
                 src_init_paths=[init for init in src_inits if _project_of_src_init(init) in roots],
+                audit_strategy=audit_strategy,
+                audit_cooldown=audit_cooldown,
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.
@@ -121,7 +126,7 @@ class Uv:
     def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """A single uv workspace at `path`, relative to the workspace root.
 
-        The returned `UvWorkspaceSource` can `audit` its locked dependencies or
+        The returned `UvWorkspaceSource` can `audit` (and upgrade) its locked dependencies or
         `build` a minimal container for a package.
         """
         return _lookup(self.items, path)

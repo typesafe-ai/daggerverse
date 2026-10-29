@@ -7,7 +7,7 @@ from typing import Annotated
 
 import anyio
 import yaml
-from dagger import Doc, check, function, object_type
+from dagger import Doc, QueryError, check, function, object_type
 from dagger.telemetry import get_tracer
 from dagger_clients.core import Changeset, Check, Container, Directory, ReturnType, Secret, Service, Workspace, core
 from dagger_clients.deptry import deptry
@@ -16,7 +16,7 @@ from dagger_clients.pyproject import pyproject
 from dagger_clients.ruff import ruff
 from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
-from dagger_clients.uv import uv
+from dagger_clients.uv import UvCooldownPolicy, UvUpdateStrategy, uv
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
@@ -235,12 +235,25 @@ class TypesafeDaggerverse:
 
     @staticmethod
     async def _uv_audit_all(src: Directory, subset: list[str] | None = None) -> None:
-        """Audit every workspace in `src` (or the `subset` of them), as `dagger check` does."""
+        """Audit every workspace in `src` (or the `subset` of them), failing unless each is clean,
+        as `dagger check --generated` does."""
         workspaces = uv(src.as_workspace()).workspaces()
         if subset is not None:
             workspaces = workspaces.subset(subset)
         for workspace in await workspaces.list_():
-            await _run_check(workspace.audit())
+            if not await workspace.audit().is_empty():
+                raise AssertionError(f"expected no audit fixes for {await workspace.path()}")
+
+    @staticmethod
+    async def _uv_audit_fixes(fixture: str, **kwargs) -> tuple[str, str]:
+        """The fixed uv.lock and pyproject.toml `audit` generates for `fixture`."""
+        after = uv(_fixture(fixture), **kwargs).workspace(".").audit().after()
+        return await after.file("uv.lock").contents(), await after.file("pyproject.toml").contents()
+
+    @staticmethod
+    def _locked_version(lock: str, package: str) -> tuple[int, ...]:
+        version = next(p["version"] for p in tomllib.loads(lock)["package"] if p["name"] == package)
+        return tuple(int(part) for part in version.split("."))
 
     @check
     @function
@@ -261,6 +274,10 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "audit_clean", self.uv_audit_clean)
             tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
             tg.start_soon(_run, "audit_subset", self.uv_audit_subset)
+            tg.start_soon(_run, "audit_upgrades_latest", self.uv_audit_upgrades_latest)
+            tg.start_soon(_run, "audit_upgrades_minimal", self.uv_audit_upgrades_minimal)
+            tg.start_soon(_run, "audit_respects_cooldown", self.uv_audit_respects_cooldown)
+            tg.start_soon(_run, "audit_exempts_cooldown", self.uv_audit_exempts_cooldown)
             tg.start_soon(_run, "workspaces_exclude", self.uv_workspaces_exclude)
             tg.start_soon(_run, "install_venv", self.uv_install_venv)
             tg.start_soon(_run, "project_environment", self.uv_project_environment)
@@ -356,16 +373,55 @@ class TypesafeDaggerverse:
     async def uv_audit_detects_vulnerability(self) -> None:
         """Auditing a workspace with a known-vulnerable dependency fails.
 
-        (The audit report itself is folded into the check's error by
+        Its only fix needs a looser constraint than `urllib3==2.6.3`, so there's nothing to
+        generate. (The audit report itself is folded into the error by
         `UvWorkspaceSource.audit`; the message construction is covered by the
         `format_audit_failure` unit tests.)
         """
         src = _src("uv/tests/_packages/vulnerable")
         try:
             await self._uv_audit_all(src)
-        except CheckFailedError:
+        except QueryError:
             return
         raise AssertionError("expected uv audit to fail for the vulnerable fixture")
+
+    @function
+    async def uv_audit_upgrades_latest(self) -> None:
+        """`audit` upgrades a vulnerable package within its constraints, leaving the settings alone."""
+        lock, pyproject = await self._uv_audit_fixes("uv/tests/_packages/upgradable")
+        if self._locked_version(lock, "urllib3") < (2, 8, 0):
+            raise AssertionError(f"expected urllib3 >= 2.8.0, got:\n{lock}")
+        if "exclude-newer" in pyproject:
+            raise AssertionError(f"expected no cooldown exemption, got:\n{pyproject}")
+
+    @function
+    async def uv_audit_upgrades_minimal(self) -> None:
+        """`audit_strategy=MINIMAL` upgrades to the lowest version that fixes every advisory."""
+        lock, _ = await self._uv_audit_fixes("uv/tests/_packages/upgradable", audit_strategy=UvUpdateStrategy.MINIMAL)
+        if self._locked_version(lock, "urllib3") != (2, 8, 0):
+            raise AssertionError(f"expected urllib3 == 2.8.0, got:\n{lock}")
+
+    @function
+    async def uv_audit_respects_cooldown(self) -> None:
+        """A fix the cooldown holds back stays unapplied, but the partial upgrade before the cutoff is kept."""
+        fixes = uv(_fixture("uv/tests/_packages/cooldown")).workspace(".").audit()
+        lock = await fixes.after().file("uv.lock").contents()
+        if self._locked_version(lock, "urllib3") != (2, 7, 0):
+            raise AssertionError(f"expected urllib3 == 2.7.0 (the last release before the cutoff), got:\n{lock}")
+        if await fixes.modified_paths() != ["uv.lock"]:
+            raise AssertionError(f"expected only uv.lock to change, got {await fixes.modified_paths()}")
+
+    @function
+    async def uv_audit_exempts_cooldown(self) -> None:
+        """`audit_cooldown=EXEMPT` admits just the fixing version past the cooldown, and records why."""
+        lock, pyproject = await self._uv_audit_fixes(
+            "uv/tests/_packages/cooldown", audit_cooldown=UvCooldownPolicy.EXEMPT
+        )
+        if self._locked_version(lock, "urllib3") != (2, 8, 0):
+            raise AssertionError(f"expected urllib3 == 2.8.0, got:\n{lock}")
+        exemption = tomllib.loads(pyproject)["tool"]["uv"].get("exclude-newer-package", {}).get("urllib3")
+        if exemption != "2026-09-15T19:29:37Z" or "uv audit:" not in pyproject:
+            raise AssertionError(f"expected a marked urllib3 exemption at its upload time, got:\n{pyproject}")
 
     @function
     async def uv_audit_subset(self) -> None:
