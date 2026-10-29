@@ -577,13 +577,16 @@ class TypesafeDaggerverse:
             "assert version('plugged-app') == '0.1.0'\n"
         )
         for no_editable in (False, True):
-            await (
-                uv(source.as_workspace())
+            ctr = (
+                uv(source.as_workspace(), build_backends=[setuptools_package_dir()])
                 .workspace(".")
-                .install(no_editable=no_editable, build_backends=[setuptools_package_dir()])
+                .install(no_editable=no_editable)
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
-                .sync()
             )
+            # The plug-in's `setup` ran before the build and its `teardown` after it.
+            await ctr.file("/tmp/setuptools-package-dir-setup").sync()
+            if await ctr.env_variable("SETUPTOOLS_PACKAGE_DIR"):
+                raise AssertionError("expected the plug-in's teardown to remove SETUPTOOLS_PACKAGE_DIR")
 
     @function
     async def uv_license_files(self) -> None:

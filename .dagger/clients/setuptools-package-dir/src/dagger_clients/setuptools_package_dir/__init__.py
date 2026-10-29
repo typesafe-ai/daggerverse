@@ -27,6 +27,10 @@ from ._target import CORE_DIGEST, NAME, PIN, REF
 
 _check_core(NAME, CORE_DIGEST, _installed_core)
 
+from dagger_clients.core import (  # noqa: E402
+    Container,
+)
+
 _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 """The module that this client loads on first use."""
 
@@ -160,6 +164,23 @@ class SetuptoolsPackageDir(_Type):
         _ctx = self._select("modulePaths", _args)
         return await _ctx.execute(list[str] | None)
 
+    def setup(self, container: Container) -> Container:
+        """
+        Leave a marker the check looks for, and a variable `teardown` removes.
+
+        Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("SetuptoolsPackageDir.setup", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("setup", _args)
+        return Container(_ctx)
+
     async def source_paths(self, pyproject: str, name: str) -> list[str] | None:
         """Returns
         -------
@@ -185,6 +206,20 @@ class SetuptoolsPackageDir(_Type):
         ]
         _ctx = self._select("sourcePaths", _args)
         return await _ctx.execute(list[str] | None)
+
+    def teardown(self, container: Container) -> Container:
+        """Parameters
+        ----------
+        container:
+            An OCI-compatible container, also known as a Docker container.
+        """
+        if not (isinstance(container, Container)):
+            raise _type_error("SetuptoolsPackageDir.teardown", "container", container, "Container")
+        _args = [
+            _Arg("container", container),
+        ]
+        _ctx = self._select("teardown", _args)
+        return Container(_ctx)
 
 
 def setuptools_package_dir(*, session: _Session | None = None) -> SetuptoolsPackageDir:
