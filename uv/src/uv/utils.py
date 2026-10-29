@@ -138,6 +138,17 @@ def selected_groups(content: str, groups: list[str], all_groups: bool, no_defaul
     return set(groups) | set(default)
 
 
+def python_request(python_version: str | None, pyproject: str) -> str | None:
+    """The Python to provision: the `.python-version` pin, else `[project].requires-python`.
+
+    Passed to `uv venv --python` and `uv python install` before the workspace's
+    `pyproject.toml` is in the container, so they pick what `uv sync` would.
+    """
+    if python_version:
+        return python_version
+    return tomllib.loads(pyproject).get("project", {}).get("requires-python")
+
+
 def parse_required_version_from_pyproject(content: str) -> str | None:
     data = tomllib.loads(content)
     return data.get("tool", {}).get("uv", {}).get("required-version")

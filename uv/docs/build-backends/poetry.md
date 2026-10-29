@@ -19,7 +19,7 @@ these `[tool.poetry]` settings:
 - `[tool.poetry.build]` `script` (or the older `build = "build.py"`): the build script.
 
 Without `packages`, the module expects the
-[conventional layout](index.md#other-backends).
+[conventional layout](index.md#unknown-build-backends).
 
 !!! warning "Not supported"
     - Versions from plugins that read git, such as `poetry-dynamic-versioning`.

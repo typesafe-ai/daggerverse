@@ -22,10 +22,11 @@ everything in an order that caches well, so you don't assemble the build context
     ```mermaid
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
-      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + sync plan)</i>"]
+      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
       WS -->|install| C1["Container"]
+      WS -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
       B -->|with_local_dependencies / copy_venv| C2["Container"]
-      B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
+      B -->|venv| V
     ```
 
     - **`Uv`** holds the source tree it reads from the Dagger workspace (`ws`). Ask it
@@ -34,8 +35,8 @@ everything in an order that caches well, so you don't assemble the build context
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
       `install` everything in one call.
-    - **`UvWorkspaceBuild`** is an in-progress build: a container plus the resolved sync
-      plan. It exposes the individual pipeline steps so you can run your own steps
+    - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
+      environment ready, plus the resolved sync plan. It exposes the individual pipeline steps so you can run your own steps
       between them, and exports the result as a container or a [`UvVenv`](virtual-environments.md).
 
     The convenience methods (`audit`, `install`) cover the common cases. Use the
@@ -75,29 +76,30 @@ expensive work stays cached across builds:
 
 1. The module parses the workspace's `uv.lock` to find the **local** packages your target
    depends on, directly or transitively.
-2. **Remote** (third-party) dependencies are installed first. They change rarely, so
+2. The **Python environment** is prepared before `uv.lock` is copied in: a uv-managed
+   Python, or a `.venv` (see the warning below). It changes only with the Python version.
+3. **Remote** (third-party) dependencies are installed next. They change rarely, so
    this layer caches well. If the cache has grown past a configurable size,
    `uv cache prune --ci` runs afterwards.
-3. The needed **local** members are scaffolded as stubs (their `pyproject.toml`, empty
+4. The needed **local** members are scaffolded as stubs (their `pyproject.toml`, empty
    modules, and the [files their build backend reads](#supported-build-backends), such as
    the readme, license files, and version file) and installed with `uv sync`. `uv`
    installs workspace members as *editable* by default, so this step only records path
    links. It depends on the packages' metadata, not their code, and stays cached when
    only source changes.
-4. The real source is copied in **last**, on top of the stubs. The editable installs
+5. The real source is copied in **last**, on top of the stubs. The editable installs
    already point at these paths, so the code goes live without a re-sync, and a
    source-only change invalidates only this final layer. Symlinks in the copied
    source that point elsewhere in the source tree, such as modules shared from a
    sibling directory, are replaced with the content they point to.
 
-If you omit a package, the module mirrors a bare `uv sync` and installs the current
-package (the one declared at the workspace root). To install every member of the
-workspace instead, ask for all packages.
+!!! warning "Set `UV_PROJECT_ENVIRONMENT` to build venv-free images"
+    If your base ships a Python, point `UV_PROJECT_ENVIRONMENT` at its prefix:
 
-!!! note
-    By default the module installs into the system environment and creates no `.venv`.
-    Set `venv=True` to create one in the workspace root. For multi-stage builds, see
-    [virtual environments](./virtual-environments.md).
+    ```python
+    base = core().container().from_("python:3.13.7-slim").with_env_variable("UV_PROJECT_ENVIRONMENT", "/usr/local")
+    ctr = uv(ws).workspace(".").install(base_container=base)
+    ```
 
 ### Choosing a base image
 
@@ -119,7 +121,7 @@ the network.
 
 If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a directory there, the module mounts the cache volume at that path instead of the default.
 
-When the cache grows past 100 GiB, the module runs `uv cache prune --ci`. This is on by default.
+The module automatically runs `uv cache prune --ci` when the cache size exceeds a certain threshold (100 GiB by default).
 
 ## Supported build backends
 

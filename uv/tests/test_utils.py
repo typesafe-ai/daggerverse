@@ -11,6 +11,7 @@ from uv.utils import (
     parse_pyvenv_cfg,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
+    python_request,
     require_package_selection,
     resolve_specifier,
     selected_groups,
@@ -348,3 +349,14 @@ class TestResolveSpecifier:
 
     def test_no_lower_bound_falls_back_to_default(self):
         assert resolve_specifier("<1.0.0") == "0.11.19"
+
+
+class TestPythonRequest:
+    def test_python_version_pin_wins(self):
+        assert python_request("3.13.7", '[project]\nrequires-python = ">=3.12"\n') == "3.13.7"
+
+    def test_falls_back_to_requires_python(self):
+        assert python_request(None, '[project]\nrequires-python = ">=3.12"\n') == ">=3.12"
+
+    def test_none_without_either(self):
+        assert python_request(None, "[tool.uv.workspace]\n") is None

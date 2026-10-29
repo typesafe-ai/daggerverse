@@ -21,7 +21,7 @@ Applies to packages with `build-backend = "pdm.backend"`. The module reads these
   the version file.
 
 Without `includes` or `package-dir`, the module expects the
-[conventional layout](index.md#other-backends).
+[conventional layout](index.md#unknown-build-backends).
 
 !!! warning "Not supported"
     - [`source = "scm"`](https://backend.pdm-project.org/metadata/#read-from-scm-tag-supporting-git-and-hg)

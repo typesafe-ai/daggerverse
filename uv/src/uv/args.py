@@ -75,3 +75,19 @@ NoEditable: TypeAlias = Annotated[
         "`copy_venv`) without also carrying the workspace source."
     ),
 ]
+
+VenvRelocatable: TypeAlias = Annotated[
+    bool,
+    Doc(
+        "Create a relocatable `.venv` (`uv venv --relocatable`) before installing, even when the base "
+        "sets `UV_PROJECT_ENVIRONMENT`. Needed to copy the environment into another image (see `venv`)."
+    ),
+]
+
+ActivateVenv: TypeAlias = Annotated[
+    bool,
+    Doc(
+        "When the build uses a `.venv`, activate it in the container: set `VIRTUAL_ENV` and put its "
+        "`bin/` first on `PATH`, so a plain `python` runs the installed environment."
+    ),
+]
