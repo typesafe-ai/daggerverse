@@ -20,7 +20,7 @@ type ModuleTypes {
           function("", typeDef.withObject("Zizmor"))
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("ctr", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container with zizmor installed. Defaults to the official ghcr.io/zizmorcore/zizmor image.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("version", typeDef.withKind(TypeDefKind.STRING_KIND), description: "zizmor image tag (only used when ctr is not provided).", defaultValue: ("\"1.25.2\"" :: Dagger.JSON!))
+            .withArg("version", typeDef.withKind(TypeDefKind.STRING_KIND), description: "zizmor image tag (only used when ctr is not provided).", defaultValue: ("\"1.32.0\"" :: Dagger.JSON!))
             .withArg("fix_mode", typeDef.withEnum("FixMode", description: "Which fixes to apply."), description: "Which fixes `fix` applies.", defaultValue: ("\"SAFE\"" :: Dagger.JSON!))
             .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))
             .withArg("min_severity", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum severity to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
