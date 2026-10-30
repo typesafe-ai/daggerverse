@@ -2,9 +2,11 @@
 
 Dagger module for [zizmor](https://github.com/zizmorcore/zizmor), a static analyzer for GitHub Actions security issues.
 
-## Installation
+It exposes one generator, `fix` (`zizmor --fix`), over the workspace's `.github` directory.
+`dagger generate` applies its fixes, and `dagger check --generated` fails while it would
+change a file. `fix` also fails on findings zizmor can't fix.
 
-Install into your workspace to add `zizmor:lint` to `dagger check`:
+## Installation
 
 ```sh
 dagger install github.com/typesafe-ai/daggerverse/zizmor
@@ -12,20 +14,25 @@ dagger install github.com/typesafe-ai/daggerverse/zizmor
 
 ## Usage
 
-Lint workflows (defaults to `.github` at the workspace root):
+Fail when workflows have findings:
 
 ```sh
-dagger check zizmor
+dagger check --zizmor --generated
 ```
 
-With a GitHub token for online audits:
+Apply the fixes to the workspace:
 
 ```sh
-dagger check zizmor lint --github-token=env:GITHUB_TOKEN
+dagger generate --zizmor
 ```
 
-Auto-fix security issues and apply changes to the host:
+## Configuration
 
-```sh
-dagger call zizmor fix
+Generators run with their default arguments, so options are constructor settings in `dagger.toml`.
+String and enum settings are JSON, so they need inner quotes:
+
+```toml
+[modules.zizmor.settings]
+fixMode = '"ALL"'
+persona = '"pedantic"'
 ```

@@ -29,7 +29,6 @@ _check_core(NAME, CORE_DIGEST, _installed_core)
 
 from dagger_clients.core import (  # noqa: E402
     Changeset,
-    Check,
     Container,
     Directory,
     Secret,
@@ -54,7 +53,10 @@ class ZizmorFixMode(_Enum):
 
 
 class Zizmor(_Type):
-    """ Static analysis for GitHub Actions security.  """
+    """ Static analysis for GitHub Actions security.  `fix` is a
+    generator: `dagger generate` applies zizmor's fixes, and `dagger check
+    --generated` fails while it would change a file. It also fails on
+    findings zizmor can't fix.  """
 
     def ctr(self) -> Container:
         """Container with zizmor installed."""
@@ -62,50 +64,42 @@ class Zizmor(_Type):
         _ctx = self._select("ctr", _args)
         return Container(_ctx)
 
-    def fix(self, *, mode: ZizmorFixMode = ZizmorFixMode.SAFE, github_token: Secret | None = None, persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, extra_args: list[str] | None = None,) -> Changeset:
+    def fix(self) -> Changeset:
         """
-        Auto-fix GitHub Actions security issues found by zizmor.
+        Fix GitHub Actions security issues with `zizmor --fix`.
 
-        Returns a Changeset to apply to the host.
-
-        Parameters
-        ----------
-        mode:
-            Which fixes to apply.
-        github_token:
-            GitHub token for online audits. Without it, zizmor runs in offline
-            mode.
-        persona:
-            Sensitivity level: regular, pedantic, or auditor.
-        min_severity:
-            Minimum severity to report (e.g. low, medium, high).
-        min_confidence:
-            Minimum confidence to report (e.g. low, medium, high).
-        extra_args:
-            Additional arguments to pass to zizmor.
+        Fails when findings zizmor can't fix remain.
         """
-        if not (isinstance(mode, ZizmorFixMode)):
-            raise _type_error("Zizmor.fix", "mode", mode, "ZizmorFixMode")
-        if not (github_token is None or isinstance(github_token, Secret)):
-            raise _type_error("Zizmor.fix", "github_token", github_token, "Secret | None")
-        if not (isinstance(persona, str)):
-            raise _type_error("Zizmor.fix", "persona", persona, "str")
-        if not (min_severity is None or isinstance(min_severity, str)):
-            raise _type_error("Zizmor.fix", "min_severity", min_severity, "str | None")
-        if not (min_confidence is None or isinstance(min_confidence, str)):
-            raise _type_error("Zizmor.fix", "min_confidence", min_confidence, "str | None")
-        if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
-            raise _type_error("Zizmor.fix", "extra_args", extra_args, "list[str] | None")
-        _args = [
-            _Arg("mode", mode, ZizmorFixMode.SAFE),
-            _Arg("githubToken", github_token, None),
-            _Arg("persona", persona, 'regular'),
-            _Arg("minSeverity", min_severity, None),
-            _Arg("minConfidence", min_confidence, None),
-            _Arg("extraArgs", extra_args, None),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("fix", _args)
         return Changeset(_ctx)
+
+    async def fix_mode(self) -> ZizmorFixMode:
+        """Which fixes `fix` applies.
+
+        Returns
+        -------
+        ZizmorFixMode
+             Which fixes to apply.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("fixMode", _args)
+        return await _ctx.execute(ZizmorFixMode)
+
+    def github_token(self) -> Secret:
+        """GitHub token for online audits. Without it, zizmor runs in offline
+        mode.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("githubToken", _args)
+        return Secret(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this Zizmor.
@@ -135,61 +129,85 @@ class Zizmor(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def lint(self, *, github_token: Secret | None = None, format: str = 'plain', persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, extra_args: list[str] | None = None,) -> Check:
-        """
-        Run zizmor on GitHub Actions workflow files.
+    async def min_confidence(self) -> str | None:
+        """Minimum confidence to report (e.g. low, medium, high).
 
-        Exits non-zero if findings above the configured severity are found.
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
 
-        Parameters
-        ----------
-        github_token:
-            GitHub token for online audits. Without it, zizmor runs in offline
-            mode.
-        format:
-            Output format: plain, json, sarif, or github.
-        persona:
-            Sensitivity level: regular, pedantic, or auditor.
-        min_severity:
-            Minimum severity to report (e.g. low, medium, high).
-        min_confidence:
-            Minimum confidence to report (e.g. low, medium, high).
-        extra_args:
-            Additional arguments to pass to zizmor.
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
         """
-        if not (github_token is None or isinstance(github_token, Secret)):
-            raise _type_error("Zizmor.lint", "github_token", github_token, "Secret | None")
-        if not (isinstance(format, str)):
-            raise _type_error("Zizmor.lint", "format", format, "str")
-        if not (isinstance(persona, str)):
-            raise _type_error("Zizmor.lint", "persona", persona, "str")
-        if not (min_severity is None or isinstance(min_severity, str)):
-            raise _type_error("Zizmor.lint", "min_severity", min_severity, "str | None")
-        if not (min_confidence is None or isinstance(min_confidence, str)):
-            raise _type_error("Zizmor.lint", "min_confidence", min_confidence, "str | None")
-        if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
-            raise _type_error("Zizmor.lint", "extra_args", extra_args, "list[str] | None")
-        _args = [
-            _Arg("githubToken", github_token, None),
-            _Arg("format", format, 'plain'),
-            _Arg("persona", persona, 'regular'),
-            _Arg("minSeverity", min_severity, None),
-            _Arg("minConfidence", min_confidence, None),
-            _Arg("extraArgs", extra_args, None),
-        ]
-        _ctx = self._select("lint", _args)
-        return Check(_ctx)
+        _args: list[_Arg] = []
+        _ctx = self._select("minConfidence", _args)
+        return await _ctx.execute(str | None)
+
+    async def min_severity(self) -> str | None:
+        """Minimum severity to report (e.g. low, medium, high).
+
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("minSeverity", _args)
+        return await _ctx.execute(str | None)
+
+    async def persona(self) -> str:
+        """Sensitivity level: regular, pedantic, or auditor.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("persona", _args)
+        return await _ctx.execute(str)
 
     def source(self) -> Directory:
-        """The workspace's `.github` directory containing Actions workflows."""
+        """The workspace's `.github` directory containing Actions workflows, less
+        `exclude` and gitignored files.
+        """
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
 
-def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.25.2', session: _Session | None = None,) -> Zizmor:
+def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.25.2', fix_mode: ZizmorFixMode = ZizmorFixMode.SAFE, persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, github_token: Secret | None = None, exclude: list[str] | None = None, session: _Session | None = None,) -> Zizmor:
     """
     Static analysis for GitHub Actions security.
+
+    `fix` is a generator: `dagger generate` applies zizmor's fixes, and
+    `dagger check --generated` fails while it would change a file. It also
+    fails on findings zizmor can't fix.
 
     Parameters
     ----------
@@ -201,6 +219,20 @@ def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.25.
         ghcr.io/zizmorcore/zizmor image.
     version:
         zizmor image tag (only used when ctr is not provided).
+    fix_mode:
+        Which fixes `fix` applies.
+    persona:
+        Sensitivity level: regular, pedantic, or auditor.
+    min_severity:
+        Minimum severity to report (e.g. low, medium, high).
+    min_confidence:
+        Minimum confidence to report (e.g. low, medium, high).
+    github_token:
+        GitHub token for online audits. Without it, zizmor runs in offline
+        mode.
+    exclude:
+        Glob patterns of workspace paths that are not uploaded to the
+        Dagger engine.
     """
     if not (isinstance(ws, Workspace)):
         raise _type_error("zizmor", "ws", ws, "Workspace")
@@ -208,10 +240,28 @@ def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.25.
         raise _type_error("zizmor", "ctr", ctr, "Container | None")
     if not (isinstance(version, str)):
         raise _type_error("zizmor", "version", version, "str")
+    if not (isinstance(fix_mode, ZizmorFixMode)):
+        raise _type_error("zizmor", "fix_mode", fix_mode, "ZizmorFixMode")
+    if not (isinstance(persona, str)):
+        raise _type_error("zizmor", "persona", persona, "str")
+    if not (min_severity is None or isinstance(min_severity, str)):
+        raise _type_error("zizmor", "min_severity", min_severity, "str | None")
+    if not (min_confidence is None or isinstance(min_confidence, str)):
+        raise _type_error("zizmor", "min_confidence", min_confidence, "str | None")
+    if not (github_token is None or isinstance(github_token, Secret)):
+        raise _type_error("zizmor", "github_token", github_token, "Secret | None")
+    if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
+        raise _type_error("zizmor", "exclude", exclude, "list[str]")
     _args = [
         _Arg("ws", ws),
         _Arg("ctr", ctr, None),
         _Arg("version", version, '1.25.2'),
+        _Arg("fixMode", fix_mode, ZizmorFixMode.SAFE),
+        _Arg("persona", persona, 'regular'),
+        _Arg("minSeverity", min_severity, None),
+        _Arg("minConfidence", min_confidence, None),
+        _Arg("githubToken", github_token, None),
+        _Arg("exclude", [] if exclude is None else exclude, []),
     ]
     return _client_root(Zizmor, _TARGET, "zizmor", _args, session=session)
 

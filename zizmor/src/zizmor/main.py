@@ -1,10 +1,11 @@
 import enum
-import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Self
 
-from dagger import Doc, check, enum_type, field, function, object_type
+from dagger import Doc, enum_type, field, function, generate, object_type
 from dagger_clients.core import Changeset, Container, Directory, Secret, Workspace, core
+
+from zizmor.args import SOURCE_EXCLUDE, Exclude
 
 
 @enum_type
@@ -36,7 +37,12 @@ _DEFAULT_IMAGE, _DEFAULT_VERSION = pinned_image("zizmor").rsplit(":", 1)
 
 @object_type
 class Zizmor:
-    """Static analysis for GitHub Actions security."""
+    """Static analysis for GitHub Actions security.
+
+    `fix` is a generator: `dagger generate` applies zizmor's fixes, and
+    `dagger check --generated` fails while it would change a file. It also
+    fails on findings zizmor can't fix.
+    """
 
     ctr: Annotated[
         Container,
@@ -45,7 +51,16 @@ class Zizmor:
 
     source: Annotated[
         Directory,
-        Doc("The workspace's `.github` directory containing Actions workflows."),
+        Doc("The workspace's `.github` directory containing Actions workflows, less `exclude` and gitignored files."),
+    ] = field()
+
+    fix_mode: Annotated[FixMode, Doc("Which fixes `fix` applies.")] = field()
+    persona: Annotated[str, Doc("Sensitivity level: regular, pedantic, or auditor.")] = field()
+    min_severity: Annotated[str | None, Doc("Minimum severity to report (e.g. low, medium, high).")] = field()
+    min_confidence: Annotated[str | None, Doc("Minimum confidence to report (e.g. low, medium, high).")] = field()
+    github_token: Annotated[
+        Secret | None,
+        Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
     ] = field()
 
     @classmethod
@@ -60,133 +75,63 @@ class Zizmor:
             str,
             Doc("zizmor image tag (only used when ctr is not provided)."),
         ] = _DEFAULT_VERSION,
-    ) -> "Zizmor":
+        fix_mode: Annotated[FixMode, Doc("Which fixes `fix` applies.")] = FixMode.SAFE,
+        persona: Annotated[str, Doc("Sensitivity level: regular, pedantic, or auditor.")] = "regular",
+        min_severity: Annotated[str | None, Doc("Minimum severity to report (e.g. low, medium, high).")] = None,
+        min_confidence: Annotated[str | None, Doc("Minimum confidence to report (e.g. low, medium, high).")] = None,
+        github_token: Annotated[
+            Secret | None,
+            Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
+        ] = None,
+        exclude: Exclude = SOURCE_EXCLUDE,
+    ) -> Self:
         if ctr is None:
             ctr = core().container().from_(f"{_DEFAULT_IMAGE}:{version}")
-        return cls(ctr=ctr, source=ws.directory("/.github"))
+        # The workspace gets a new cache key on every run, and so does everything
+        # loaded from it. Re-loading the source as a workspace of its own keys it
+        # by its contents, so zizmor reruns only when a file changes.
+        source = (
+            ws.directory("/", include=[".github/**"], exclude=exclude, gitignore=True)
+            .as_workspace()
+            .directory("/.github")
+        )
+        return cls(
+            ctr=ctr,
+            source=source,
+            fix_mode=fix_mode,
+            persona=persona,
+            min_severity=min_severity,
+            min_confidence=min_confidence,
+            github_token=github_token,
+        )
 
-    def _container(self, github_token: Secret | None = None) -> Container:
-        ctr = self.ctr.with_workdir("/work").with_directory("/work/.github", self.source)
-
-        if github_token is not None:
-            ctr = ctr.with_secret_variable("GH_TOKEN", github_token)
-        else:
-            ctr = ctr.with_env_variable("ZIZMOR_OFFLINE", "true")
-
-        return ctr
-
-    @staticmethod
-    def _args(
-        *,
-        fix: FixMode | None,
-        persona: str,
-        format: str,
-        min_severity: str | None,
-        min_confidence: str | None,
-        extra_args: list[str] | None,
-    ) -> list[str]:
-        args = ["zizmor", f"--format={format}", f"--persona={persona}"]
-        if fix is not None:
-            args.extend([f"--fix={fix.value}", "--no-exit-codes"])
-        if min_severity is not None:
-            args.append(f"--min-severity={min_severity}")
-        if min_confidence is not None:
-            args.append(f"--min-confidence={min_confidence}")
-        if extra_args:
-            args.extend(extra_args)
+    def _args(self, *extra: str) -> list[str]:
+        args = ["zizmor", "--format=plain", f"--persona={self.persona}", *extra]
+        if self.min_severity is not None:
+            args.append(f"--min-severity={self.min_severity}")
+        if self.min_confidence is not None:
+            args.append(f"--min-confidence={self.min_confidence}")
         args.append(".")
         return args
 
-    @check
+    @generate
     @function
-    async def lint(
-        self,
-        github_token: Annotated[
-            Secret | None,
-            Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
-        ] = None,
-        format: Annotated[
-            str,
-            Doc("Output format: plain, json, sarif, or github."),
-        ] = "plain",
-        persona: Annotated[
-            str,
-            Doc("Sensitivity level: regular, pedantic, or auditor."),
-        ] = "regular",
-        min_severity: Annotated[
-            str | None,
-            Doc("Minimum severity to report (e.g. low, medium, high)."),
-        ] = None,
-        min_confidence: Annotated[
-            str | None,
-            Doc("Minimum confidence to report (e.g. low, medium, high)."),
-        ] = None,
-        extra_args: Annotated[
-            list[str] | None,
-            Doc("Additional arguments to pass to zizmor."),
-        ] = None,
-    ) -> None:
-        """Run zizmor on GitHub Actions workflow files.
+    def fix(self) -> Changeset:
+        """Fix GitHub Actions security issues with `zizmor --fix`.
 
-        Exits non-zero if findings above the configured severity are found.
+        Fails when findings zizmor can't fix remain.
         """
-        ctr = self._container(github_token)
-        args = self._args(
-            fix=None,
-            persona=persona,
-            format=format,
-            min_severity=min_severity,
-            min_confidence=min_confidence,
-            extra_args=extra_args,
+        ctr = self.ctr.with_workdir("/work").with_directory("/work/.github", self.source)
+        if self.github_token is not None:
+            ctr = ctr.with_secret_variable("GH_TOKEN", self.github_token)
+        else:
+            ctr = ctr.with_env_variable("ZIZMOR_OFFLINE", "true")
+        fixed = (
+            ctr.with_exec(self._args(f"--fix={self.fix_mode.value}", "--no-exit-codes"))
+            # Audit the fixed workflows: only the findings left fail.
+            .with_exec(self._args())
+            .directory("/work/.github")
         )
-        await ctr.with_exec(args)
-
-    @function
-    async def fix(
-        self,
-        mode: Annotated[
-            FixMode,
-            Doc("Which fixes to apply."),
-        ] = FixMode.SAFE,
-        github_token: Annotated[
-            Secret | None,
-            Doc("GitHub token for online audits. Without it, zizmor runs in offline mode."),
-        ] = None,
-        persona: Annotated[
-            str,
-            Doc("Sensitivity level: regular, pedantic, or auditor."),
-        ] = "regular",
-        min_severity: Annotated[
-            str | None,
-            Doc("Minimum severity to report (e.g. low, medium, high)."),
-        ] = None,
-        min_confidence: Annotated[
-            str | None,
-            Doc("Minimum confidence to report (e.g. low, medium, high)."),
-        ] = None,
-        extra_args: Annotated[
-            list[str] | None,
-            Doc("Additional arguments to pass to zizmor."),
-        ] = None,
-    ) -> Changeset:
-        """Auto-fix GitHub Actions security issues found by zizmor.
-
-        Returns a Changeset to apply to the host.
-        """
-        ctr = self._container(github_token)
-        args = self._args(
-            fix=mode,
-            persona=persona,
-            format="plain",
-            min_severity=min_severity,
-            min_confidence=min_confidence,
-            extra_args=extra_args,
-        )
-        result = ctr.with_exec(args)
-        output = await result.combined_output()
-        if output.strip():
-            sys.stderr.write(output)
-        fixed = result.directory("/work/.github")
         before = core().directory().with_directory(".github", self.source)
         after = core().directory().with_directory(".github", fixed)
         return after.changes(before)

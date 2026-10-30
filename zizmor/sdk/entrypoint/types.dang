@@ -3,35 +3,30 @@
 type ModuleTypes {
   pub all: [TypeDef!]! {
     [
-      typeDef.withObject("Zizmor", description: "Static analysis for GitHub Actions security.")
+      typeDef.withObject("Zizmor", description: "Static analysis for GitHub Actions security.\n\n`fix` is a generator: `dagger generate` applies zizmor's fixes, and\n`dagger check --generated` fails while it would change a file. It also\nfails on findings zizmor can't fix.")
         .withField("ctr", typeDef.withObject("Container"), description: "Container with zizmor installed.")
-        .withField("source", typeDef.withObject("Directory"), description: "The workspace's `.github` directory containing Actions workflows.")
+        .withField("source", typeDef.withObject("Directory"), description: "The workspace's `.github` directory containing Actions workflows, less `exclude` and gitignored files.")
+        .withField("fix_mode", typeDef.withEnum("FixMode", description: "Which fixes to apply."), description: "Which fixes `fix` applies.")
+        .withField("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.")
+        .withField("min_severity", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Minimum severity to report (e.g. low, medium, high).")
+        .withField("min_confidence", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND), description: "Minimum confidence to report (e.g. low, medium, high).")
+        .withField("github_token", typeDef.withOptional(true).withObject("Secret"), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.")
         .withFunction(
           function("fix", typeDef.withObject("Changeset"))
-            .withDescription("Auto-fix GitHub Actions security issues found by zizmor.\n\nReturns a Changeset to apply to the host.")
-            .withArg("mode", typeDef.withEnum("FixMode", description: "Which fixes to apply."), description: "Which fixes to apply.", defaultValue: ("\"SAFE\"" :: Dagger.JSON!))
-            .withArg("github_token", typeDef.withOptional(true).withObject("Secret").withOptional(true), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))
-            .withArg("min_severity", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum severity to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("min_confidence", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum confidence to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("extra_args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to zizmor.", defaultValue: ("null" :: Dagger.JSON!))
-        )
-        .withFunction(
-          function("lint", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run zizmor on GitHub Actions workflow files.\n\nExits non-zero if findings above the configured severity are found.")
-            .withCheck
-            .withArg("github_token", typeDef.withOptional(true).withObject("Secret").withOptional(true), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("format", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Output format: plain, json, sarif, or github.", defaultValue: ("\"plain\"" :: Dagger.JSON!))
-            .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))
-            .withArg("min_severity", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum severity to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("min_confidence", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum confidence to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("extra_args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to zizmor.", defaultValue: ("null" :: Dagger.JSON!))
+            .withDescription("Fix GitHub Actions security issues with `zizmor --fix`.\n\nFails when findings zizmor can't fix remain.")
+            .withGenerator
         )
         .withConstructor(
           function("", typeDef.withObject("Zizmor"))
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("ctr", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container with zizmor installed. Defaults to the official ghcr.io/zizmorcore/zizmor image.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("version", typeDef.withKind(TypeDefKind.STRING_KIND), description: "zizmor image tag (only used when ctr is not provided).", defaultValue: ("\"1.25.2\"" :: Dagger.JSON!))
+            .withArg("fix_mode", typeDef.withEnum("FixMode", description: "Which fixes to apply."), description: "Which fixes `fix` applies.", defaultValue: ("\"SAFE\"" :: Dagger.JSON!))
+            .withArg("persona", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Sensitivity level: regular, pedantic, or auditor.", defaultValue: ("\"regular\"" :: Dagger.JSON!))
+            .withArg("min_severity", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum severity to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("min_confidence", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Minimum confidence to report (e.g. low, medium, high).", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("github_token", typeDef.withOptional(true).withObject("Secret").withOptional(true), description: "GitHub token for online audits. Without it, zizmor runs in offline mode.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of workspace paths that are not uploaded to the Dagger engine.", defaultValue: ("[]" :: Dagger.JSON!))
         ),
       typeDef.withEnum("FixMode", description: "Which fixes to apply.")
         .withEnumMember("SAFE", value: "safe", description: "Only apply fixes that are guaranteed to preserve workflow behavior.")
