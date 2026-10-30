@@ -40,13 +40,9 @@ def _match_reachable(
 def handlers_by_backend(backends: list[str]) -> dict[str, int]:
     """The index of each backend's handler in `backends`, the backends the handlers handle.
 
-    Raises when two handlers handle the same backend: one handler configures every
-    package that uses it.
+    When several handlers handle the same backend, the last one wins, so a
+    handler added later overrides an earlier one.
     """
-    duplicates = sorted({backend for backend in backends if backends.count(backend) > 1})
-    if duplicates:
-        msg = f"more than one build backend handler for {', '.join(duplicates)}; pass one per backend."
-        raise ValueError(msg)
     return {backend: i for i, backend in enumerate(backends)}
 
 

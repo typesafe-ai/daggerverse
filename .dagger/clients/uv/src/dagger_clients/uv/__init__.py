@@ -364,6 +364,9 @@ class Uv(_Type):
     `workspace` to grab a single workspace by path or `workspaces` to get
     them all, `build_backend_handlers` for handlers that configure the
     built-in backends, and `with_build_backend_handlers` to apply them.
+    Each workspace it hands out is loaded from just the files its builds
+    read, as a workspace of its own. Dagger caches that by its contents,
+    so the workspace's builds rerun only when one of those files changes.
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).
     """
 
@@ -413,10 +416,10 @@ class Uv(_Type):
         These workspaces with `handlers` added to their build backend
         handlers.
 
-        Every workspace's `inputs`, `build`, `install` and `venv` use them. A
-        handler configures every package that uses its backend, so pass one
-        per
-        backend.
+        Every workspace `workspace` and `workspaces` hand out loads the files
+        they read, and its `build`, `install` and `venv` use them. When
+        several
+        handle the same backend, the last one added configures its packages.
 
         Parameters
         ----------
@@ -2445,6 +2448,102 @@ class UvPoetryCoreHandler(_Type):
         return Container(_ctx)
 
 
+class UvProjectLayout(_Type):
+    """ The patterns loading a project's files and those of its local
+    dependencies.  """
+
+    async def exclude(self) -> list[str]:
+        """Glob patterns the project's files leave out
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("exclude", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvProjectLayout.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def include(self) -> list[str]:
+        """Glob patterns loading the project's files
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("include", _args)
+        return await _ctx.execute(list[str])
+
+    async def path(self) -> str:
+        """Project root, relative to the workspace root
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("path", _args)
+        return await _ctx.execute(str)
+
+
 class UvProjectSource(_Type):
     """ A project's files: the project and its local dependencies, at
     workspace-root-relative paths.  """
@@ -3097,6 +3196,171 @@ class UvWorkspaceBuild(_Type):
 
 
 
+class UvWorkspaceLayout(_Type):
+    """ The patterns loading a uv workspace's files, as the `pyproject`
+    module discovers them.  """
+
+    async def exclude(self) -> list[str]:
+        """Glob patterns `include` leaves out
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("exclude", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this UvWorkspaceLayout.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def include(self) -> list[str]:
+        """Glob patterns loading the members and their path dependencies
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("include", _args)
+        return await _ctx.execute(list[str])
+
+    async def manifest_exclude(self) -> list[str]:
+        """Glob patterns `manifest_include` leaves out
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("manifestExclude", _args)
+        return await _ctx.execute(list[str])
+
+    async def manifest_include(self) -> list[str]:
+        """Glob patterns loading what resolving the workspace reads
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("manifestInclude", _args)
+        return await _ctx.execute(list[str])
+
+    async def path(self) -> str:
+        """Workspace root path (holding uv.lock), relative to the workspace root
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("path", _args)
+        return await _ctx.execute(str)
+
+    async def projects(self) -> list[UvProjectLayout]:
+        """Each member's and local dependency's patterns"""
+        _args: list[_Arg] = []
+        _ctx = self._select("projects", _args)
+        return await _ctx.execute_object_list(UvProjectLayout)
+
+    async def src_paths(self) -> list[str]:
+        """The entries directly under the projects' `src/`
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("srcPaths", _args)
+        return await _ctx.execute(list[str])
+
+
 class UvWorkspaceSource(_Type):
     """ A self-contained uv workspace: the source files rooted at a
     `uv.lock`.  Carries the source tree and the workspace's path within it
@@ -3319,11 +3583,10 @@ class UvWorkspaceSource(_Type):
         Every file `build`, `install` and `venv` read, at workspace-root-
         relative paths.
 
-        A module handing its workspace to `uv` can load just these files
-        (merged
-        with its own) and pass them on as a workspace. A workspace made from a
-        directory is cached by its contents, so builds rerun only when one of
-        these files changes.
+        `Uv.workspace` loads the workspace from just these files. A module
+        that
+        reads more of the workspace can merge its own files into them and hand
+        the result on with `as_workspace()`.
         """
         _args: list[_Arg] = []
         _ctx = self._select("inputs", _args)
@@ -3780,6 +4043,11 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, session: _Session | N
     backends, and
     `with_build_backend_handlers` to apply them.
 
+    Each workspace it hands out is loaded from just the files its builds
+    read,
+    as a workspace of its own. Dagger caches that by its contents, so the
+    workspace's builds rerun only when one of those files changes.
+
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).
 
     Parameters
@@ -3816,10 +4084,12 @@ __all__ = [
     "UvPackageSource",
     "UvPdmBackendHandler",
     "UvPoetryCoreHandler",
+    "UvProjectLayout",
     "UvProjectSource",
     "UvSyncPlan",
     "UvVenv",
     "UvWorkspaceBuild",
+    "UvWorkspaceLayout",
     "UvWorkspaceSource",
     "UvWorkspaces",
     "uv",

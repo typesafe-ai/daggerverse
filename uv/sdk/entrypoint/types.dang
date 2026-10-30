@@ -459,7 +459,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("inputs", typeDef.withObject("Directory"))
-            .withDescription("Every file `build`, `install` and `venv` read, at workspace-root-relative paths.\n\nA module handing its workspace to `uv` can load just these files (merged\nwith its own) and pass them on as a workspace. A workspace made from a\ndirectory is cached by its contents, so builds rerun only when one of\nthese files changes.")
+            .withDescription("Every file `build`, `install` and `venv` read, at workspace-root-relative paths.\n\n`Uv.workspace` loads the workspace from just these files. A module that\nreads more of the workspace can merge its own files into them and hand\nthe result on with `as_workspace()`.")
         )
         .withFunction(
           function("install", typeDef.withObject("Container"))
@@ -510,6 +510,18 @@ type ModuleTypes {
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
             .withArg("auto_install_uv", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.", defaultValue: ("true" :: Dagger.JSON!))
         ),
+      typeDef.withObject("UvProjectLayout", description: "The patterns loading a project's files and those of its local dependencies.")
+        .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Project root, relative to the workspace root")
+        .withField("include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns loading the project's files")
+        .withField("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns the project's files leave out"),
+      typeDef.withObject("UvWorkspaceLayout", description: "The patterns loading a uv workspace's files, as the `pyproject` module discovers them.")
+        .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path (holding uv.lock), relative to the workspace root")
+        .withField("include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns loading the members and their path dependencies")
+        .withField("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `include` leaves out")
+        .withField("manifest_include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns loading what resolving the workspace reads")
+        .withField("manifest_exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `manifest_include` leaves out")
+        .withField("projects", typeDef.withListOf(typeDef.withObject("UvProjectLayout")), description: "Each member's and local dependency's patterns")
+        .withField("src_paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The entries directly under the projects' `src/`"),
       typeDef.withObject("UvWorkspaces", description: "Every uv workspace in the source tree (one per uv.lock), keyed by its path.\n\n`audit` runs once per selected workspace, so each workspace is its own check\nthat can be selected or skipped on its own.")
         .withCollection
         .withField("paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root.")
@@ -520,14 +532,14 @@ type ModuleTypes {
             .withDescription("The uv workspace rooted at `path`.")
             .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Path to the uv workspace root (holding uv.lock and pyproject.toml), relative to the workspace root.")
         ),
-      typeDef.withObject("Uv", description: "Entrypoint for the `uv` module.\n\nHands out one `UvWorkspaceSource` per uv workspace, as the `pyproject`\nmodule discovers them.\nUse `workspace` to grab a single workspace by path or `workspaces` to get them all,\n`build_backend_handlers` for handlers that configure the built-in backends, and\n`with_build_backend_handlers` to apply them.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).")
+      typeDef.withObject("Uv", description: "Entrypoint for the `uv` module.\n\nHands out one `UvWorkspaceSource` per uv workspace, as the `pyproject`\nmodule discovers them.\nUse `workspace` to grab a single workspace by path or `workspaces` to get them all,\n`build_backend_handlers` for handlers that configure the built-in backends, and\n`with_build_backend_handlers` to apply them.\n\nEach workspace it hands out is loaded from just the files its builds read,\nas a workspace of its own. Dagger caches that by its contents, so the\nworkspace's builds rerun only when one of those files changes.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/).")
         .withFunction(
           function("build_backend_handlers", typeDef.withObject("BuildBackendHandlers"))
             .withDescription("Handlers for the module's built-in build backends, to configure them for some packages.\n\nPass them to `with_build_backend_handlers`, e.g. a maturin handler with\nthe crates a package's Cargo workspace keeps above it.")
         )
         .withFunction(
           function("with_build_backend_handlers", typeDef.withObject("Uv"))
-            .withDescription("These workspaces with `handlers` added to their build backend handlers.\n\nEvery workspace's `inputs`, `build`, `install` and `venv` use them. A\nhandler configures every package that uses its backend, so pass one per\nbackend.")
+            .withDescription("These workspaces with `handlers` added to their build backend handlers.\n\nEvery workspace `workspace` and `workspaces` hand out loads the files\nthey read, and its `build`, `install` and `venv` use them. When several\nhandle the same backend, the last one added configures its packages.")
             .withArg("handlers", typeDef.withListOf(typeDef.withInterface("BuildBackendHandler")), description: "Handlers for the local packages' build backends: from `build_backend_handlers()`, or another module's `BuildBackendHandler`. They take precedence over the module's own support for their backends.")
         )
         .withFunction(

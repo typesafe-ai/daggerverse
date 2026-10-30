@@ -249,7 +249,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_workspace_inputs", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("A workspace loaded from `inputs` holds only what a build reads, and builds the same.")
+            .withDescription("A workspace is loaded from just what its builds read, the handlers' build inputs included.")
         )
         .withFunction(
           function("uv_workspace_layer_cache", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

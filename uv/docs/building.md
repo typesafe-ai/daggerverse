@@ -125,17 +125,15 @@ The module automatically runs `uv cache prune --ci` when the cache size exceeds 
 
 A workspace's cache key depends on where it comes from: the current workspace
 gets a new one on every local run (and every commit remotely), while one made
-with `directory.as_workspace()` is keyed by the directory's contents. A module
-that hands its workspace to `uv` can load just the files a build reads and pass
-those on, so its builds stay cached until one of them changes:
+with `directory.as_workspace()` is keyed by the directory's contents. So
+`workspace` and `workspaces` load each uv workspace from a workspace made of
+just the files its builds read: manifests, members, their path dependencies,
+and the build backend handlers' build inputs. Its builds stay cached until one
+of those files changes.
 
-```python
-inputs = uv(ws).with_build_backend_handlers([maturin]).workspace(".").inputs()
-ctr = uv(inputs.as_workspace()).with_build_backend_handlers([maturin]).workspace(".").install()
-```
-
-Merge your own files into `inputs` (`inputs.with_directory(".", ...)`) before
-passing it on when your module reads more of the workspace.
+A module that reads more of the workspace than `uv` does can merge its own
+files into `inputs()` and hand the result on with `as_workspace()`, keeping its
+own functions cached the same way.
 
 ## Supported build backends
 

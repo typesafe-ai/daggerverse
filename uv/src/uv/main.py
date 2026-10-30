@@ -10,13 +10,13 @@ from dagger_clients.pyproject import pyproject
 from uv.args import WorkspacePath
 from uv.workspace import UvWorkspaceSource
 from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendHandlers
-from uv.workspace.plan import ProjectSource
+from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
 
 # A uv workspace is a directory holding a uv.lock.
 _WORKSPACE_MARKERS = ["uv.lock"]
 
 
-def _lookup(items: list[UvWorkspaceSource], path: str) -> UvWorkspaceSource:
+def _lookup[T: (UvWorkspaceSource, UvWorkspaceLayout)](items: list[T], path: str) -> T:
     for item in items:
         if item.path == path:
             return item
@@ -62,9 +62,16 @@ class Uv:
     `build_backend_handlers` for handlers that configure the built-in backends, and
     `with_build_backend_handlers` to apply them.
 
+    Each workspace it hands out is loaded from just the files its builds read,
+    as a workspace of its own. Dagger caches that by its contents, so the
+    workspace's builds rerun only when one of those files changes.
+
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""
 
-    items: list[UvWorkspaceSource]
+    # Not `field()`s: Dagger can't expose a `Workspace` as one, and the rest is internal.
+    ws: Workspace | None = None
+    layouts: list[UvWorkspaceLayout] = dataclasses.field(default_factory=list)
+    handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
 
     @classmethod
     async def create(
@@ -78,14 +85,13 @@ class Uv:
         discovered = pyproject(ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
         found, projects = await asyncio.gather(discovered.workspaces().list_(), discovered.projects().list_())
 
-        # Read the patterns `pyproject` computed and build the directories here: each
-        # `Workspace.directory` is lazy, so nothing loads until a build reads it, and
-        # no call goes back to the `pyproject` module per workspace or project.
-        async def project_source(project) -> ProjectSource:
+        # Keep only the patterns `pyproject` computed: `workspace` loads each
+        # workspace from them, so no call goes back to the `pyproject` module.
+        async def project_layout(project) -> UvProjectLayout:
             path, include, exclude = await asyncio.gather(project.path(), project.include(), project.exclude())
-            return ProjectSource(path=path, source=ws.directory("/", include=include, exclude=exclude, gitignore=True))
+            return UvProjectLayout(path=path, include=include, exclude=exclude)
 
-        async def workspace_source(workspace) -> UvWorkspaceSource:
+        async def workspace_layout(workspace) -> UvWorkspaceLayout:
             path, members, dependencies, include, exclude, manifest_include, manifest_exclude = await asyncio.gather(
                 workspace.path(),
                 workspace.members(),
@@ -96,20 +102,32 @@ class Uv:
                 workspace.manifest_exclude(),
             )
             roots = [*members, *dependencies]
-            return UvWorkspaceSource(
+            return UvWorkspaceLayout(
                 path=path,
-                source=ws.directory("/", include=include, exclude=exclude, gitignore=True),
-                manifests=ws.directory("/", include=manifest_include, exclude=manifest_exclude),
-                projects=[sources[root] for root in roots if root in sources],
+                include=include,
+                exclude=exclude,
+                manifest_include=manifest_include,
+                manifest_exclude=manifest_exclude,
+                projects=[layouts[root] for root in roots if root in layouts],
                 # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.
                 src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
-                ws=ws,
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.
         src_paths = [posixpath.normpath(path) for path in await ws.glob("**/src/*")]
-        sources = {source.path: source for source in await asyncio.gather(*(project_source(p) for p in projects))}
-        return cls(items=list(await asyncio.gather(*(workspace_source(w) for w in found))))
+        layouts = {layout.path: layout for layout in await asyncio.gather(*(project_layout(p) for p in projects))}
+        return cls(ws=ws, layouts=list(await asyncio.gather(*(workspace_layout(w) for w in found))))
+
+    async def _load(self, layout: UvWorkspaceLayout) -> UvWorkspaceSource:
+        """The workspace at `layout`, loaded from a workspace of just the files its builds read.
+
+        The workspace `uv()` was given gets a new cache key on every run, and so
+        does everything loaded from it. One made from a directory is keyed by its
+        contents, so loading the workspace from it keeps its builds cached.
+        """
+        assert self.ws is not None
+        inputs = await layout.load(self.ws, self.handlers).inputs()
+        return layout.load(inputs.as_workspace(), self.handlers)
 
     @function
     def build_backend_handlers(self) -> BuildBackendHandlers:
@@ -134,28 +152,23 @@ class Uv:
     ) -> Self:
         """These workspaces with `handlers` added to their build backend handlers.
 
-        Every workspace's `inputs`, `build`, `install` and `venv` use them. A
-        handler configures every package that uses its backend, so pass one per
-        backend.
+        Every workspace `workspace` and `workspaces` hand out loads the files
+        they read, and its `build`, `install` and `venv` use them. When several
+        handle the same backend, the last one added configures its packages.
         """
-        return dataclasses.replace(
-            self,
-            items=[
-                dataclasses.replace(item, build_backend_handlers=[*item.build_backend_handlers, *handlers])
-                for item in self.items
-            ],
-        )
+        return dataclasses.replace(self, handlers=[*self.handlers, *handlers])
 
     @function
-    def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
+    async def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """A single uv workspace at `path`, relative to the workspace root.
 
         The returned `UvWorkspaceSource` can `audit` its locked dependencies or
         `build` a minimal container for a package.
         """
-        return _lookup(self.items, path)
+        return await self._load(_lookup(self.layouts, path))
 
     @function
-    def workspaces(self) -> UvWorkspaces:
+    async def workspaces(self) -> UvWorkspaces:
         """Every uv workspace in the source tree (one per uv.lock), less those matching `exclude`."""
-        return UvWorkspaces(paths=[item.path for item in self.items], items=self.items)
+        items = list(await asyncio.gather(*(self._load(layout) for layout in self.layouts)))
+        return UvWorkspaces(paths=[item.path for item in items], items=items)

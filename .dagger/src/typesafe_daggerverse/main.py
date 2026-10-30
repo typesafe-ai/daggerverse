@@ -637,32 +637,21 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_workspace_inputs(self) -> None:
-        """A workspace loaded from `inputs` holds only what a build reads, and builds the same."""
+        """A workspace is loaded from just what its builds read, the handlers' build inputs included."""
         source = _src("uv/tests/_packages/maturin-outside-workspace").with_new_file("docs/unrelated.md", "unread")
+        uv_ = uv(source.as_workspace())
         maturin = (
-            uv(source.as_workspace())
-            .build_backend_handlers()
+            uv_.build_backend_handlers()
             .maturin()
             .with_package_config(
                 name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
             )
         )
-        inputs = uv(source.as_workspace()).with_build_backend_handlers([maturin]).workspace("py").inputs()
-        found = sorted(await inputs.glob("**/*.*"))
+        workspace = uv_.with_build_backend_handlers([maturin]).workspace("py")
+        found = sorted(await workspace.inputs().glob("**/*.*"))
         expected = sorted(path for path in await source.glob("**/*.*") if not path.startswith("docs/"))
         if found != expected:
             raise AssertionError(f"inputs: expected {expected}, got {found}")
-        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
-        await (
-            uv(inputs.as_workspace())
-            .with_build_backend_handlers([maturin])
-            .workspace("py")
-            .install(base_container=base)
-            .with_exec(
-                ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
-            )
-            .sync()
-        )
 
     @function
     async def uv_maturin_editable_cached_build(self) -> None:

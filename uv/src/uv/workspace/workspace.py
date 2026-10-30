@@ -103,8 +103,8 @@ class UvWorkspaceSource:
         Doc("Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`."),
     ] = field(default=list)
 
-    # The workspace `uv()` was given, for the build backend handlers' `/`-prefixed build inputs.
-    # Not a `field()`: Dagger can't expose a `Workspace` as one.
+    # The workspace the directories were loaded from, for the build backend handlers'
+    # `/`-prefixed build inputs. Not a `field()`: Dagger can't expose a `Workspace` as one.
     ws: Workspace | None = None
 
     def _ws_dir(self) -> Directory:
@@ -386,10 +386,9 @@ class UvWorkspaceSource:
     async def inputs(self) -> Directory:
         """Every file `build`, `install` and `venv` read, at workspace-root-relative paths.
 
-        A module handing its workspace to `uv` can load just these files (merged
-        with its own) and pass them on as a workspace. A workspace made from a
-        directory is cached by its contents, so builds rerun only when one of
-        these files changes.
+        `Uv.workspace` loads the workspace from just these files. A module that
+        reads more of the workspace can merge its own files into them and hand
+        the result on with `as_workspace()`.
         """
         plan = await UvSyncPlan.create(
             source_dir=self.source,
