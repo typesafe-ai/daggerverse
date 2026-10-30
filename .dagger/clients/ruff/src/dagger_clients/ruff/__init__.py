@@ -29,7 +29,6 @@ _check_core(NAME, CORE_DIGEST, _installed_core)
 
 from dagger_clients.core import (  # noqa: E402
     Changeset,
-    Check,
     Container,
     Directory,
     Workspace,
@@ -40,15 +39,20 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 
 
 class Ruff(_Type):
-    """ Ruff Python linter and formatter.  """
+    """ Ruff Python linter and formatter.  `check` and `format` are
+    generators: `dagger generate` applies their fixes, and `dagger check
+    --generated` fails while either would change a file. `check` also
+    fails on violations ruff can't fix.  """
 
-    def check(self) -> "RuffChecker":
+    def check(self) -> Changeset:
         """
-        Return the ruff linter (`ruff check`).
+        Fix lint violations with `ruff check --fix`.
+
+        Fails when violations ruff can't fix remain.
         """
         _args: list[_Arg] = []
         _ctx = self._select("check", _args)
-        return RuffChecker(_ctx)
+        return Changeset(_ctx)
 
     def ctr(self) -> Container:
         """Container with ruff installed."""
@@ -56,13 +60,13 @@ class Ruff(_Type):
         _ctx = self._select("ctr", _args)
         return Container(_ctx)
 
-    def format(self) -> "RuffFormatter":
+    def format(self) -> Changeset:
         """
-        Return the ruff formatter (`ruff format`).
+        Format source files with `ruff format`.
         """
         _args: list[_Arg] = []
         _ctx = self._select("format", _args)
-        return RuffFormatter(_ctx)
+        return Changeset(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this Ruff.
@@ -93,8 +97,8 @@ class Ruff(_Type):
         return await _ctx.execute(str)
 
     def source(self) -> Directory:
-        """Source tree: the Dagger workspace, less caches, virtualenvs and
-        gitignored files.
+        """Source tree: the Dagger workspace, less `exclude` and gitignored
+        files.
         """
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
@@ -123,169 +127,15 @@ class Ruff(_Type):
         return await _ctx.execute(str)
 
 
-class RuffChecker(_Type):
-    """ Ruff linter (`ruff check`).  """
-
-    def ctr(self) -> Container:
-        """Container with ruff installed."""
-        _args: list[_Arg] = []
-        _ctx = self._select("ctr", _args)
-        return Container(_ctx)
-
-    def fix(self, *, extra_args: list[str] | None = None,) -> Changeset:
-        """
-        Auto-fix lint violations and return a Changeset.
-
-        Parameters
-        ----------
-        extra_args:
-            Additional arguments to pass to `ruff check --fix`.
-        """
-        if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
-            raise _type_error("RuffChecker.fix", "extra_args", extra_args, "list[str] | None")
-        _args = [
-            _Arg("extraArgs", extra_args, None),
-        ]
-        _ctx = self._select("fix", _args)
-        return Changeset(_ctx)
-
-    async def id(self) -> str:
-        """A unique identifier for this RuffChecker.
-
-        Note
-        ----
-        This is lazily evaluated, no operation is actually run.
-
-        Returns
-        -------
-        str
-            The `ID` scalar type represents a unique identifier, often used to
-            refetch an object or as key for a cache. The ID type appears in a
-            JSON response as a String; however, it is not intended to be
-            human-readable. When expected as an input type, any string (such
-            as `"4"`) or integer (such as `4`) input value will be accepted as
-            an ID.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("id", _args)
-        return await _ctx.execute(str)
-
-    def lint(self, *, extra_args: list[str] | None = None,) -> Check:
-        """
-        Run `ruff check` and report violations.
-
-        Exits non-zero when violations are found.
-
-        Parameters
-        ----------
-        extra_args:
-            Additional arguments to pass to `ruff check`.
-        """
-        if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
-            raise _type_error("RuffChecker.lint", "extra_args", extra_args, "list[str] | None")
-        _args = [
-            _Arg("extraArgs", extra_args, None),
-        ]
-        _ctx = self._select("lint", _args)
-        return Check(_ctx)
-
-    def source(self) -> Directory:
-        """Source tree to run on."""
-        _args: list[_Arg] = []
-        _ctx = self._select("source", _args)
-        return Directory(_ctx)
-
-
-class RuffFormatter(_Type):
-    """ Ruff formatter (`ruff format`).  """
-
-    def ctr(self) -> Container:
-        """Container with ruff installed."""
-        _args: list[_Arg] = []
-        _ctx = self._select("ctr", _args)
-        return Container(_ctx)
-
-    def fix(self, *, extra_args: list[str] | None = None,) -> Changeset:
-        """
-        Auto-format source files and return a Changeset.
-
-        Parameters
-        ----------
-        extra_args:
-            Additional arguments to pass to `ruff format`.
-        """
-        if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
-            raise _type_error("RuffFormatter.fix", "extra_args", extra_args, "list[str] | None")
-        _args = [
-            _Arg("extraArgs", extra_args, None),
-        ]
-        _ctx = self._select("fix", _args)
-        return Changeset(_ctx)
-
-    async def id(self) -> str:
-        """A unique identifier for this RuffFormatter.
-
-        Note
-        ----
-        This is lazily evaluated, no operation is actually run.
-
-        Returns
-        -------
-        str
-            The `ID` scalar type represents a unique identifier, often used to
-            refetch an object or as key for a cache. The ID type appears in a
-            JSON response as a String; however, it is not intended to be
-            human-readable. When expected as an input type, any string (such
-            as `"4"`) or integer (such as `4`) input value will be accepted as
-            an ID.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("id", _args)
-        return await _ctx.execute(str)
-
-    def lint(self, *, extra_args: list[str] | None = None,) -> Check:
-        """
-        Run `ruff format --check` and report unformatted files.
-
-        Exits non-zero when files would be reformatted.
-
-        Parameters
-        ----------
-        extra_args:
-            Additional arguments to pass to `ruff format --check`.
-        """
-        if not (extra_args is None or (isinstance(extra_args, list) and all(isinstance(_v0, str) for _v0 in extra_args))):
-            raise _type_error("RuffFormatter.lint", "extra_args", extra_args, "list[str] | None")
-        _args = [
-            _Arg("extraArgs", extra_args, None),
-        ]
-        _ctx = self._select("lint", _args)
-        return Check(_ctx)
-
-    def source(self) -> Directory:
-        """Source tree to run on."""
-        _args: list[_Arg] = []
-        _ctx = self._select("source", _args)
-        return Directory(_ctx)
-
-
-def ruff(ws: Workspace, *, ctr: Container | None = None, version: str | None = None, session: _Session | None = None,) -> Ruff:
+def ruff(ws: Workspace, *, ctr: Container | None = None, version: str | None = None, exclude: list[str] | None = None, session: _Session | None = None,) -> Ruff:
     """
     Ruff Python linter and formatter.
+
+    `check` and `format` are generators: `dagger generate` applies their
+    fixes,
+    and `dagger check --generated` fails while either would change a file.
+    `check` also
+    fails on violations ruff can't fix.
 
     Parameters
     ----------
@@ -298,6 +148,9 @@ def ruff(ws: Workspace, *, ctr: Container | None = None, version: str | None = N
     version:
         Ruff image tag. Only used when `ctr` is not provided. Defaults to
         the version the workspace pins.
+    exclude:
+        Glob patterns of workspace paths that are not uploaded to the
+        Dagger engine.
     """
     if not (isinstance(ws, Workspace)):
         raise _type_error("ruff", "ws", ws, "Workspace")
@@ -305,17 +158,18 @@ def ruff(ws: Workspace, *, ctr: Container | None = None, version: str | None = N
         raise _type_error("ruff", "ctr", ctr, "Container | None")
     if not (version is None or isinstance(version, str)):
         raise _type_error("ruff", "version", version, "str | None")
+    if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
+        raise _type_error("ruff", "exclude", exclude, "list[str]")
     _args = [
         _Arg("ws", ws),
         _Arg("ctr", ctr, None),
         _Arg("version", version, None),
+        _Arg("exclude", ['**/.git'] if exclude is None else exclude, ['**/.git']),
     ]
     return _client_root(Ruff, _TARGET, "ruff", _args, session=session)
 
 
 __all__ = [
     "Ruff",
-    "RuffChecker",
-    "RuffFormatter",
     "ruff",
 ]

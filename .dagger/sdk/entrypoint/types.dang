@@ -109,20 +109,24 @@ type ModuleTypes {
             .withDescription("A workspace's source leaves out unrelated nested projects; its manifests hold only resolver inputs.")
         )
         .withFunction(
-          function("ruff_check_fix", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("Run ruff check --fix on a dirty file and verify only dirty.py is changed.")
+          function("ruff_check_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The `check` generator changes nothing on a clean file.")
         )
         .withFunction(
-          function("ruff_check_lint_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run ruff check on a clean file and verify it passes.")
+          function("ruff_check_fix", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `check` generator fixes a dirty file and changes nothing else.")
+        )
+        .withFunction(
+          function("ruff_check_unfixable", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The `check` generator fails on a violation ruff can't fix.")
+        )
+        .withFunction(
+          function("ruff_format_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The `format` generator changes nothing on a clean file.")
         )
         .withFunction(
           function("ruff_format_fix", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("Run ruff format on a dirty file and verify only dirty.py is changed.")
-        )
-        .withFunction(
-          function("ruff_format_lint_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run ruff format --check on a clean file and verify it passes.")
+            .withDescription("The `format` generator formats a dirty file and changes nothing else.")
         )
         .withFunction(
           function("twingate_build", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
