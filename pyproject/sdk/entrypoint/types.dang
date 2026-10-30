@@ -67,8 +67,16 @@ type ModuleTypes {
         ),
       typeDef.withObject("Pyproject", description: "Discovers the Python projects and workspaces in a Dagger workspace.\n\nA project is a directory holding a `pyproject.toml`; a workspace is a\ndirectory holding a workspace marker (`uv.lock` or `pylock.toml` by\ndefault). Each comes with the scoped source it needs, so tools built on\nthis load one project's files instead of the whole repository.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/pyproject/).")
         .withFunction(
+          function("project_list", typeDef.withListOf(typeDef.withObject("PyprojectProject")))
+            .withDescription("The projects `projects` holds, in one call.\n\nListing a collection gets each item with its own call; use this to read\nevery project at once.")
+        )
+        .withFunction(
           function("projects", typeDef.withObject("PyprojectProjects"))
             .withDescription("Every Python project in the workspace, less those matching `exclude`.")
+        )
+        .withFunction(
+          function("workspace_list", typeDef.withListOf(typeDef.withObject("PyprojectWorkspace")))
+            .withDescription("The workspaces `workspaces` holds, in one call.\n\nListing a collection gets each item with its own call; use this to read\nevery workspace at once.")
         )
         .withFunction(
           function("workspaces", typeDef.withObject("PyprojectWorkspaces"))

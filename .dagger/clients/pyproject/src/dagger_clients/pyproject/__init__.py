@@ -74,6 +74,18 @@ class Pyproject(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
+    async def project_list(self) -> list["PyprojectProject"]:
+        """
+        The projects `projects` holds, in one call.
+
+        Listing a collection gets each item with its own call; use this to
+        read
+        every project at once.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("projectList", _args)
+        return await _ctx.execute_object_list(PyprojectProject)
+
     def projects(self) -> "PyprojectProjects":
         """
         Every Python project in the workspace, less those matching `exclude`.
@@ -81,6 +93,18 @@ class Pyproject(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("projects", _args)
         return PyprojectProjects(_ctx)
+
+    async def workspace_list(self) -> list["PyprojectWorkspace"]:
+        """
+        The workspaces `workspaces` holds, in one call.
+
+        Listing a collection gets each item with its own call; use this to
+        read
+        every workspace at once.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("workspaceList", _args)
+        return await _ctx.execute_object_list(PyprojectWorkspace)
 
     def workspaces(self) -> "PyprojectWorkspaces":
         """
