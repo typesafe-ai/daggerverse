@@ -147,7 +147,9 @@ class TypesafeDaggerverse:
         ctr = (
             await uv(src.as_workspace())
             .workspace(".")
-            .build(package=[module], base_container=_base(), group=["docs"])
+            .builder(base_container=_base())
+            .with_packages([module])
+            .with_groups(["docs"])
             .with_dependencies()
             .container()
         )
@@ -164,7 +166,8 @@ class TypesafeDaggerverse:
         ctr = (
             await uv(src.as_workspace())
             .workspace(".")
-            .build(base_container=_base(), group=["docs"])
+            .builder(base_container=_base())
+            .with_groups(["docs"])
             .with_dependencies()
             .container()
         )
@@ -418,7 +421,8 @@ class TypesafeDaggerverse:
         out = await (
             uv(src.as_workspace())
             .workspace(".")
-            .build(package=["my-app"], venv_relocatable=True)
+            .builder(venv_relocatable=True)
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
             .with_exec(["python", "-c", "import my_app, my_core, sys; print('VENV_OK', sys.prefix)"])
@@ -448,16 +452,15 @@ class TypesafeDaggerverse:
         async def has_venv(ctr: Container) -> bool:
             return await ctr.with_exec(["test", "-e", ".venv"], expect=ReturnType.ANY).exit_code() == 0
 
-        managed = workspace.build(package=["my-app"]).with_dependencies().container()
+        managed = workspace.builder().with_packages(["my-app"]).with_dependencies().container()
         managed_prefix = await prefix(managed)
         if await has_venv(managed) or "/uv/python/" not in managed_prefix:
             raise AssertionError(f"expected a uv-managed Python and no .venv, got prefix {managed_prefix!r}")
 
         # Debian's Python 3.13 doesn't satisfy the fixture's `>=3.14`.
         mismatched = (
-            workspace.build(
-                package=["my-app"], base_container=core().container().from_("ghcr.io/astral-sh/uv:0.11.19-debian")
-            )
+            workspace.builder(base_container=core().container().from_("ghcr.io/astral-sh/uv:0.11.19-debian"))
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
         )
@@ -465,20 +468,23 @@ class TypesafeDaggerverse:
         if await has_venv(mismatched) or "/uv/python/" not in mismatched_prefix:
             raise AssertionError(f"expected a uv-managed Python for a non-matching base, got {mismatched_prefix!r}")
 
-        activated = workspace.build(package=["my-app"], base_container=with_python).with_dependencies().container()
+        activated = (
+            workspace.builder(base_container=with_python).with_packages(["my-app"]).with_dependencies().container()
+        )
         venv = posixpath.join(await activated.workdir(), ".venv")
         if await activated.env_variable("VIRTUAL_ENV") != venv or await prefix(activated) != venv:
             raise AssertionError("expected an activated .venv when the base has Python")
 
         inactive = (
-            workspace.build(package=["my-app"], base_container=with_python, activate_venv=False)
+            workspace.builder(base_container=with_python, activate_venv=False)
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
         )
         if not await has_venv(inactive) or await inactive.env_variable("VIRTUAL_ENV"):
             raise AssertionError("expected an inactive .venv with activate_venv=False")
 
-        system = workspace.build(package=["my-app"], base_container=_base()).with_dependencies().container()
+        system = workspace.builder(base_container=_base()).with_packages(["my-app"]).with_dependencies().container()
         if await has_venv(system) or await prefix(system) != "/usr/local":
             raise AssertionError("expected UV_PROJECT_ENVIRONMENT=/usr/local to be installed into directly")
 
@@ -508,7 +514,8 @@ class TypesafeDaggerverse:
         out = await (
             uv(src.as_workspace())
             .workspace(".")
-            .build(extra=["viz"], venv_relocatable=True)
+            .builder(venv_relocatable=True)
+            .with_extras(["viz"])
             .with_remote_dependencies()
             .copy_venv(base, set_env_vars=True)
             .with_exec(["python", "-c", "import tabulate; print('FRESH_VENV_OK')"])
@@ -543,7 +550,8 @@ class TypesafeDaggerverse:
         out = await (
             uv(src.as_workspace())
             .workspace(".")
-            .build(package=["my-app"], no_editable=True, venv_relocatable=True)
+            .builder(no_editable=True, venv_relocatable=True)
+            .with_packages(["my-app"])
             .with_dependencies()
             .venv()
             .into(base, set_env_vars=True)
@@ -584,7 +592,8 @@ class TypesafeDaggerverse:
                 await (
                     uv(source.as_workspace())
                     .workspace(".")
-                    .build(package=package, no_editable=no_editable)
+                    .builder(no_editable=no_editable)
+                    .with_packages(package or [])
                     .with_remote_dependencies(prune_cache=False)
                     .with_workspace_files()
                     .with_local_dependencies()
@@ -596,7 +605,8 @@ class TypesafeDaggerverse:
         await (
             uv(source.as_workspace())
             .workspace(".")
-            .build(package=["flat-dist"])
+            .builder()
+            .with_packages(["flat-dist"])
             .with_all_workspace_members()
             .container()
             .with_exec(["uv", "sync", "--frozen", "--all-packages"])
@@ -619,7 +629,7 @@ class TypesafeDaggerverse:
                 uv(ws)
                 .with_build_backend_handlers([setuptools_package_dir()])
                 .workspace(".")
-                .build(no_editable=no_editable)
+                .builder(no_editable=no_editable)
                 .with_dependencies()
                 .container()
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
@@ -651,7 +661,7 @@ class TypesafeDaggerverse:
         for no_editable in (False, True):
             await (
                 uv_.workspace("py")
-                .build(base_container=base, no_editable=no_editable)
+                .builder(base_container=base, no_editable=no_editable)
                 .with_dependencies()
                 .container()
                 # Isolated (`-I`), so the installed package is imported rather than the source.
@@ -694,8 +704,9 @@ class TypesafeDaggerverse:
         dist = (
             uv_.with_build_backend_handlers([maturin])
             .workspace("py")
-            .build(base_container=base, package=["outside-app"])
-            .dist(python_version=["3.13"])
+            .builder(base_container=base)
+            .with_packages(["outside-app"])
+            .build(python_version=["3.13"])
         )
         entries = await dist.entries()
         if not any(e.endswith(".whl") for e in entries) or not any(e.endswith(".tar.gz") for e in entries):
@@ -732,7 +743,7 @@ class TypesafeDaggerverse:
         scaffold = (
             uv_.with_build_backend_handlers([maturin])
             .workspace("py")
-            .build(base_container=base)
+            .builder(base_container=base)
             .with_remote_dependencies()
             .with_workspace_files()
         )
@@ -781,7 +792,8 @@ class TypesafeDaggerverse:
             await (
                 uv(src.as_workspace())
                 .workspace(path="nested")
-                .build(package=["my-app"], no_editable=no_editable)
+                .builder(no_editable=no_editable)
+                .with_packages(["my-app"])
                 .with_remote_dependencies(prune_cache=False)
                 .with_workspace_files()
                 .with_local_dependencies()
@@ -811,7 +823,7 @@ class TypesafeDaggerverse:
             ctr = (
                 uv(source.with_new_file("pyproject.toml", metadata).as_workspace())
                 .workspace(".")
-                .build()
+                .builder()
                 .with_workspace_files()
                 .container()
             )
@@ -861,18 +873,15 @@ class TypesafeDaggerverse:
                     for name, extra_build_inputs in packages.items():
                         handler = handler.with_package_config(name=name, extra_build_inputs=extra_build_inputs)
                     handlers.append(handler)
-                ctr = (
-                    await project_uv.with_build_backend_handlers(handlers)
+                builder = (
+                    project_uv.with_build_backend_handlers(handlers)
                     .workspace(".")
-                    .build(
-                        package=names,
-                        no_editable=no_editable,
-                        base_container=base,
-                        **project.get("install", {}),
-                    )
-                    .with_dependencies()
-                    .container()
+                    .builder(no_editable=no_editable, base_container=base)
+                    .with_packages(names)
                 )
+                for method in project.get("builder", []):
+                    builder = getattr(builder, method)()
+                ctr = await builder.with_dependencies().container()
                 script = "".join(f"import {module}\n" for module in project["imports"])
                 # Isolated (`-I`), so the installed package is imported rather than the source
                 # in the working directory, which lacks a compiled extension.
@@ -890,7 +899,8 @@ class TypesafeDaggerverse:
         ctr = (
             await uv(_fixture("uv/tests/_packages/workspace"))
             .workspace(".")
-            .build(package=["my-app"], base_container=bare)
+            .builder(base_container=bare)
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
         )
@@ -903,7 +913,8 @@ class TypesafeDaggerverse:
         ctr = (
             await uv(_fixture("uv/tests/_packages/workspace"))
             .workspace(".")
-            .build(package=["my-app"], base_container=_base())
+            .builder(base_container=_base())
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
         )
@@ -915,7 +926,8 @@ class TypesafeDaggerverse:
         ctr = (
             await uv(_fixture("uv/tests/_packages/workspace"))
             .workspace(".")
-            .build(all_packages=True, base_container=_base())
+            .builder(base_container=_base())
+            .with_all_packages()
             .with_dependencies()
             .container()
         )
@@ -930,14 +942,16 @@ class TypesafeDaggerverse:
         first = (
             await uv(source.as_workspace())
             .workspace(".")
-            .build(all_packages=True, base_container=base)
+            .builder(base_container=base)
+            .with_all_packages()
             .with_dependencies()
             .container()
         )
         second = (
             await uv(changed.as_workspace())
             .workspace(".")
-            .build(all_packages=True, base_container=base)
+            .builder(base_container=base)
+            .with_all_packages()
             .with_dependencies()
             .container()
         )
@@ -977,7 +991,8 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/workspace-app"))
             .workspace(".")
-            .build(package=["my-app"], base_container=_base())
+            .builder(base_container=_base())
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
         )
@@ -989,7 +1004,8 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/workspace-flat"))
             .workspace(".")
-            .build(package=["my-app"], base_container=_base())
+            .builder(base_container=_base())
+            .with_packages(["my-app"])
             .with_dependencies()
             .container()
         )
@@ -1001,7 +1017,8 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/standalone-app"))
             .workspace(".")
-            .build(package=["standalone-app"], base_container=_base())
+            .builder(base_container=_base())
+            .with_packages(["standalone-app"])
             .with_dependencies()
             .container()
         )
@@ -1013,11 +1030,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/standalone-app"))
             .workspace(".")
-            .build(
-                package=["standalone-app"],
-                base_container=_base(),
-                extra=["viz"],
-            )
+            .builder(base_container=_base())
+            .with_packages(["standalone-app"])
+            .with_extras(["viz"])
             .with_dependencies()
             .container()
         )
@@ -1033,11 +1048,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/standalone-app"))
             .workspace(".")
-            .build(
-                package=["standalone-app"],
-                base_container=_base(),
-                all_extras=True,
-            )
+            .builder(base_container=_base())
+            .with_packages(["standalone-app"])
+            .with_all_extras()
             .with_dependencies()
             .container()
         )
@@ -1053,11 +1066,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/standalone-app"))
             .workspace(".")
-            .build(
-                package=["standalone-app"],
-                base_container=_base(),
-                group=["docs"],
-            )
+            .builder(base_container=_base())
+            .with_packages(["standalone-app"])
+            .with_groups(["docs"])
             .with_dependencies()
             .container()
         )
@@ -1073,11 +1084,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/standalone-app"))
             .workspace(".")
-            .build(
-                package=["standalone-app"],
-                base_container=_base(),
-                all_groups=True,
-            )
+            .builder(base_container=_base())
+            .with_packages(["standalone-app"])
+            .with_all_groups()
             .with_dependencies()
             .container()
         )
@@ -1093,12 +1102,10 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/workspace"))
             .workspace(".")
-            .build(
-                all_packages=True,
-                all_extras=True,
-                all_groups=True,
-                base_container=_base(),
-            )
+            .builder(base_container=_base())
+            .with_all_packages()
+            .with_all_extras()
+            .with_all_groups()
             .with_dependencies()
             .container()
         )
@@ -1114,7 +1121,8 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv"))
             .workspace(".")
-            .build(package=["uv"], base_container=_base())
+            .builder(base_container=_base())
+            .with_packages(["uv"])
             .with_dependencies()
             .container()
         )
@@ -1127,7 +1135,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("github"))
             .workspace(".")
-            .build(package=["github"], base_container=_base(), all_groups=True)
+            .builder(base_container=_base())
+            .with_packages(["github"])
+            .with_all_groups()
             .with_dependencies()
             .container()
         )
@@ -1155,7 +1165,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv"))
             .workspace(".")
-            .build(package=["uv"], base_container=_base(), all_groups=True)
+            .builder(base_container=_base())
+            .with_packages(["uv"])
+            .with_all_groups()
             .with_dependencies()
             .container()
         )
@@ -1247,11 +1259,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/partial-workspace"))
             .workspace("sub-project")
-            .build(
-                package=["sub-project"],
-                base_container=_base(),
-                group=["dev"],
-            )
+            .builder(base_container=_base())
+            .with_packages(["sub-project"])
+            .with_groups(["dev"])
             .with_dependencies()
             .container()
         )
@@ -1272,7 +1282,8 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("uv/tests/_packages/nested-standalone"))
             .workspace("app")
-            .build(base_container=_base(), group=["dev"])
+            .builder(base_container=_base())
+            .with_groups(["dev"])
             .with_dependencies()
             .container()
         )
@@ -1343,7 +1354,9 @@ print("LAYER_CACHE_OK")
         ctr = (
             await uv(_fixture("pyproject"))
             .workspace(".")
-            .build(package=["pyproject"], base_container=_base(), all_groups=True)
+            .builder(base_container=_base())
+            .with_packages(["pyproject"])
+            .with_all_groups()
             .with_dependencies()
             .container()
         )

@@ -52,7 +52,7 @@ maturin = (
         extra_build_inputs=["/Cargo.toml", "/Cargo.lock", "/crates/jiter/Cargo.toml", "/crates/jiter/src/**"],
     )
 )
-ctr = uv_.with_build_backend_handlers([maturin]).workspace(".").build().with_dependencies().container()
+ctr = uv_.with_build_backend_handlers([maturin]).workspace(".").builder().with_dependencies().container()
 ```
 
 Workspace-root-relative inputs are read from the workspace given to `uv()`,

@@ -22,10 +22,10 @@ everything in an order that caches well, so you don't assemble the build context
     ```mermaid
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
-      WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
+      WS -->|builder| B["UvWorkspaceBuilder<br/><i>(container + package selection + sync plan)</i>"]
       B -->|with_dependencies / with_*| B
       B -->|container / copy_venv| C["Container"]
-      B -->|dist| D["Directory<br/><i>(sdists and wheels)</i>"]
+      B -->|build| D["Directory<br/><i>(sdists and wheels)</i>"]
       B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
@@ -33,28 +33,29 @@ everything in an order that caches well, so you don't assemble the build context
       for one workspace by path (`workspace`) or for the collection of every workspace
       it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it (a check), or `build` a container.
-    - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
-      environment ready, plus the resolved sync plan. `with_dependencies` installs
+      you can read the required `uv` version, `audit` it (a check), or get a `builder` for its packages.
+    - **`UvWorkspaceBuilder`** builds the workspace's packages: a container with its Python
+      environment ready, the package selection (`with_packages`, `with_extras`,
+      `with_groups`) and the sync plan resolved from it. `with_dependencies` installs
       everything; its individual steps let you run your own steps between them. Every
       step returns the build, and `container`, [`venv`](virtual-environments.md) or
-      `dist` (sdists and wheels) finishes it.
+      `build` (sdists and wheels) finishes it.
 
 ## Installing everything: `with_dependencies`
 
-`build` prepares the build, `with_dependencies` installs everything a package needs,
+`builder` prepares the build, `with_dependencies` installs everything a package needs,
 and `container` returns the result:
 
 === "CLI"
 
     ```console
-    $ dagger call uv workspace --path . build with-dependencies container
+    $ dagger call uv workspace --path . builder with-dependencies container
     ```
 
 === "Python SDK"
 
     ```python
-    ctr = uv(ws).workspace(".").build().with_dependencies().container()
+    ctr = uv(ws).workspace(".").builder().with_dependencies().container()
     ```
 
 Under the hood this is equivalent to:
@@ -63,7 +64,7 @@ Under the hood this is equivalent to:
 ctr = (
     uv(ws)
     .workspace(".")
-    .build()
+    .builder()
     .with_remote_dependencies()  # uv sync --no-install-local
     .with_workspace_files()  # scaffold local package stubs
     .with_local_dependencies()  # editable-install from stubs, then copy real source
@@ -98,7 +99,7 @@ expensive work stays cached across builds:
 
     ```python
     base = core().container().from_("python:3.13.7-slim").with_env_variable("UV_PROJECT_ENVIRONMENT", "/usr/local")
-    ctr = uv(ws).workspace(".").build(base_container=base).with_dependencies().container()
+    ctr = uv(ws).workspace(".").builder(base_container=base).with_dependencies().container()
     ```
 
 ### Choosing a base image
@@ -153,16 +154,16 @@ The module parses their native configuration files and copies files required to 
     With `no_editable=True`, changes to source code trigger a rebuild of the package.
     Third-party dependencies remain cached.
 
-## Building distributions: `dist`
+## Building distributions: `build`
 
-`dist` builds the requested packages' sdists and wheels with `uv build`, from their
-real source, so it follows `build` directly. The build backend handlers' hooks run
+`build` builds the selected packages' sdists and wheels with `uv build`, from their
+real source, so it follows the package selection directly. The build backend handlers' hooks run
 around it, as for an install, e.g. maturin's Cargo target cache. Pass
 `python_version` to build a wheel per Python version for packages with compiled
 extensions:
 
 ```python
-dist = uv(ws).workspace(".").build(package=["my-app"]).dist(python_version=["3.12", "3.13"])
+dists = uv(ws).workspace(".").builder().with_packages(["my-app"]).build(python_version=["3.12", "3.13"])
 ```
 
 ## Running the pipeline step by step
@@ -171,12 +172,12 @@ dist = uv(ws).workspace(".").build(package=["my-app"]).dist(python_version=["3.1
 yourself in order:
 
 ```python
-b = uv(ws).workspace(".").build(package=["my-app"])
+b = uv(ws).workspace(".").builder().with_packages(["my-app"])
 b = b.with_remote_dependencies()  # uv sync --no-install-local
 # ... run your own step here, e.g. `pulumi install` ...
 b = b.with_workspace_files()  # scaffold local package stubs
 ctr = b.with_local_dependencies().container()  # editable-install from stubs, then copy real source last
 ```
 
-Each step returns a new `UvWorkspaceBuild`, so the chain reads top to bottom. You can also swap in a different container mid-pipeline
+Each step returns a new `UvWorkspaceBuilder`, so the chain reads top to bottom. You can also swap in a different container mid-pipeline
 (for instance after installing OS packages) and keep the same resolved plan.

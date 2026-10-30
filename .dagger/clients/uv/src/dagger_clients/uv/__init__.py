@@ -417,7 +417,7 @@ class Uv(_Type):
         handlers.
 
         Every workspace `workspace` and `workspaces` hand out loads the files
-        they read, and its `build` uses them. When several handle the same
+        they read, and its `builder` uses them. When several handle the same
         backend, the last one added configures its packages.
 
         Parameters
@@ -442,7 +442,7 @@ class Uv(_Type):
 
         The returned `UvWorkspaceSource` can `audit` its locked dependencies
         or
-        `build` a minimal container for a package.
+        get a `builder` for its packages.
 
         Parameters
         ----------
@@ -2708,6 +2708,76 @@ class UvSyncPlan(_Type):
         return Directory(_ctx)
 
 
+class UvSyncPlanner(_Type):
+    """ Resolves a workspace's sync plan for a package selection.  Holds
+    what planning reads: the workspace's manifests and sources, its build
+    backend handlers, and the workspace those were loaded from, for the
+    handlers' `/`-prefixed build inputs.  """
+
+    async def id(self) -> str:
+        """A unique identifier for this UvSyncPlanner.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    def manifests(self) -> Directory:
+        """What resolving the workspace reads: uv.lock, uv.toml and the members'
+        pyproject.toml files
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("manifests", _args)
+        return Directory(_ctx)
+
+    def source(self) -> Directory:
+        """The workspace's members and their path dependencies"""
+        _args: list[_Arg] = []
+        _ctx = self._select("source", _args)
+        return Directory(_ctx)
+
+    async def workspace_path(self) -> str:
+        """Workspace root path within the sources. `.` for a root workspace.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("workspacePath", _args)
+        return await _ctx.execute(str)
+
+
 class UvVenv(_Type):
     """ A relocatable uv virtual environment bundled with the uv-managed
     Python it needs.  A venv never contains the standard library:
@@ -2715,7 +2785,7 @@ class UvVenv(_Type):
     provides it. This pairs the venv with that interpreter so the two can
     be dropped into a fresh container (one without any Python of its own)
     and run without uv.  Only valid for a venv created with
-    `build(venv_relocatable=True)` against a *uv-managed* (standalone)
+    `builder(venv_relocatable=True)` against a *uv-managed* (standalone)
     Python: uv's standalone Pythons are themselves relocatable, and a
     relocatable venv keeps working when its directory is moved. The venv
     may be mounted at any path, but the Python must be remounted at
@@ -2826,13 +2896,91 @@ class UvVenv(_Type):
         return Directory(_ctx)
 
 
-class UvWorkspaceBuild(_Type):
-    """ An in-progress workspace build: a container plus its resolved sync
-    plan.  Drives the install pipeline: `with_remote_dependencies` to
-    install remote deps, `with_workspace_files` to scaffold local
-    packages, then `with_local_dependencies` to install them, or
-    `with_dependencies` for all three. Every step returns the build;
-    finish with `container`, or `venv` to export the environment.  """
+class UvWorkspaceBuilder(_Type):
+    """ Builds a workspace's packages: a container, the package selection,
+    and its sync plan.  Select the packages with `with_packages` (default:
+    the workspace root's), `with_extras` and `with_groups`. Then drive the
+    install pipeline: `with_remote_dependencies` to install remote deps,
+    `with_workspace_files` to scaffold local packages, then
+    `with_local_dependencies` to install them, or `with_dependencies` for
+    all three. Every step returns the builder; finish with `container`,
+    `venv` to export the environment, or `build` for the packages' sdists
+    and wheels.  """
+
+    async def all_extras(self) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("allExtras", _args)
+        return await _ctx.execute(bool)
+
+    async def all_groups(self) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("allGroups", _args)
+        return await _ctx.execute(bool)
+
+    async def all_packages(self) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("allPackages", _args)
+        return await _ctx.execute(bool)
+
+    def build(self, *, python_version: list[str] | None = None,) -> Directory:
+        """
+        The selected packages' sdists and wheels, built with `uv build`.
+
+        Builds from the packages' real source, so call it right after
+        selecting:
+        nothing needs installing first. The build backends' hooks run around
+        the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
+        target cache).
+
+        Parameters
+        ----------
+        python_version:
+            Python versions to build wheels for (e.g. ['3.12', '3.13']), for
+            packages with compiled extensions. Defaults to the build's Python.
+        """
+        if not (python_version is None or (isinstance(python_version, list) and all(isinstance(_v0, str) for _v0 in python_version))):
+            raise _type_error("UvWorkspaceBuilder.build", "python_version", python_version, "list[str] | None")
+        _args = [
+            _Arg("pythonVersion", python_version, None),
+        ]
+        _ctx = self._select("build", _args)
+        return Directory(_ctx)
 
     def container(self) -> Container:
         _args: list[_Arg] = []
@@ -2862,11 +3010,11 @@ class UvWorkspaceBuild(_Type):
             `PATH` with the venv's `bin/` first).
         """
         if not (isinstance(container, Container)):
-            raise _type_error("UvWorkspaceBuild.copy_venv", "container", container, "Container")
+            raise _type_error("UvWorkspaceBuilder.copy_venv", "container", container, "Container")
         if not (isinstance(path, str)):
-            raise _type_error("UvWorkspaceBuild.copy_venv", "path", path, "str")
+            raise _type_error("UvWorkspaceBuilder.copy_venv", "path", path, "str")
         if not (isinstance(set_env_vars, bool)):
-            raise _type_error("UvWorkspaceBuild.copy_venv", "set_env_vars", set_env_vars, "bool")
+            raise _type_error("UvWorkspaceBuilder.copy_venv", "set_env_vars", set_env_vars, "bool")
         _args = [
             _Arg("container", container),
             _Arg("path", path, '.venv'),
@@ -2875,31 +3023,46 @@ class UvWorkspaceBuild(_Type):
         _ctx = self._select("copyVenv", _args)
         return Container(_ctx)
 
-    def dist(self, *, python_version: list[str] | None = None,) -> Directory:
-        """
-        The requested packages' sdists and wheels, built with `uv build`.
+    async def extras(self) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
 
-        Builds from the packages' real source, so call it right after `build`:
-        nothing needs installing first. The build backends' hooks run around
-        the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
-        target cache).
-
-        Parameters
-        ----------
-        python_version:
-            Python versions to build wheels for (e.g. ['3.12', '3.13']), for
-            packages with compiled extensions. Defaults to the build's Python.
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
         """
-        if not (python_version is None or (isinstance(python_version, list) and all(isinstance(_v0, str) for _v0 in python_version))):
-            raise _type_error("UvWorkspaceBuild.dist", "python_version", python_version, "list[str] | None")
-        _args = [
-            _Arg("pythonVersion", python_version, None),
-        ]
-        _ctx = self._select("dist", _args)
-        return Directory(_ctx)
+        _args: list[_Arg] = []
+        _ctx = self._select("extras", _args)
+        return await _ctx.execute(list[str] | None)
+
+    async def groups(self) -> list[str] | None:
+        """Returns
+        -------
+        list[str] | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("groups", _args)
+        return await _ctx.execute(list[str] | None)
 
     async def id(self) -> str:
-        """A unique identifier for this UvWorkspaceBuild.
+        """A unique identifier for this UvWorkspaceBuilder.
 
         Note
         ----
@@ -2926,10 +3089,68 @@ class UvWorkspaceBuild(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
+    async def no_default_groups(self) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("noDefaultGroups", _args)
+        return await _ctx.execute(bool)
+
+    async def no_editable(self) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("noEditable", _args)
+        return await _ctx.execute(bool)
+
+    async def packages(self) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("packages", _args)
+        return await _ctx.execute(list[str])
+
     def plan(self) -> UvSyncPlan:
         _args: list[_Arg] = []
         _ctx = self._select("plan", _args)
         return UvSyncPlan(_ctx)
+
+    def planner(self) -> UvSyncPlanner:
+        _args: list[_Arg] = []
+        _ctx = self._select("planner", _args)
+        return UvSyncPlanner(_ctx)
 
     def venv(self) -> UvVenv:
         """
@@ -2938,13 +3159,39 @@ class UvWorkspaceBuild(_Type):
 
         Bundles the venv and the exact interpreter it links against into a
         `UvVenv` (see `UvVenv.create`). Call after the venv is populated (e.g.
-        after `with_dependencies`). Requires a relocatable venv (`build` with
+        after `with_dependencies`). Requires a relocatable venv (`builder`
+        with
         `venv_relocatable=True`) built against a uv-managed Python; raises
         otherwise.
         """
         _args: list[_Arg] = []
         _ctx = self._select("venv", _args)
         return UvVenv(_ctx)
+
+    def with_all_extras(self) -> _Self:
+        """
+        This builder with every extra selected (`uv sync --all-extras`).
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("withAllExtras", _args)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_all_groups(self) -> _Self:
+        """
+        This builder with every dependency group selected (`uv sync --all-
+        groups`).
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("withAllGroups", _args)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_all_packages(self) -> _Self:
+        """
+        This builder with every workspace member selected (`--all-packages`).
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("withAllPackages", _args)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_all_workspace_members(self) -> _Self:
         """
@@ -2953,7 +3200,7 @@ class UvWorkspaceBuild(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("withAllWorkspaceMembers", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_cache_prune(self, *, max_cache_size: int = 100, lock_timeout: int = 600,) -> _Self:
         """
@@ -2990,20 +3237,19 @@ class UvWorkspaceBuild(_Type):
             (`UV_LOCK_TIMEOUT`) while pruning the cache.
         """
         if not (isinstance(max_cache_size, int)):
-            raise _type_error("UvWorkspaceBuild.with_cache_prune", "max_cache_size", max_cache_size, "int")
+            raise _type_error("UvWorkspaceBuilder.with_cache_prune", "max_cache_size", max_cache_size, "int")
         if not (isinstance(lock_timeout, int)):
-            raise _type_error("UvWorkspaceBuild.with_cache_prune", "lock_timeout", lock_timeout, "int")
+            raise _type_error("UvWorkspaceBuilder.with_cache_prune", "lock_timeout", lock_timeout, "int")
         _args = [
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
         ]
         _ctx = self._select("withCachePrune", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_container(self, container: Container) -> _Self:
         """
-        Return a new UvWorkspaceBuild with a different container but the same
-        plan.
+        This builder with `container`, keeping its selection and plan.
 
         Parameters
         ----------
@@ -3011,12 +3257,12 @@ class UvWorkspaceBuild(_Type):
             Replacement container (e.g. after installing non-Python packages)
         """
         if not (isinstance(container, Container)):
-            raise _type_error("UvWorkspaceBuild.with_container", "container", container, "Container")
+            raise _type_error("UvWorkspaceBuilder.with_container", "container", container, "Container")
         _args = [
             _Arg("container", container),
         ]
         _ctx = self._select("withContainer", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_dependencies(self, *, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600,) -> _Self:
         """
@@ -3040,18 +3286,53 @@ class UvWorkspaceBuild(_Type):
             (`UV_LOCK_TIMEOUT`) while pruning the cache.
         """
         if not (isinstance(prune_cache, bool)):
-            raise _type_error("UvWorkspaceBuild.with_dependencies", "prune_cache", prune_cache, "bool")
+            raise _type_error("UvWorkspaceBuilder.with_dependencies", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
-            raise _type_error("UvWorkspaceBuild.with_dependencies", "max_cache_size", max_cache_size, "int")
+            raise _type_error("UvWorkspaceBuilder.with_dependencies", "max_cache_size", max_cache_size, "int")
         if not (isinstance(lock_timeout, int)):
-            raise _type_error("UvWorkspaceBuild.with_dependencies", "lock_timeout", lock_timeout, "int")
+            raise _type_error("UvWorkspaceBuilder.with_dependencies", "lock_timeout", lock_timeout, "int")
         _args = [
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
         ]
         _ctx = self._select("withDependencies", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_extras(self, extras: list[str]) -> _Self:
+        """
+        This builder with `extras` added to the selection (`uv sync --extra`).
+
+        Parameters
+        ----------
+        extras:
+            Extras to install; passed to `uv sync` as repeated `--extra`
+        """
+        if not (isinstance(extras, list) and all(isinstance(_v0, str) for _v0 in extras)):
+            raise _type_error("UvWorkspaceBuilder.with_extras", "extras", extras, "list[str]")
+        _args = [
+            _Arg("extras", extras),
+        ]
+        _ctx = self._select("withExtras", _args)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_groups(self, groups: list[str]) -> _Self:
+        """
+        This builder with `groups` added to the selection (`uv sync --group`).
+
+        Parameters
+        ----------
+        groups:
+            Dependency groups to install; passed to `uv sync` as repeated
+            `--group`
+        """
+        if not (isinstance(groups, list) and all(isinstance(_v0, str) for _v0 in groups)):
+            raise _type_error("UvWorkspaceBuilder.with_groups", "groups", groups, "list[str]")
+        _args = [
+            _Arg("groups", groups),
+        ]
+        _ctx = self._select("withGroups", _args)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_local_dependencies(self) -> _Self:
         """
@@ -3077,7 +3358,28 @@ class UvWorkspaceBuild(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("withLocalDependencies", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_packages(self, packages: list[str]) -> _Self:
+        """
+        This builder with `packages` added to the selection (`uv sync
+        --package`, `uv build --package`).
+
+        Parameters
+        ----------
+        packages:
+            Package names to install; passed to `uv sync` as repeated
+            `--package`. Defaults to the current (workspace root) package,
+            mirroring a bare `uv sync`. Use `all_packages` to install every
+            workspace member instead.
+        """
+        if not (isinstance(packages, list) and all(isinstance(_v0, str) for _v0 in packages)):
+            raise _type_error("UvWorkspaceBuilder.with_packages", "packages", packages, "list[str]")
+        _args = [
+            _Arg("packages", packages),
+        ]
+        _ctx = self._select("withPackages", _args)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_python_install(self, version: str) -> _Self:
         """
@@ -3093,12 +3395,12 @@ class UvWorkspaceBuild(_Type):
             `3.13.7`).
         """
         if not (isinstance(version, str)):
-            raise _type_error("UvWorkspaceBuild.with_python_install", "version", version, "str")
+            raise _type_error("UvWorkspaceBuilder.with_python_install", "version", version, "str")
         _args = [
             _Arg("version", version),
         ]
         _ctx = self._select("withPythonInstall", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_python_pin(self, version: str) -> _Self:
         """
@@ -3114,12 +3416,12 @@ class UvWorkspaceBuild(_Type):
             version` file).
         """
         if not (isinstance(version, str)):
-            raise _type_error("UvWorkspaceBuild.with_python_pin", "version", version, "str")
+            raise _type_error("UvWorkspaceBuilder.with_python_pin", "version", version, "str")
         _args = [
             _Arg("version", version),
         ]
         _ctx = self._select("withPythonPin", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_remote_dependencies(self, *, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600,) -> _Self:
         """
@@ -3147,18 +3449,18 @@ class UvWorkspaceBuild(_Type):
             (`UV_LOCK_TIMEOUT`) while pruning the cache.
         """
         if not (isinstance(prune_cache, bool)):
-            raise _type_error("UvWorkspaceBuild.with_remote_dependencies", "prune_cache", prune_cache, "bool")
+            raise _type_error("UvWorkspaceBuilder.with_remote_dependencies", "prune_cache", prune_cache, "bool")
         if not (isinstance(max_cache_size, int)):
-            raise _type_error("UvWorkspaceBuild.with_remote_dependencies", "max_cache_size", max_cache_size, "int")
+            raise _type_error("UvWorkspaceBuilder.with_remote_dependencies", "max_cache_size", max_cache_size, "int")
         if not (isinstance(lock_timeout, int)):
-            raise _type_error("UvWorkspaceBuild.with_remote_dependencies", "lock_timeout", lock_timeout, "int")
+            raise _type_error("UvWorkspaceBuilder.with_remote_dependencies", "lock_timeout", lock_timeout, "int")
         _args = [
             _Arg("pruneCache", prune_cache, True),
             _Arg("maxCacheSize", max_cache_size, 100),
             _Arg("lockTimeout", lock_timeout, 600),
         ]
         _ctx = self._select("withRemoteDependencies", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_uv(self, *, version: str | None = None) -> _Self:
         """
@@ -3176,12 +3478,12 @@ class UvWorkspaceBuild(_Type):
             workspace.
         """
         if not (version is None or isinstance(version, str)):
-            raise _type_error("UvWorkspaceBuild.with_uv", "version", version, "str | None")
+            raise _type_error("UvWorkspaceBuilder.with_uv", "version", version, "str | None")
         _args = [
             _Arg("version", version, None),
         ]
         _ctx = self._select("withUv", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
     def with_workspace_files(self) -> _Self:
         """
@@ -3190,10 +3492,19 @@ class UvWorkspaceBuild(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("withWorkspaceFiles", _args)
-        return UvWorkspaceBuild(_ctx)
+        return UvWorkspaceBuilder(_ctx)
 
-    def with_(self, cb: _Callable[["UvWorkspaceBuild"], "UvWorkspaceBuild"]) -> "UvWorkspaceBuild":
-        """Call the provided callable with current UvWorkspaceBuild.
+    def without_default_groups(self) -> _Self:
+        """
+        This builder without the default dependency groups (`uv sync --no-
+        default-groups`).
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("withoutDefaultGroups", _args)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_(self, cb: _Callable[["UvWorkspaceBuilder"], "UvWorkspaceBuilder"]) -> "UvWorkspaceBuilder":
+        """Call the provided callable with current UvWorkspaceBuilder.
 
         This is useful for reusability and readability by not breaking the calling chain.
         """
@@ -3206,10 +3517,10 @@ class UvWorkspaceSource(_Type):
     `uv.lock`.  Carries the source tree and the workspace's path within it
     (`"."` for a root workspace), relative to the Dagger workspace root.
     From those it derives everything it needs to `audit` the locked
-    dependencies or `build` a minimal container for a package, so the
-    parent `Uv` stays a thin, container-free entrypoint.  Every directory
-    keeps workspace-root-relative paths, so builds can reach a sibling
-    like `../my-dep` in a nested workspace. They are lazy: resolving and
+    dependencies or get a `builder` for its packages, so the parent `Uv`
+    stays a thin, container-free entrypoint.  Every directory keeps
+    workspace-root-relative paths, so builds can reach a sibling like
+    `../my-dep` in a nested workspace. They are lazy: resolving and
     planning read only `manifests`, and a build loads only the `projects`
     it installs. Projects nested in those trees that nothing needs (e.g.
     test fixtures) are left out, so their edits don't invalidate this
@@ -3250,14 +3561,12 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("audit", _args)
         return Check(_ctx)
 
-    def build(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuild:
+    def builder(self, *, base_container: Container | None = None, no_editable: bool = False, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuilder:
         """
-        Prepare a build for this workspace without installing anything yet.
+        A builder for this workspace's packages, with nothing installed yet.
 
-        Resolves the sync plan, mounts the uv cache, prepares the environment
-        uv
-        installs into, and copies the root pyproject.toml and uv.lock into the
-        container.
+        Mounts the uv cache, prepares the environment uv installs into, and
+        copies the root pyproject.toml and uv.lock into the container.
 
         The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets
         it.
@@ -3268,13 +3577,18 @@ class UvWorkspaceSource(_Type):
         `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
         redundant `.venv`.
 
-        The returned `UvWorkspaceBuild` drives the pipeline from here:
-        `with_dependencies()` installs everything, or run its steps
+        Select what to build on the returned `UvWorkspaceBuilder`
+        (`with_packages`,
+        `with_extras`, `with_groups`, ...); it defaults to the workspace
+        root's
+        package. Then `with_dependencies()` installs everything, or run its
+        steps
         individually: `with_remote_dependencies()`, `with_workspace_files()`,
         then `with_local_dependencies()`. Skip `with_remote_dependencies()`
         when
         another tool (e.g. `pulumi install`) handles dependency installation.
-        Finish with `container()`, or `venv()` with `venv_relocatable=True`.
+        Finish with `container()`, `venv()` (with `venv_relocatable=True`), or
+        `build()` for the packages' sdists and wheels.
 
         Parameters
         ----------
@@ -3282,25 +3596,12 @@ class UvWorkspaceSource(_Type):
             Container to build on top of (auth, system packages, etc.).
             Defaults to a Debian-based uv image at the workspace's uv version
             (uv provisions Python on demand).
-        package:
-        extra:
-        group:
-        all_extras:
-            Install every extra; maps to `uv sync --all-extras`
-        all_groups:
-            Install every dependency group; maps to `uv sync --all-groups`
-        all_packages:
-            Install every workspace member; maps to `uv sync --all-packages`
         no_editable:
             Install local/workspace packages non-editable (`uv sync --no-
             editable`), baking their source into site-packages instead of
             linking it. Makes the resulting venv self-contained, so it can be
             exported/copied (e.g. via `copy_venv`) without also carrying the
             workspace source.
-        no_default_groups:
-            Skip the default dependency groups (`[tool.uv] default-groups`,
-            `dev` unless set); maps to `uv sync --no-default-groups`. Groups
-            passed with `group` are still installed.
         venv_relocatable:
             Create a relocatable `.venv` (`uv venv --relocatable`) before
             installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
@@ -3314,45 +3615,24 @@ class UvWorkspaceSource(_Type):
             Set to False if your base_container already ships uv.
         """
         if not (base_container is None or isinstance(base_container, Container)):
-            raise _type_error("UvWorkspaceSource.build", "base_container", base_container, "Container | None")
-        if not (package is None or (isinstance(package, list) and all(isinstance(_v0, str) for _v0 in package))):
-            raise _type_error("UvWorkspaceSource.build", "package", package, "list[str] | None")
-        if not (extra is None or (isinstance(extra, list) and all(isinstance(_v0, str) for _v0 in extra))):
-            raise _type_error("UvWorkspaceSource.build", "extra", extra, "list[str] | None")
-        if not (group is None or (isinstance(group, list) and all(isinstance(_v0, str) for _v0 in group))):
-            raise _type_error("UvWorkspaceSource.build", "group", group, "list[str] | None")
-        if not (isinstance(all_extras, bool)):
-            raise _type_error("UvWorkspaceSource.build", "all_extras", all_extras, "bool")
-        if not (isinstance(all_groups, bool)):
-            raise _type_error("UvWorkspaceSource.build", "all_groups", all_groups, "bool")
-        if not (isinstance(all_packages, bool)):
-            raise _type_error("UvWorkspaceSource.build", "all_packages", all_packages, "bool")
+            raise _type_error("UvWorkspaceSource.builder", "base_container", base_container, "Container | None")
         if not (isinstance(no_editable, bool)):
-            raise _type_error("UvWorkspaceSource.build", "no_editable", no_editable, "bool")
-        if not (isinstance(no_default_groups, bool)):
-            raise _type_error("UvWorkspaceSource.build", "no_default_groups", no_default_groups, "bool")
+            raise _type_error("UvWorkspaceSource.builder", "no_editable", no_editable, "bool")
         if not (isinstance(venv_relocatable, bool)):
-            raise _type_error("UvWorkspaceSource.build", "venv_relocatable", venv_relocatable, "bool")
+            raise _type_error("UvWorkspaceSource.builder", "venv_relocatable", venv_relocatable, "bool")
         if not (isinstance(activate_venv, bool)):
-            raise _type_error("UvWorkspaceSource.build", "activate_venv", activate_venv, "bool")
+            raise _type_error("UvWorkspaceSource.builder", "activate_venv", activate_venv, "bool")
         if not (isinstance(auto_install_uv, bool)):
-            raise _type_error("UvWorkspaceSource.build", "auto_install_uv", auto_install_uv, "bool")
+            raise _type_error("UvWorkspaceSource.builder", "auto_install_uv", auto_install_uv, "bool")
         _args = [
             _Arg("baseContainer", base_container, None),
-            _Arg("package", package, None),
-            _Arg("extra", extra, None),
-            _Arg("group", group, None),
-            _Arg("allExtras", all_extras, False),
-            _Arg("allGroups", all_groups, False),
-            _Arg("allPackages", all_packages, False),
             _Arg("noEditable", no_editable, False),
-            _Arg("noDefaultGroups", no_default_groups, False),
             _Arg("venvRelocatable", venv_relocatable, False),
             _Arg("activateVenv", activate_venv, True),
             _Arg("autoInstallUv", auto_install_uv, True),
         ]
-        _ctx = self._select("build", _args)
-        return UvWorkspaceBuild(_ctx)
+        _ctx = self._select("builder", _args)
+        return UvWorkspaceBuilder(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this UvWorkspaceSource.
@@ -3411,8 +3691,7 @@ class UvWorkspaceSource(_Type):
 
     def inputs(self) -> Directory:
         """
-        Every file `build`, `install` and `venv` read, at workspace-root-
-        relative paths.
+        Every file a `builder` reads, at workspace-root-relative paths.
 
         `Uv.workspace` loads the workspace from just these files. A module
         that
@@ -3477,8 +3756,8 @@ class UvWorkspaceSource(_Type):
 
         Returns its contents (e.g. `3.13.7`), or `None` when the file is
         absent.
-        `build` stages this pin so the environment and `uv sync` use the exact
-        interpreter
+        `builder` stages this pin so the environment and `uv sync` use the
+        exact interpreter
         instead of resolving `requires-python`.
 
         Returns
@@ -3683,8 +3962,9 @@ __all__ = [
     "UvPoetryCoreHandler",
     "UvProjectSource",
     "UvSyncPlan",
+    "UvSyncPlanner",
     "UvVenv",
-    "UvWorkspaceBuild",
+    "UvWorkspaceBuilder",
     "UvWorkspaceSource",
     "UvWorkspaces",
     "uv",

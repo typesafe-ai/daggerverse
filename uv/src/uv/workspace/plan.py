@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import posixpath
 import tomllib
 from collections import OrderedDict
@@ -6,7 +7,7 @@ from typing import Annotated, Self
 
 from dagger import Doc, field, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Directory
+from dagger_clients.core import Directory, Workspace
 
 from uv.utils import (
     build_uv_sync_args,
@@ -360,3 +361,72 @@ class UvSyncPlan:
             no_editable=no_editable,
             handlers=handlers,
         )
+
+
+@object_type
+class UvSyncPlanner:
+    """Resolves a workspace's sync plan for a package selection.
+
+    Holds what planning reads: the workspace's manifests and sources, its build
+    backend handlers, and the workspace those were loaded from, for the
+    handlers' `/`-prefixed build inputs.
+    """
+
+    manifests: Annotated[
+        Directory,
+        Doc("What resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files"),
+    ] = field()
+    source: Annotated[Directory, Doc("The workspace's members and their path dependencies")] = field()
+    workspace_path: Annotated[str, Doc("Workspace root path within the sources. `.` for a root workspace.")] = field(
+        default="."
+    )
+
+    # Not `field()`s: internal state, and Dagger can't expose a `Workspace` as one.
+    projects: list[ProjectSource] = dataclasses.field(default_factory=list)
+    src_paths: list[str] = dataclasses.field(default_factory=list)
+    handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
+    ws: Workspace | None = None
+
+    async def plan(
+        self,
+        packages: list[str] | None = None,
+        extras: list[str] | None = None,
+        groups: list[str] | None = None,
+        all_extras: bool = False,
+        all_groups: bool = False,
+        all_packages: bool = False,
+        no_default_groups: bool = False,
+        no_editable: bool = False,
+    ) -> UvSyncPlan:
+        """The sync plan for a package selection, with the handlers' root inputs loaded."""
+        with get_tracer().start_as_current_span("resolve sync plan") as span:
+            span.set_attribute("workspace.path", self.workspace_path)
+            span.set_attribute("build.packages", packages or [])
+            span.set_attribute("build.all_packages", all_packages)
+            plan = await UvSyncPlan.create(
+                source_dir=self.source,
+                manifests_dir=self.manifests,
+                projects=self.projects,
+                src_paths=self.src_paths,
+                workspace_path=self.workspace_path,
+                package=packages,
+                extra=extras,
+                group=groups,
+                all_extras=all_extras,
+                all_groups=all_groups,
+                all_packages=all_packages,
+                no_editable=no_editable,
+                no_default_groups=no_default_groups,
+                handlers=self.handlers,
+            )
+            span.set_attribute("uv.sync_args", plan.uv_sync_args)
+            span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
+        if not plan.root_inputs:
+            return plan
+        # Loaded from the workspace, filtered to just these paths, as they may lie
+        # outside every member (e.g. a Cargo workspace above them).
+        if self.ws is None:
+            msg = f"`/`-prefixed build inputs {plan.root_inputs} need the workspace `uv()` was given"
+            raise ValueError(msg)
+        root_inputs = self.ws.directory("/", include=plan.root_inputs, gitignore=True)
+        return dataclasses.replace(plan, root_inputs_dir=root_inputs)

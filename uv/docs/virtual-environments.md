@@ -14,13 +14,14 @@ its own. Use this to combine several virtual environments in one image.
 
 Virtual environments aren't self-contained by default: `.venv/bin/python` points back
 at a base interpreter, and the venv's scripts hardcode their location. To make a venv
-that survives being moved, pass `venv_relocatable=True` to `build`:
+that survives being moved, pass `venv_relocatable=True` to `builder`:
 
 ```python
 b = (
     uv(ws)
     .workspace(".")
-    .build(package=["my-app"], no_editable=True, venv_relocatable=True)  # uv venv --relocatable
+    .builder(no_editable=True, venv_relocatable=True)
+    .with_packages(["my-app"])  # uv venv --relocatable
     .with_remote_dependencies()  # sync installs into the relocatable venv
 )
 ```
@@ -38,7 +39,7 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger call uv workspace --path . build --package my-app --no-editable --venv-relocatable \
+    $ dagger call uv workspace --path . builder --no-editable --venv-relocatable with-packages --packages my-app \
         with-remote-dependencies \
         copy-venv --container alpine --set-env-vars
     ```
@@ -49,7 +50,8 @@ paths the venv expects:
     runner = (
         uv(ws)
         .workspace(".")
-        .build(package=["my-app"], no_editable=True, venv_relocatable=True)
+        .builder(no_editable=True, venv_relocatable=True)
+        .with_packages(["my-app"])
         .with_remote_dependencies()
         .copy_venv(core().container().from_("debian:bookworm-slim"), set_env_vars=True)
     )
@@ -59,7 +61,7 @@ paths the venv expects:
 
     By default `uv` installs your workspace's own packages **editable**: their
     `.pth` entries point back at the source tree, which does not exist in the target container.
-    Use `build(..., no_editable=True)` to bake the local sources into `site-packages` instead.
+    Use `builder(no_editable=True)` to bake the local sources into `site-packages` instead.
 
 `copy_venv` mounts the venv at `.venv` (relative to the target's working directory by
 default) and, with `set_env_vars`, exports `VIRTUAL_ENV` and prepends the venv's `bin/`

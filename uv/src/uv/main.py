@@ -155,7 +155,7 @@ class Uv:
         """These workspaces with `handlers` added to their build backend handlers.
 
         Every workspace `workspace` and `workspaces` hand out loads the files
-        they read, and its `build` uses them. When several handle the same
+        they read, and its `builder` uses them. When several handle the same
         backend, the last one added configures its packages.
         """
         return dataclasses.replace(self, handlers=[*self.handlers, *handlers])
@@ -165,7 +165,7 @@ class Uv:
         """A single uv workspace at `path`, relative to the workspace root.
 
         The returned `UvWorkspaceSource` can `audit` its locked dependencies or
-        `build` a minimal container for a package.
+        get a `builder` for its packages.
         """
         return await _load(self.ws, self.layouts, self.handlers, path)
 

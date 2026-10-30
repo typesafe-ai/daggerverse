@@ -5,7 +5,7 @@
 #   rev:      commit SHA (release tag in the comment)
 #   packages: package directories (relative to the repo root) to install
 #   imports:  modules that must import after the build
-#   install:  extra `install` options (optional)
+#   builder:  argument-less `UvWorkspaceBuilder` methods to call (optional)
 #   base:     base image, e.g. one with a Rust toolchain (optional)
 #   handlers: built-in build backend handlers to configure (optional): each
 #             `build_backend_handlers()` function, e.g. `maturin`, mapped to
@@ -45,8 +45,7 @@
   rev: aa19d2dbb9ed187ec01957a92848d9b005e9ba9d # 3.3.2
   packages: [airflow-core]
   imports: [airflow]
-  install:
-    no_default_groups: true
+  builder: [without_default_groups]
 
 # maturin, pure Rust: the package is a crate in a Cargo workspace whose
 # `Cargo.toml`, `Cargo.lock` and sibling crate (`crates/jiter`) sit above it,
