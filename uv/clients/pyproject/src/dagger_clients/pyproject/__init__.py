@@ -118,25 +118,15 @@ class PyprojectProject(_Type):
         _ctx = self._select("exclude", _args)
         return await _ctx.execute(list[str])
 
-    def files(self, ws: Workspace) -> Directory:
+    def files(self) -> Directory:
         """
         The files this project owns, at their workspace-root-relative paths.
 
         Its tree less the projects nested in it, caches, virtualenvs, build
         output and gitignored files. This is what a tool that works on one
         project's own code, such as a linter, should see.
-
-        Parameters
-        ----------
-        ws:
-            A Dagger workspace detected from the current working directory or
-            constructed from a Directory.
         """
-        if not (isinstance(ws, Workspace)):
-            raise _type_error("PyprojectProject.files", "ws", ws, "Workspace")
-        _args = [
-            _Arg("ws", ws),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("files", _args)
         return Directory(_ctx)
 
@@ -296,25 +286,15 @@ class PyprojectProject(_Type):
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
 
-    def pyproject(self, ws: Workspace) -> File:
+    def pyproject(self) -> File:
         """
         This project's `pyproject.toml`.
-
-        Parameters
-        ----------
-        ws:
-            A Dagger workspace detected from the current working directory or
-            constructed from a Directory.
         """
-        if not (isinstance(ws, Workspace)):
-            raise _type_error("PyprojectProject.pyproject", "ws", ws, "Workspace")
-        _args = [
-            _Arg("ws", ws),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("pyproject", _args)
         return File(_ctx)
 
-    def source(self, ws: Workspace) -> Directory:
+    def source(self) -> Directory:
         """
         What building or installing this project reads, at its workspace-root-
         relative paths.
@@ -324,18 +304,8 @@ class PyprojectProject(_Type):
         workspace root. Projects nested inside those trees that none of them
         needs are left out, as are caches, virtualenvs, build output and
         gitignored files.
-
-        Parameters
-        ----------
-        ws:
-            A Dagger workspace detected from the current working directory or
-            constructed from a Directory.
         """
-        if not (isinstance(ws, Workspace)):
-            raise _type_error("PyprojectProject.source", "ws", ws, "Workspace")
-        _args = [
-            _Arg("ws", ws),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
@@ -616,7 +586,7 @@ class PyprojectWorkspace(_Type):
         _ctx = self._select("manifestInclude", _args)
         return await _ctx.execute(list[str])
 
-    def manifests(self, ws: Workspace) -> Directory:
+    def manifests(self) -> Directory:
         """
         What resolving this workspace's dependencies reads, and nothing else.
 
@@ -624,18 +594,8 @@ class PyprojectWorkspace(_Type):
         dependency's `pyproject.toml` and `.python-version`, at their
         workspace-root-relative paths. A source edit changes none of them, so
         a dependency layer built from this stays cached across source edits.
-
-        Parameters
-        ----------
-        ws:
-            A Dagger workspace detected from the current working directory or
-            constructed from a Directory.
         """
-        if not (isinstance(ws, Workspace)):
-            raise _type_error("PyprojectWorkspace.manifests", "ws", ws, "Workspace")
-        _args = [
-            _Arg("ws", ws),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("manifests", _args)
         return Directory(_ctx)
 
@@ -689,7 +649,7 @@ class PyprojectWorkspace(_Type):
         _ctx = self._select("projects", _args)
         return PyprojectProjects(_ctx)
 
-    def source(self, ws: Workspace) -> Directory:
+    def source(self) -> Directory:
         """
         What building or installing this workspace reads, at its workspace-
         root-relative paths.
@@ -698,18 +658,8 @@ class PyprojectWorkspace(_Type):
         they live. Projects nested inside those trees that none of them needs
         are left out, as are caches, virtualenvs, build output and gitignored
         files.
-
-        Parameters
-        ----------
-        ws:
-            A Dagger workspace detected from the current working directory or
-            constructed from a Directory.
         """
-        if not (isinstance(ws, Workspace)):
-            raise _type_error("PyprojectWorkspace.source", "ws", ws, "Workspace")
-        _args = [
-            _Arg("ws", ws),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 

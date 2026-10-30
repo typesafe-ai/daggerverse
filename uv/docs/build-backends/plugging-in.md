@@ -79,5 +79,5 @@ at the package root.
     from dagger_clients.setuptools_package_dir import setuptools_package_dir
     from dagger_clients.uv import uv
 
-    uv(ws).with_build_backend_handlers([setuptools_package_dir()]).workspace(".").install()
+    uv(ws).with_build_backend_handlers([setuptools_package_dir()]).workspace(".").build().with_dependencies().container()
     ```

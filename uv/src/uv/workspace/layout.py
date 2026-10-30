@@ -1,6 +1,5 @@
-from typing import Annotated
+from dataclasses import dataclass
 
-from dagger import Doc, field, object_type
 from dagger_clients.core import Workspace
 
 from uv.workspace.build_backends.handler import BuildBackendHandler
@@ -8,26 +7,26 @@ from uv.workspace.plan import ProjectSource
 from uv.workspace.workspace import UvWorkspaceSource
 
 
-@object_type
+@dataclass
 class UvProjectLayout:
-    """The patterns loading a project's files and those of its local dependencies."""
+    """The patterns loading a project's files and those of its local dependencies. Internal state of `Uv`."""
 
-    path: Annotated[str, Doc("Project root, relative to the workspace root")] = field()
-    include: Annotated[list[str], Doc("Glob patterns loading the project's files")] = field()
-    exclude: Annotated[list[str], Doc("Glob patterns the project's files leave out")] = field()
+    path: str
+    include: list[str]
+    exclude: list[str]
 
 
-@object_type
+@dataclass
 class UvWorkspaceLayout:
-    """The patterns loading a uv workspace's files, as the `pyproject` module discovers them."""
+    """The patterns loading a uv workspace's files, as `pyproject` discovers them. Internal state of `Uv`."""
 
-    path: Annotated[str, Doc("Workspace root path (holding uv.lock), relative to the workspace root")] = field()
-    include: Annotated[list[str], Doc("Glob patterns loading the members and their path dependencies")] = field()
-    exclude: Annotated[list[str], Doc("Glob patterns `include` leaves out")] = field()
-    manifest_include: Annotated[list[str], Doc("Glob patterns loading what resolving the workspace reads")] = field()
-    manifest_exclude: Annotated[list[str], Doc("Glob patterns `manifest_include` leaves out")] = field()
-    projects: Annotated[list[UvProjectLayout], Doc("Each member's and local dependency's patterns")] = field()
-    src_paths: Annotated[list[str], Doc("The entries directly under the projects' `src/`")] = field()
+    path: str
+    include: list[str]
+    exclude: list[str]
+    manifest_include: list[str]
+    manifest_exclude: list[str]
+    projects: list[UvProjectLayout]
+    src_paths: list[str]
 
     def load(self, ws: Workspace, handlers: list[BuildBackendHandler]) -> UvWorkspaceSource:
         """The workspace's directories, loaded lazily from `ws`."""

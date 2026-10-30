@@ -13,6 +13,17 @@ ProjectPath = Annotated[
 WorkspacePath = Annotated[str, Doc("Workspace root (holding a workspace marker), relative to the workspace root.")]
 
 
+def _load(ws: Workspace | None, include: list[str], exclude: list[str] | None = None) -> Directory:
+    """`include` less `exclude` and gitignored files, loaded from `ws`.
+
+    Handed out as a workspace of its own: the workspace given to `pyproject()`
+    gets a new cache key on every run, while one made from a directory is keyed
+    by its contents, so functions given the result stay cached until it changes.
+    """
+    assert ws is not None
+    return ws.directory("/", include=include, exclude=exclude or [], gitignore=True).as_workspace().directory("/")
+
+
 @object_type
 class PyprojectProject:
     """A Python project: a directory holding a `pyproject.toml`.
@@ -53,9 +64,13 @@ class PyprojectProject:
         Doc("Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects."),
     ] = field()
 
+    # The workspace `pyproject()` was given. Not a `field()`: Dagger can't expose a `Workspace` as one.
+    ws: Workspace | None = None
+
     @classmethod
-    def of(cls, project: discovery.Project) -> Self:
+    def of(cls, project: discovery.Project, ws: Workspace) -> Self:
         return cls(
+            ws=ws,
             path=project.path,
             name=project.name,
             generated=project.generated,
@@ -67,12 +82,13 @@ class PyprojectProject:
         )
 
     @function
-    def pyproject(self, ws: Workspace) -> File:
+    def pyproject(self) -> File:
         """This project's `pyproject.toml`."""
-        return ws.file("/" + join(self.path, "pyproject.toml"))
+        path = join(self.path, "pyproject.toml")
+        return _load(self.ws, [path]).file(path)
 
     @function
-    def files(self, ws: Workspace) -> Directory:
+    def files(self) -> Directory:
         """The files this project owns, at their workspace-root-relative paths.
 
         Its tree less the projects nested in it, caches, virtualenvs, build
@@ -80,10 +96,10 @@ class PyprojectProject:
         project's own code, such as a linter, should see.
         """
         exclude = [*SOURCE_EXCLUDE, *(pattern for nested in self.nested for pattern in tree(nested))]
-        return ws.directory("/", include=tree(self.path), exclude=exclude, gitignore=True)
+        return _load(self.ws, tree(self.path), exclude)
 
     @function
-    def source(self, ws: Workspace) -> Directory:
+    def source(self) -> Directory:
         """What building or installing this project reads, at its workspace-root-relative paths.
 
         The project's own files and those of its local dependencies, so a path
@@ -92,7 +108,7 @@ class PyprojectProject:
         needs are left out, as are caches, virtualenvs, build output and
         gitignored files.
         """
-        return ws.directory("/", include=self.include, exclude=self.exclude, gitignore=True)
+        return _load(self.ws, self.include, self.exclude)
 
 
 @object_type
@@ -146,13 +162,16 @@ class PyprojectWorkspace:
     ] = field()
     manifest_exclude: Annotated[list[str], Doc("Glob patterns `manifests` leaves out.")] = field()
 
+    # The workspace `pyproject()` was given. Not a `field()`: Dagger can't expose a `Workspace` as one.
+    ws: Workspace | None = None
+
     @function
     def projects(self) -> PyprojectProjects:
         """This workspace's member projects."""
         return PyprojectProjects(paths=self.members, items=self.member_items)
 
     @function
-    def source(self, ws: Workspace) -> Directory:
+    def source(self) -> Directory:
         """What building or installing this workspace reads, at its workspace-root-relative paths.
 
         Every member's files and those of their local dependencies, wherever
@@ -160,10 +179,10 @@ class PyprojectWorkspace:
         are left out, as are caches, virtualenvs, build output and gitignored
         files.
         """
-        return ws.directory("/", include=self.include, exclude=self.exclude, gitignore=True)
+        return _load(self.ws, self.include, self.exclude)
 
     @function
-    def manifests(self, ws: Workspace) -> Directory:
+    def manifests(self) -> Directory:
         """What resolving this workspace's dependencies reads, and nothing else.
 
         The markers (lockfiles), `uv.toml`, and every member's and local
@@ -171,7 +190,7 @@ class PyprojectWorkspace:
         workspace-root-relative paths. A source edit changes none of them, so
         a dependency layer built from this stays cached across source edits.
         """
-        return ws.directory("/", include=self.manifest_include, exclude=self.manifest_exclude)
+        return _load(self.ws, self.manifest_include, self.manifest_exclude)
 
 
 @object_type
@@ -249,7 +268,7 @@ class Pyproject:
 
         def project(path: str) -> PyprojectProject:
             if path not in projects:
-                projects[path] = PyprojectProject.of(found.project(path))
+                projects[path] = PyprojectProject.of(found.project(path), ws)
             return projects[path]
 
         workspaces = []
@@ -268,6 +287,7 @@ class Pyproject:
                     exclude=list(workspace.exclude),
                     manifest_include=list(workspace.manifest_include),
                     manifest_exclude=list(SOURCE_EXCLUDE),
+                    ws=ws,
                 )
             )
         return cls(

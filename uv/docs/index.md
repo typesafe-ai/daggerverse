@@ -59,7 +59,7 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     Build a minimal container with a package and its local dependencies installed:
 
     ```console
-    $ dagger call uv workspace --path . install --package my-app
+    $ dagger call uv workspace --path . build --package my-app with-dependencies container
     ```
 
     Audit every workspace in the source tree:
@@ -74,7 +74,7 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     from dagger_clients.uv import uv
 
     # Build a minimal container with a package and its local dependencies installed.
-    ctr = uv(ws).workspace(".").install(package=["my-app"])
+    ctr = uv(ws).workspace(".").build(package=["my-app"]).with_dependencies().container()
     ```
 
     `ws` is the Dagger workspace the module reads. In your own module, take
@@ -87,24 +87,21 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
       WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
-      WS -->|install| C1["Container"]
-      WS -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
-      B -->|with_local_dependencies / copy_venv| C2["Container"]
-      B -->|venv| V
+      B -->|with_dependencies / with_*| B
+      B -->|container / copy_venv| C["Container"]
+      B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
     - **`Uv`** holds the source tree it reads from the Dagger workspace (`ws`). Ask it
       for one workspace by path (`workspace`) or for the collection of every workspace
       it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
-      `install` everything in one call.
+      you can read the required `uv` version, `audit` it (a check), or `build` a container.
     - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
-      environment ready, plus the resolved sync plan. It exposes the individual pipeline steps so you can run your own steps
-      between them, and exports the result as a container or a [`UvVenv`](virtual-environments.md).
-
-    The convenience methods (`audit`, `install`) cover the common cases. Use the
-    pipeline when you need control over the individual steps.
+      environment ready, plus the resolved sync plan. `with_dependencies` installs
+      everything; its individual steps let you run your own steps between them. Every
+      step returns the build, and `container` or [`venv`](virtual-environments.md)
+      finishes it.
 
 ## Where to go next
 

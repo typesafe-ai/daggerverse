@@ -18,12 +18,9 @@ from uv.args import (
     AllPackages,
     Extra,
     Group,
-    LockTimeout,
-    MaxCacheSize,
     NoDefaultGroups,
     NoEditable,
     Package,
-    PruneCache,
     VenvRelocatable,
 )
 from uv.utils import (
@@ -43,7 +40,6 @@ from uv.workspace.build_backends.handler import BuildBackendHandler
 from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_workspace_indices
 from uv.workspace.package import UvPackageSource
 from uv.workspace.plan import ProjectSource, UvSyncPlan
-from uv.workspace.venv import UvVenv
 
 logger = logging.getLogger(__name__)
 
@@ -83,28 +79,19 @@ class UvWorkspaceSource:
         Doc("Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files."),
     ] = field()
 
-    projects: Annotated[
-        list[ProjectSource],
-        Doc("Each member's and local dependency's files, loaded only when a build installs that project."),
-    ] = field(default=list)
-
-    src_paths: Annotated[
-        list[str],
-        Doc("The entries directly under the projects' `src/`, which mark a `src` layout."),
-    ] = field(default=list)
-
     path: Annotated[
         str,
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
 
-    build_backend_handlers: Annotated[
-        list[BuildBackendHandler],
-        Doc("Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`."),
-    ] = field(default=list)
-
-    # The workspace the directories were loaded from, for the build backend handlers'
-    # `/`-prefixed build inputs. Not a `field()`: Dagger can't expose a `Workspace` as one.
+    # Not `field()`s: internal state, and Dagger can't expose a `Workspace` as one.
+    # Each member's and local dependency's files, loaded only when a build installs that project.
+    projects: list[ProjectSource] = dataclasses.field(default_factory=list)
+    # The entries directly under the projects' `src/`, which mark a `src` layout.
+    src_paths: list[str] = dataclasses.field(default_factory=list)
+    # Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`.
+    build_backend_handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
+    # The workspace the directories were loaded from, for the handlers' `/`-prefixed build inputs.
     ws: Workspace | None = None
 
     def _ws_dir(self) -> Directory:
@@ -446,10 +433,11 @@ class UvWorkspaceSource:
         redundant `.venv`.
 
         The returned `UvWorkspaceBuild` drives the pipeline from here:
-        `with_remote_dependencies()` to install remote deps, `with_workspace_files()`
-        to scaffold local packages, then `with_local_dependencies()` to install them.
-        Skip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)
-        handles dependency installation.
+        `with_dependencies()` installs everything, or run its steps
+        individually: `with_remote_dependencies()`, `with_workspace_files()`,
+        then `with_local_dependencies()`. Skip `with_remote_dependencies()` when
+        another tool (e.g. `pulumi install`) handles dependency installation.
+        Finish with `container()`, or `venv()` with `venv_relocatable=True`.
         """
         with get_tracer().start_as_current_span("prepare workspace build") as span:
             span.set_attribute("workspace.path", self.path)
@@ -525,114 +513,3 @@ class UvWorkspaceSource:
             )
             ctr = await ctr.sync()
             return UvWorkspaceBuild(container=ctr, plan=plan)
-
-    @function
-    async def install(
-        self,
-        base_container: Annotated[
-            Container | None,
-            Doc(
-                "Container to build on (auth, system packages, etc.). Defaults to "
-                "a Debian-based uv image at the workspace's uv version (uv provisions Python on demand)."
-            ),
-        ] = None,
-        package: Package | None = None,
-        extra: Extra | None = None,
-        group: Group | None = None,
-        all_extras: AllExtras = False,
-        all_groups: AllGroups = False,
-        all_packages: AllPackages = False,
-        no_editable: NoEditable = False,
-        no_default_groups: NoDefaultGroups = False,
-        prune_cache: PruneCache = True,
-        max_cache_size: MaxCacheSize = 100,
-        lock_timeout: LockTimeout = 600,
-        venv_relocatable: VenvRelocatable = False,
-        activate_venv: ActivateVenv = True,
-        auto_install_uv: Annotated[
-            bool,
-            Doc(
-                "Automatically install the uv binary if it is not already on $PATH. "
-                "Set to False if your base_container already ships uv."
-            ),
-        ] = True,
-    ) -> Container:
-        """Build a minimal container with deps installed for the given package(s).
-
-        Convenience method composing `build`, `with_remote_dependencies`,
-        `with_workspace_files`, and `with_local_dependencies`. For fine-grained control (e.g. running
-        `pulumi install` between remote deps and local source), call them individually.
-        """
-        b = await self.build(
-            base_container,
-            package=package,
-            extra=extra,
-            group=group,
-            all_extras=all_extras,
-            all_groups=all_groups,
-            all_packages=all_packages,
-            no_editable=no_editable,
-            no_default_groups=no_default_groups,
-            venv_relocatable=venv_relocatable,
-            activate_venv=activate_venv,
-            auto_install_uv=auto_install_uv,
-        )
-        b = await b.with_remote_dependencies(
-            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
-        )
-        b = await b.with_workspace_files()
-        return await b.with_local_dependencies()
-
-    @function
-    async def venv(
-        self,
-        base_container: Annotated[
-            Container | None,
-            Doc("Container to build on; defaults to a Debian-based uv image at the workspace's uv version."),
-        ] = None,
-        package: Package | None = None,
-        extra: Extra | None = None,
-        group: Group | None = None,
-        all_extras: AllExtras = False,
-        all_groups: AllGroups = False,
-        all_packages: AllPackages = False,
-        no_editable: NoEditable = False,
-        no_default_groups: NoDefaultGroups = False,
-        prune_cache: PruneCache = True,
-        max_cache_size: MaxCacheSize = 100,
-        lock_timeout: LockTimeout = 600,
-        auto_install_uv: Annotated[
-            bool,
-            Doc(
-                "Automatically install the uv binary if it is not already on $PATH. "
-                "Set to False if your base_container already ships uv."
-            ),
-        ] = True,
-    ) -> UvVenv:
-        """Install into a relocatable venv and export it with the Python it links against.
-
-        Like `install`, but always builds a relocatable venv and returns a `UvVenv`
-        (the venv plus its uv-managed Python) that `.into(container, path)` can drop
-        into any image. Use this instead of `install` when copying the
-        environment into another container. Pair with `no_editable=True` so the
-        exported venv carries no dependency on the workspace source.
-        """
-        b = await self.build(
-            base_container,
-            package=package,
-            extra=extra,
-            group=group,
-            all_extras=all_extras,
-            all_groups=all_groups,
-            all_packages=all_packages,
-            no_editable=no_editable,
-            no_default_groups=no_default_groups,
-            venv_relocatable=True,
-            auto_install_uv=auto_install_uv,
-        )
-        b = await b.with_remote_dependencies(
-            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
-        )
-        b = await b.with_workspace_files()
-        b = b.with_container(await b.with_local_dependencies())
-        return await b.venv()

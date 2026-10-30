@@ -417,9 +417,8 @@ class Uv(_Type):
         handlers.
 
         Every workspace `workspace` and `workspaces` hand out loads the files
-        they read, and its `build`, `install` and `venv` use them. When
-        several
-        handle the same backend, the last one added configures its packages.
+        they read, and its `build` uses them. When several handle the same
+        backend, the last one added configures its packages.
 
         Parameters
         ----------
@@ -463,6 +462,8 @@ class Uv(_Type):
         """
         Every uv workspace in the source tree (one per uv.lock), less those
         matching `exclude`.
+
+        Each loads only when `workspace` gets it.
         """
         _args: list[_Arg] = []
         _ctx = self._select("workspaces", _args)
@@ -2448,102 +2449,6 @@ class UvPoetryCoreHandler(_Type):
         return Container(_ctx)
 
 
-class UvProjectLayout(_Type):
-    """ The patterns loading a project's files and those of its local
-    dependencies.  """
-
-    async def exclude(self) -> list[str]:
-        """Glob patterns the project's files leave out
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("exclude", _args)
-        return await _ctx.execute(list[str])
-
-    async def id(self) -> str:
-        """A unique identifier for this UvProjectLayout.
-
-        Note
-        ----
-        This is lazily evaluated, no operation is actually run.
-
-        Returns
-        -------
-        str
-            The `ID` scalar type represents a unique identifier, often used to
-            refetch an object or as key for a cache. The ID type appears in a
-            JSON response as a String; however, it is not intended to be
-            human-readable. When expected as an input type, any string (such
-            as `"4"`) or integer (such as `4`) input value will be accepted as
-            an ID.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("id", _args)
-        return await _ctx.execute(str)
-
-    async def include(self) -> list[str]:
-        """Glob patterns loading the project's files
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("include", _args)
-        return await _ctx.execute(list[str])
-
-    async def path(self) -> str:
-        """Project root, relative to the workspace root
-
-        Returns
-        -------
-        str
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("path", _args)
-        return await _ctx.execute(str)
-
-
 class UvProjectSource(_Type):
     """ A project's files: the project and its local dependencies, at
     workspace-root-relative paths.  """
@@ -2885,7 +2790,9 @@ class UvWorkspaceBuild(_Type):
     """ An in-progress workspace build: a container plus its resolved sync
     plan.  Drives the install pipeline: `with_remote_dependencies` to
     install remote deps, `with_workspace_files` to scaffold local
-    packages, then `with_local_dependencies` to install them.  """
+    packages, then `with_local_dependencies` to install them, or
+    `with_dependencies` for all three. Every step returns the build;
+    finish with `container`, or `venv` to export the environment.  """
 
     def container(self) -> Container:
         _args: list[_Arg] = []
@@ -2968,9 +2875,9 @@ class UvWorkspaceBuild(_Type):
 
         Bundles the venv and the exact interpreter it links against into a
         `UvVenv` (see `UvVenv.create`). Call after the venv is populated (e.g.
-        after `with_remote_dependencies`/`with_local_dependencies`). Requires
-        a
-        relocatable venv built against a uv-managed Python; raises otherwise.
+        after `with_dependencies`). Requires a relocatable venv (`build` with
+        `venv_relocatable=True`) built against a uv-managed Python; raises
+        otherwise.
         """
         _args: list[_Arg] = []
         _ctx = self._select("venv", _args)
@@ -3048,7 +2955,42 @@ class UvWorkspaceBuild(_Type):
         _ctx = self._select("withContainer", _args)
         return UvWorkspaceBuild(_ctx)
 
-    def with_local_dependencies(self) -> Container:
+    def with_dependencies(self, *, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600,) -> _Self:
+        """
+        Install every dependency: `with_remote_dependencies`,
+        `with_workspace_files`, then `with_local_dependencies`.
+
+        Run the steps individually to do something between them, e.g. `pulumi
+        install` between the remote dependencies and the local source.
+
+        Parameters
+        ----------
+        prune_cache:
+            Whether to run `uv cache prune --ci` after installing remote
+            dependencies. Learn more about the reasoning in [uv
+            docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-
+            continuous-integration).
+        max_cache_size:
+            Prune the uv cache only once it grows past this many GiB.
+        lock_timeout:
+            Seconds uv waits to acquire the cache file lock
+            (`UV_LOCK_TIMEOUT`) while pruning the cache.
+        """
+        if not (isinstance(prune_cache, bool)):
+            raise _type_error("UvWorkspaceBuild.with_dependencies", "prune_cache", prune_cache, "bool")
+        if not (isinstance(max_cache_size, int)):
+            raise _type_error("UvWorkspaceBuild.with_dependencies", "max_cache_size", max_cache_size, "int")
+        if not (isinstance(lock_timeout, int)):
+            raise _type_error("UvWorkspaceBuild.with_dependencies", "lock_timeout", lock_timeout, "int")
+        _args = [
+            _Arg("pruneCache", prune_cache, True),
+            _Arg("maxCacheSize", max_cache_size, 100),
+            _Arg("lockTimeout", lock_timeout, 600),
+        ]
+        _ctx = self._select("withDependencies", _args)
+        return UvWorkspaceBuild(_ctx)
+
+    def with_local_dependencies(self) -> _Self:
         """
         Install the scaffolded local packages, copying their real source at
         the right time.
@@ -3072,7 +3014,7 @@ class UvWorkspaceBuild(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("withLocalDependencies", _args)
-        return Container(_ctx)
+        return UvWorkspaceBuild(_ctx)
 
     def with_python_install(self, version: str) -> _Self:
         """
@@ -3196,171 +3138,6 @@ class UvWorkspaceBuild(_Type):
 
 
 
-class UvWorkspaceLayout(_Type):
-    """ The patterns loading a uv workspace's files, as the `pyproject`
-    module discovers them.  """
-
-    async def exclude(self) -> list[str]:
-        """Glob patterns `include` leaves out
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("exclude", _args)
-        return await _ctx.execute(list[str])
-
-    async def id(self) -> str:
-        """A unique identifier for this UvWorkspaceLayout.
-
-        Note
-        ----
-        This is lazily evaluated, no operation is actually run.
-
-        Returns
-        -------
-        str
-            The `ID` scalar type represents a unique identifier, often used to
-            refetch an object or as key for a cache. The ID type appears in a
-            JSON response as a String; however, it is not intended to be
-            human-readable. When expected as an input type, any string (such
-            as `"4"`) or integer (such as `4`) input value will be accepted as
-            an ID.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("id", _args)
-        return await _ctx.execute(str)
-
-    async def include(self) -> list[str]:
-        """Glob patterns loading the members and their path dependencies
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("include", _args)
-        return await _ctx.execute(list[str])
-
-    async def manifest_exclude(self) -> list[str]:
-        """Glob patterns `manifest_include` leaves out
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("manifestExclude", _args)
-        return await _ctx.execute(list[str])
-
-    async def manifest_include(self) -> list[str]:
-        """Glob patterns loading what resolving the workspace reads
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("manifestInclude", _args)
-        return await _ctx.execute(list[str])
-
-    async def path(self) -> str:
-        """Workspace root path (holding uv.lock), relative to the workspace root
-
-        Returns
-        -------
-        str
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("path", _args)
-        return await _ctx.execute(str)
-
-    async def projects(self) -> list[UvProjectLayout]:
-        """Each member's and local dependency's patterns"""
-        _args: list[_Arg] = []
-        _ctx = self._select("projects", _args)
-        return await _ctx.execute_object_list(UvProjectLayout)
-
-    async def src_paths(self) -> list[str]:
-        """The entries directly under the projects' `src/`
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("srcPaths", _args)
-        return await _ctx.execute(list[str])
-
-
 class UvWorkspaceSource(_Type):
     """ A self-contained uv workspace: the source files rooted at a
     `uv.lock`.  Carries the source tree and the workspace's path within it
@@ -3429,13 +3206,12 @@ class UvWorkspaceSource(_Type):
         redundant `.venv`.
 
         The returned `UvWorkspaceBuild` drives the pipeline from here:
-        `with_remote_dependencies()` to install remote deps,
-        `with_workspace_files()`
-        to scaffold local packages, then `with_local_dependencies()` to
-        install them.
-        Skip `with_remote_dependencies()` when another tool (e.g. `pulumi
-        install`)
-        handles dependency installation.
+        `with_dependencies()` installs everything, or run its steps
+        individually: `with_remote_dependencies()`, `with_workspace_files()`,
+        then `with_local_dependencies()`. Skip `with_remote_dependencies()`
+        when
+        another tool (e.g. `pulumi install`) handles dependency installation.
+        Finish with `container()`, or `venv()` with `venv_relocatable=True`.
 
         Parameters
         ----------
@@ -3515,14 +3291,6 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("build", _args)
         return UvWorkspaceBuild(_ctx)
 
-    async def build_backend_handlers(self) -> list[UvBuildBackendHandler]:
-        """Handlers for the local packages' build backends, from
-        `Uv.with_build_backend_handlers`.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("buildBackendHandlers", _args)
-        return await _ctx.execute_object_list(_UvBuildBackendHandlerClient)
-
     async def id(self) -> str:
         """A unique identifier for this UvWorkspaceSource.
 
@@ -3592,114 +3360,6 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("inputs", _args)
         return Directory(_ctx)
 
-    def install(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> Container:
-        """
-        Build a minimal container with deps installed for the given
-        package(s).
-
-        Convenience method composing `build`, `with_remote_dependencies`,
-        `with_workspace_files`, and `with_local_dependencies`. For fine-
-        grained control (e.g. running
-        `pulumi install` between remote deps and local source), call them
-        individually.
-
-        Parameters
-        ----------
-        base_container:
-            Container to build on (auth, system packages, etc.). Defaults to a
-            Debian-based uv image at the workspace's uv version (uv provisions
-            Python on demand).
-        package:
-        extra:
-        group:
-        all_extras:
-            Install every extra; maps to `uv sync --all-extras`
-        all_groups:
-            Install every dependency group; maps to `uv sync --all-groups`
-        all_packages:
-            Install every workspace member; maps to `uv sync --all-packages`
-        no_editable:
-            Install local/workspace packages non-editable (`uv sync --no-
-            editable`), baking their source into site-packages instead of
-            linking it. Makes the resulting venv self-contained, so it can be
-            exported/copied (e.g. via `copy_venv`) without also carrying the
-            workspace source.
-        no_default_groups:
-            Skip the default dependency groups (`[tool.uv] default-groups`,
-            `dev` unless set); maps to `uv sync --no-default-groups`. Groups
-            passed with `group` are still installed.
-        prune_cache:
-            Whether to run `uv cache prune --ci` after installing remote
-            dependencies. Learn more about the reasoning in [uv
-            docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-
-            continuous-integration).
-        max_cache_size:
-            Prune the uv cache only once it grows past this many GiB.
-        lock_timeout:
-            Seconds uv waits to acquire the cache file lock
-            (`UV_LOCK_TIMEOUT`) while pruning the cache.
-        venv_relocatable:
-            Create a relocatable `.venv` (`uv venv --relocatable`) before
-            installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
-            Needed to copy the environment into another image (see `venv`).
-        activate_venv:
-            When the build uses a `.venv`, activate it in the container: set
-            `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain
-            `python` runs the installed environment.
-        auto_install_uv:
-            Automatically install the uv binary if it is not already on $PATH.
-            Set to False if your base_container already ships uv.
-        """
-        if not (base_container is None or isinstance(base_container, Container)):
-            raise _type_error("UvWorkspaceSource.install", "base_container", base_container, "Container | None")
-        if not (package is None or (isinstance(package, list) and all(isinstance(_v0, str) for _v0 in package))):
-            raise _type_error("UvWorkspaceSource.install", "package", package, "list[str] | None")
-        if not (extra is None or (isinstance(extra, list) and all(isinstance(_v0, str) for _v0 in extra))):
-            raise _type_error("UvWorkspaceSource.install", "extra", extra, "list[str] | None")
-        if not (group is None or (isinstance(group, list) and all(isinstance(_v0, str) for _v0 in group))):
-            raise _type_error("UvWorkspaceSource.install", "group", group, "list[str] | None")
-        if not (isinstance(all_extras, bool)):
-            raise _type_error("UvWorkspaceSource.install", "all_extras", all_extras, "bool")
-        if not (isinstance(all_groups, bool)):
-            raise _type_error("UvWorkspaceSource.install", "all_groups", all_groups, "bool")
-        if not (isinstance(all_packages, bool)):
-            raise _type_error("UvWorkspaceSource.install", "all_packages", all_packages, "bool")
-        if not (isinstance(no_editable, bool)):
-            raise _type_error("UvWorkspaceSource.install", "no_editable", no_editable, "bool")
-        if not (isinstance(no_default_groups, bool)):
-            raise _type_error("UvWorkspaceSource.install", "no_default_groups", no_default_groups, "bool")
-        if not (isinstance(prune_cache, bool)):
-            raise _type_error("UvWorkspaceSource.install", "prune_cache", prune_cache, "bool")
-        if not (isinstance(max_cache_size, int)):
-            raise _type_error("UvWorkspaceSource.install", "max_cache_size", max_cache_size, "int")
-        if not (isinstance(lock_timeout, int)):
-            raise _type_error("UvWorkspaceSource.install", "lock_timeout", lock_timeout, "int")
-        if not (isinstance(venv_relocatable, bool)):
-            raise _type_error("UvWorkspaceSource.install", "venv_relocatable", venv_relocatable, "bool")
-        if not (isinstance(activate_venv, bool)):
-            raise _type_error("UvWorkspaceSource.install", "activate_venv", activate_venv, "bool")
-        if not (isinstance(auto_install_uv, bool)):
-            raise _type_error("UvWorkspaceSource.install", "auto_install_uv", auto_install_uv, "bool")
-        _args = [
-            _Arg("baseContainer", base_container, None),
-            _Arg("package", package, None),
-            _Arg("extra", extra, None),
-            _Arg("group", group, None),
-            _Arg("allExtras", all_extras, False),
-            _Arg("allGroups", all_groups, False),
-            _Arg("allPackages", all_packages, False),
-            _Arg("noEditable", no_editable, False),
-            _Arg("noDefaultGroups", no_default_groups, False),
-            _Arg("pruneCache", prune_cache, True),
-            _Arg("maxCacheSize", max_cache_size, 100),
-            _Arg("lockTimeout", lock_timeout, 600),
-            _Arg("venvRelocatable", venv_relocatable, False),
-            _Arg("activateVenv", activate_venv, True),
-            _Arg("autoInstallUv", auto_install_uv, True),
-        ]
-        _ctx = self._select("install", _args)
-        return Container(_ctx)
-
     def manifests(self) -> Directory:
         """Only what resolving the workspace reads: uv.lock, uv.toml and the
         members' pyproject.toml files.
@@ -3747,14 +3407,6 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
 
-    async def projects(self) -> list[UvProjectSource]:
-        """Each member's and local dependency's files, loaded only when a build
-        installs that project.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("projects", _args)
-        return await _ctx.execute_object_list(UvProjectSource)
-
     async def python_version(self) -> str | None:
         """
         The Python version pinned by the workspace's `.python-version`, if
@@ -3792,28 +3444,6 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
-    async def src_paths(self) -> list[str]:
-        """The entries directly under the projects' `src/`, which mark a `src`
-        layout.
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("srcPaths", _args)
-        return await _ctx.execute(list[str])
-
     async def uv_version(self) -> str:
         """
         The uv version this workspace requires, as a concrete image tag.
@@ -3842,102 +3472,6 @@ class UvWorkspaceSource(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("uvVersion", _args)
         return await _ctx.execute(str)
-
-    def venv(self, *, base_container: Container | None = None, package: list[str] | None = None, extra: list[str] | None = None, group: list[str] | None = None, all_extras: bool = False, all_groups: bool = False, all_packages: bool = False, no_editable: bool = False, no_default_groups: bool = False, prune_cache: bool = True, max_cache_size: int = 100, lock_timeout: int = 600, auto_install_uv: bool = True,) -> UvVenv:
-        """
-        Install into a relocatable venv and export it with the Python it links
-        against.
-
-        Like `install`, but always builds a relocatable venv and returns a
-        `UvVenv`
-        (the venv plus its uv-managed Python) that `.into(container, path)`
-        can drop
-        into any image. Use this instead of `install` when copying the
-        environment into another container. Pair with `no_editable=True` so
-        the
-        exported venv carries no dependency on the workspace source.
-
-        Parameters
-        ----------
-        base_container:
-            Container to build on; defaults to a Debian-based uv image at the
-            workspace's uv version.
-        package:
-        extra:
-        group:
-        all_extras:
-            Install every extra; maps to `uv sync --all-extras`
-        all_groups:
-            Install every dependency group; maps to `uv sync --all-groups`
-        all_packages:
-            Install every workspace member; maps to `uv sync --all-packages`
-        no_editable:
-            Install local/workspace packages non-editable (`uv sync --no-
-            editable`), baking their source into site-packages instead of
-            linking it. Makes the resulting venv self-contained, so it can be
-            exported/copied (e.g. via `copy_venv`) without also carrying the
-            workspace source.
-        no_default_groups:
-            Skip the default dependency groups (`[tool.uv] default-groups`,
-            `dev` unless set); maps to `uv sync --no-default-groups`. Groups
-            passed with `group` are still installed.
-        prune_cache:
-            Whether to run `uv cache prune --ci` after installing remote
-            dependencies. Learn more about the reasoning in [uv
-            docs](https://docs.astral.sh/uv/concepts/cache/#caching-in-
-            continuous-integration).
-        max_cache_size:
-            Prune the uv cache only once it grows past this many GiB.
-        lock_timeout:
-            Seconds uv waits to acquire the cache file lock
-            (`UV_LOCK_TIMEOUT`) while pruning the cache.
-        auto_install_uv:
-            Automatically install the uv binary if it is not already on $PATH.
-            Set to False if your base_container already ships uv.
-        """
-        if not (base_container is None or isinstance(base_container, Container)):
-            raise _type_error("UvWorkspaceSource.venv", "base_container", base_container, "Container | None")
-        if not (package is None or (isinstance(package, list) and all(isinstance(_v0, str) for _v0 in package))):
-            raise _type_error("UvWorkspaceSource.venv", "package", package, "list[str] | None")
-        if not (extra is None or (isinstance(extra, list) and all(isinstance(_v0, str) for _v0 in extra))):
-            raise _type_error("UvWorkspaceSource.venv", "extra", extra, "list[str] | None")
-        if not (group is None or (isinstance(group, list) and all(isinstance(_v0, str) for _v0 in group))):
-            raise _type_error("UvWorkspaceSource.venv", "group", group, "list[str] | None")
-        if not (isinstance(all_extras, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "all_extras", all_extras, "bool")
-        if not (isinstance(all_groups, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "all_groups", all_groups, "bool")
-        if not (isinstance(all_packages, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "all_packages", all_packages, "bool")
-        if not (isinstance(no_editable, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "no_editable", no_editable, "bool")
-        if not (isinstance(no_default_groups, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "no_default_groups", no_default_groups, "bool")
-        if not (isinstance(prune_cache, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "prune_cache", prune_cache, "bool")
-        if not (isinstance(max_cache_size, int)):
-            raise _type_error("UvWorkspaceSource.venv", "max_cache_size", max_cache_size, "int")
-        if not (isinstance(lock_timeout, int)):
-            raise _type_error("UvWorkspaceSource.venv", "lock_timeout", lock_timeout, "int")
-        if not (isinstance(auto_install_uv, bool)):
-            raise _type_error("UvWorkspaceSource.venv", "auto_install_uv", auto_install_uv, "bool")
-        _args = [
-            _Arg("baseContainer", base_container, None),
-            _Arg("package", package, None),
-            _Arg("extra", extra, None),
-            _Arg("group", group, None),
-            _Arg("allExtras", all_extras, False),
-            _Arg("allGroups", all_groups, False),
-            _Arg("allPackages", all_packages, False),
-            _Arg("noEditable", no_editable, False),
-            _Arg("noDefaultGroups", no_default_groups, False),
-            _Arg("pruneCache", prune_cache, True),
-            _Arg("maxCacheSize", max_cache_size, 100),
-            _Arg("lockTimeout", lock_timeout, 600),
-            _Arg("autoInstallUv", auto_install_uv, True),
-        ]
-        _ctx = self._select("venv", _args)
-        return UvVenv(_ctx)
 
 
 class UvWorkspaces(_Type):
@@ -4084,12 +3618,10 @@ __all__ = [
     "UvPackageSource",
     "UvPdmBackendHandler",
     "UvPoetryCoreHandler",
-    "UvProjectLayout",
     "UvProjectSource",
     "UvSyncPlan",
     "UvVenv",
     "UvWorkspaceBuild",
-    "UvWorkspaceLayout",
     "UvWorkspaceSource",
     "UvWorkspaces",
     "uv",

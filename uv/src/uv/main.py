@@ -16,12 +16,22 @@ from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
 _WORKSPACE_MARKERS = ["uv.lock"]
 
 
-def _lookup[T: (UvWorkspaceSource, UvWorkspaceLayout)](items: list[T], path: str) -> T:
-    for item in items:
-        if item.path == path:
-            return item
-    msg = f"no uv workspace (uv.lock) at {path!r}"
-    raise ValueError(msg)
+async def _load(
+    ws: Workspace | None, layouts: list[UvWorkspaceLayout], handlers: list[BuildBackendHandler], path: str
+) -> UvWorkspaceSource:
+    """The workspace at `path`, loaded from a workspace of just the files its builds read.
+
+    The workspace `uv()` was given gets a new cache key on every run, and so
+    does everything loaded from it. One made from a directory is keyed by its
+    contents, so loading the workspace from it keeps its builds cached.
+    """
+    assert ws is not None
+    layout = next((layout for layout in layouts if layout.path == path), None)
+    if layout is None:
+        msg = f"no uv workspace (uv.lock) at {path!r}"
+        raise ValueError(msg)
+    inputs = await layout.load(ws, handlers).inputs()
+    return layout.load(inputs.as_workspace(), handlers)
 
 
 def _project_of_src_path(path: str) -> str:
@@ -43,13 +53,16 @@ class UvWorkspaces:
         Doc("uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root."),
     ] = keys()
 
-    items: list[UvWorkspaceSource]
+    # Not `field()`s: each workspace loads only when `workspace` gets it.
+    ws: Workspace | None = None
+    layouts: list[UvWorkspaceLayout] = dataclasses.field(default_factory=list)
+    handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
 
     @function
     @get
-    def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
+    async def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """The uv workspace rooted at `path`."""
-        return _lookup(self.items, path)
+        return await _load(self.ws, self.layouts, self.handlers, path)
 
 
 @object_type
@@ -118,17 +131,6 @@ class Uv:
         layouts = {layout.path: layout for layout in await asyncio.gather(*(project_layout(p) for p in projects))}
         return cls(ws=ws, layouts=list(await asyncio.gather(*(workspace_layout(w) for w in found))))
 
-    async def _load(self, layout: UvWorkspaceLayout) -> UvWorkspaceSource:
-        """The workspace at `layout`, loaded from a workspace of just the files its builds read.
-
-        The workspace `uv()` was given gets a new cache key on every run, and so
-        does everything loaded from it. One made from a directory is keyed by its
-        contents, so loading the workspace from it keeps its builds cached.
-        """
-        assert self.ws is not None
-        inputs = await layout.load(self.ws, self.handlers).inputs()
-        return layout.load(inputs.as_workspace(), self.handlers)
-
     @function
     def build_backend_handlers(self) -> BuildBackendHandlers:
         """Handlers for the module's built-in build backends, to configure them for some packages.
@@ -153,8 +155,8 @@ class Uv:
         """These workspaces with `handlers` added to their build backend handlers.
 
         Every workspace `workspace` and `workspaces` hand out loads the files
-        they read, and its `build`, `install` and `venv` use them. When several
-        handle the same backend, the last one added configures its packages.
+        they read, and its `build` uses them. When several handle the same
+        backend, the last one added configures its packages.
         """
         return dataclasses.replace(self, handlers=[*self.handlers, *handlers])
 
@@ -165,10 +167,14 @@ class Uv:
         The returned `UvWorkspaceSource` can `audit` its locked dependencies or
         `build` a minimal container for a package.
         """
-        return await self._load(_lookup(self.layouts, path))
+        return await _load(self.ws, self.layouts, self.handlers, path)
 
     @function
-    async def workspaces(self) -> UvWorkspaces:
-        """Every uv workspace in the source tree (one per uv.lock), less those matching `exclude`."""
-        items = list(await asyncio.gather(*(self._load(layout) for layout in self.layouts)))
-        return UvWorkspaces(paths=[item.path for item in items], items=items)
+    def workspaces(self) -> UvWorkspaces:
+        """Every uv workspace in the source tree (one per uv.lock), less those matching `exclude`.
+
+        Each loads only when `workspace` gets it.
+        """
+        return UvWorkspaces(
+            paths=[layout.path for layout in self.layouts], ws=self.ws, layouts=self.layouts, handlers=self.handlers
+        )

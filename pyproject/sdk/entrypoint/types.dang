@@ -15,17 +15,14 @@ type ModuleTypes {
         .withFunction(
           function("files", typeDef.withObject("Directory"))
             .withDescription("The files this project owns, at their workspace-root-relative paths.\n\nIts tree less the projects nested in it, caches, virtualenvs, build\noutput and gitignored files. This is what a tool that works on one\nproject's own code, such as a linter, should see.")
-            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
         )
         .withFunction(
           function("pyproject", typeDef.withObject("File"))
             .withDescription("This project's `pyproject.toml`.")
-            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
         )
         .withFunction(
           function("source", typeDef.withObject("Directory"))
             .withDescription("What building or installing this project reads, at its workspace-root-relative paths.\n\nThe project's own files and those of its local dependencies, so a path\nsource like `../lib` resolves when the directory is mounted as the\nworkspace root. Projects nested inside those trees that none of them\nneeds are left out, as are caches, virtualenvs, build output and\ngitignored files.")
-            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
         ),
       typeDef.withObject("PyprojectProjects", description: "Python projects, keyed by root.")
         .withCollection
@@ -49,7 +46,6 @@ type ModuleTypes {
         .withFunction(
           function("manifests", typeDef.withObject("Directory"))
             .withDescription("What resolving this workspace's dependencies reads, and nothing else.\n\nThe markers (lockfiles), `uv.toml`, and every member's and local\ndependency's `pyproject.toml` and `.python-version`, at their\nworkspace-root-relative paths. A source edit changes none of them, so\na dependency layer built from this stays cached across source edits.")
-            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
         )
         .withFunction(
           function("projects", typeDef.withObject("PyprojectProjects"))
@@ -58,7 +54,6 @@ type ModuleTypes {
         .withFunction(
           function("source", typeDef.withObject("Directory"))
             .withDescription("What building or installing this workspace reads, at its workspace-root-relative paths.\n\nEvery member's files and those of their local dependencies, wherever\nthey live. Projects nested inside those trees that none of them needs\nare left out, as are caches, virtualenvs, build output and gitignored\nfiles.")
-            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
         ),
       typeDef.withObject("PyprojectWorkspaces", description: "Python workspaces, keyed by root.")
         .withCollection

@@ -23,39 +23,37 @@ everything in an order that caches well, so you don't assemble the build context
     graph LR
       Uv["Uv<br/><i>(your source tree)</i>"] -->|workspace / workspaces| WS["UvWorkspaceSource<br/><i>(one per uv.lock)</i>"]
       WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
-      WS -->|install| C1["Container"]
-      WS -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
-      B -->|with_local_dependencies / copy_venv| C2["Container"]
-      B -->|venv| V
+      B -->|with_dependencies / with_*| B
+      B -->|container / copy_venv| C["Container"]
+      B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
     - **`Uv`** holds the source tree it reads from the Dagger workspace (`ws`). Ask it
       for one workspace by path (`workspace`) or for the collection of every workspace
       it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it (a check), `build` a container step by step, or
-      `install` everything in one call.
+      you can read the required `uv` version, `audit` it (a check), or `build` a container.
     - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
-      environment ready, plus the resolved sync plan. It exposes the individual pipeline steps so you can run your own steps
-      between them, and exports the result as a container or a [`UvVenv`](virtual-environments.md).
+      environment ready, plus the resolved sync plan. `with_dependencies` installs
+      everything; its individual steps let you run your own steps between them. Every
+      step returns the build, and `container` or [`venv`](virtual-environments.md)
+      finishes it.
 
-    The convenience methods (`audit`, `install`) cover the common cases. Use the
-    pipeline when you need control over the individual steps.
+## Installing everything: `with_dependencies`
 
-## The one-call path: `install`
-
-`install` builds a container with everything a package needs:
+`build` prepares the build, `with_dependencies` installs everything a package needs,
+and `container` returns the result:
 
 === "CLI"
 
     ```console
-    $ dagger call uv workspace --path . install
+    $ dagger call uv workspace --path . build with-dependencies container
     ```
 
 === "Python SDK"
 
     ```python
-    ctr = uv(ws).workspace(".").install()
+    ctr = uv(ws).workspace(".").build().with_dependencies().container()
     ```
 
 Under the hood this is equivalent to:
@@ -68,6 +66,7 @@ ctr = (
     .with_remote_dependencies()  # uv sync --no-install-local
     .with_workspace_files()  # scaffold local package stubs
     .with_local_dependencies()  # editable-install from stubs, then copy real source
+    .container()
 )
 ```
 
@@ -98,7 +97,7 @@ expensive work stays cached across builds:
 
     ```python
     base = core().container().from_("python:3.13.7-slim").with_env_variable("UV_PROJECT_ENVIRONMENT", "/usr/local")
-    ctr = uv(ws).workspace(".").install(base_container=base)
+    ctr = uv(ws).workspace(".").build(base_container=base).with_dependencies().container()
     ```
 
 ### Choosing a base image
@@ -155,18 +154,16 @@ The module parses their native configuration files and copies files required to 
 
 ## Running the pipeline step by step
 
-`install` is a convenience wrapper. To run something *between* the steps, drive the
-pipeline yourself. `build` prepares the build without installing anything and returns a
-`UvWorkspaceBuild`; you then call the steps in order:
+`with_dependencies` runs three steps. To run something *between* them, call them
+yourself in order:
 
 ```python
 b = uv(ws).workspace(".").build(package=["my-app"])
 b = b.with_remote_dependencies()  # uv sync --no-install-local
 # ... run your own step here, e.g. `pulumi install` ...
 b = b.with_workspace_files()  # scaffold local package stubs
-ctr = b.with_local_dependencies()  # editable-install from stubs, then copy real source last
+ctr = b.with_local_dependencies().container()  # editable-install from stubs, then copy real source last
 ```
 
-Each step returns a new `UvWorkspaceBuild` (or, at the end, a `Container`), so the
-chain reads top to bottom. You can also swap in a different container mid-pipeline
+Each step returns a new `UvWorkspaceBuild`, so the chain reads top to bottom. You can also swap in a different container mid-pipeline
 (for instance after installing OS packages) and keep the same resolved plan.

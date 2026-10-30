@@ -48,7 +48,9 @@ class UvWorkspaceBuild:
 
     Drives the install pipeline: `with_remote_dependencies` to install remote
     deps, `with_workspace_files` to scaffold local packages, then
-    `with_local_dependencies` to install them.
+    `with_local_dependencies` to install them, or `with_dependencies` for all
+    three. Every step returns the build; finish with `container`, or `venv` to
+    export the environment.
     """
 
     container: Annotated[
@@ -202,8 +204,8 @@ class UvWorkspaceBuild:
 
         Bundles the venv and the exact interpreter it links against into a
         `UvVenv` (see `UvVenv.create`). Call after the venv is populated (e.g.
-        after `with_remote_dependencies`/`with_local_dependencies`). Requires a
-        relocatable venv built against a uv-managed Python; raises otherwise.
+        after `with_dependencies`). Requires a relocatable venv (`build` with
+        `venv_relocatable=True`) built against a uv-managed Python; raises otherwise.
         """
         workdir = await self.container.workdir()
         return await UvVenv.create(self.container, posixpath.join(workdir, ".venv"))
@@ -450,7 +452,25 @@ class UvWorkspaceBuild:
             return await ctr.sync()
 
     @function
-    async def with_local_dependencies(self) -> Container:
+    async def with_dependencies(
+        self,
+        prune_cache: PruneCache = True,
+        max_cache_size: MaxCacheSize = 100,
+        lock_timeout: LockTimeout = 600,
+    ) -> UvWorkspaceBuild:
+        """Install every dependency: `with_remote_dependencies`, `with_workspace_files`, then `with_local_dependencies`.
+
+        Run the steps individually to do something between them, e.g. `pulumi
+        install` between the remote dependencies and the local source.
+        """
+        build = await self.with_remote_dependencies(
+            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
+        )
+        build = await build.with_workspace_files()
+        return await build.with_local_dependencies()
+
+    @function
+    async def with_local_dependencies(self) -> UvWorkspaceBuild:
         """Install the scaffolded local packages, copying their real source at the right time.
 
         For **editable** installs (the default), run `uv sync` against the package
@@ -466,9 +486,9 @@ class UvWorkspaceBuild:
         workdir = await self.container.workdir()
         if self.plan.no_editable:
             ctr = await self._copy_sources(self.container, workdir)
-            return await self._sync_local(ctr)
+            return self.with_container(await self._sync_local(ctr))
         ctr = await self._sync_local(self.container)
         # Copy real source last: the editable installs above already point at these
         # paths, so the code goes live with no re-sync, keeping the install layer
         # cached across source-only changes.
-        return await self._copy_sources(ctr, workdir)
+        return self.with_container(await self._copy_sources(ctr, workdir))
