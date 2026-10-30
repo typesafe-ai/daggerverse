@@ -24,6 +24,8 @@ _DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 # normalize mtimes to 1, which backends that stamp files from their mtime (flit)
 # reject unless SOURCE_DATE_EPOCH is set.
 _SOURCE_DATE_EPOCH = "315532800"
+# Where `dist` has `uv build` write the distributions.
+_DIST_DIR = "/tmp/uv-dist"
 
 
 def _module_stubs(pkg: LocalPackage) -> list[str]:
@@ -429,27 +431,69 @@ class UvWorkspaceBuild:
             if pkg.name not in self.plan.flat_packages and pkg.build_backend.editable_writes_source
         ]
 
+    async def _exec_with_hooks(self, ctr: Container, commands: list[list[str]]) -> Container:
+        """Run the local packages' builds (`commands`), with their backends' hooks around them."""
+        hooks = self._hooks()
+        for hook in hooks.values():
+            ctr = hook.setup(ctr)
+        # Set SOURCE_DATE_EPOCH for these builds only, keeping a value the base sets.
+        set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
+        if set_epoch:
+            ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
+        for argv in commands:
+            ctr = ctr.with_exec(argv)
+        if set_epoch:
+            ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
+        for hook in reversed(hooks.values()):
+            ctr = hook.teardown(ctr)
+        # `with_exec` is lazy; sync() inside the span so it captures the actual
+        # builds rather than just the query-graph construction.
+        return await ctr.sync()
+
     async def _sync_local(self, ctr: Container) -> Container:
         """Build and install the local packages, with the backends' hooks around the `uv sync`."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
-            hooks = self._hooks()
             args = [*self.plan.uv_sync_args, *self._rebuild_args()]
             span.set_attribute("uv.sync_args", args)
-            span.set_attribute("build.backend_hooks", list(hooks))
-            for hook in hooks.values():
-                ctr = hook.setup(ctr)
-            # Set SOURCE_DATE_EPOCH for this sync only, keeping a value the base sets.
-            set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
-            if set_epoch:
-                ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
-            ctr = ctr.with_exec(args)
-            if set_epoch:
-                ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
-            for hook in reversed(hooks.values()):
-                ctr = hook.teardown(ctr)
-            # `with_exec` is lazy; sync() inside the span so it captures the actual
-            # install rather than just the query-graph construction.
-            return await ctr.sync()
+            span.set_attribute("build.backend_hooks", list(self._hooks()))
+            return await self._exec_with_hooks(ctr, [args])
+
+    @function
+    async def dist(
+        self,
+        python_version: Annotated[
+            list[str] | None,
+            Doc(
+                "Python versions to build wheels for (e.g. ['3.12', '3.13']), for packages with "
+                "compiled extensions. Defaults to the build's Python."
+            ),
+        ] = None,
+    ) -> Directory:
+        """The requested packages' sdists and wheels, built with `uv build`.
+
+        Builds from the packages' real source, so call it right after `build`:
+        nothing needs installing first. The build backends' hooks run around
+        the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
+        target cache).
+        """
+        workdir = await self.container.workdir()
+        root = self._root_path(workdir)
+        ctr = self.container.with_directory(root, self.plan.source_dir)
+        if self.plan.root_inputs_dir is not None:
+            ctr = ctr.with_directory(root, self.plan.root_inputs_dir)
+        if self.plan.all_packages:
+            targets = [["--all-packages"]]
+        else:
+            targets = [[f"--package={package}"] for package in self.plan.packages] or [[]]
+        versions = [[f"--python={version}"] for version in python_version or []] or [[]]
+        commands = [
+            ["uv", "build", "--out-dir", _DIST_DIR, *target, *version] for target in targets for version in versions
+        ]
+        with get_tracer().start_as_current_span("build distributions") as span:
+            span.set_attribute("uv.build_commands", [" ".join(argv) for argv in commands])
+            span.set_attribute("build.backend_hooks", list(self._hooks()))
+            ctr = await self._exec_with_hooks(ctr, commands)
+        return ctr.directory(_DIST_DIR)
 
     @function
     async def with_dependencies(

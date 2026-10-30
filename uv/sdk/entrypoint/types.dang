@@ -332,6 +332,8 @@ type ModuleTypes {
         .withField("needed_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Local packages the target transitively depends on (sorted by name)")
         .withField("flat_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Virtual/deps-only packages: pyproject scaffolded, source skipped")
         .withField("uv_sync_args", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Precomputed uv sync argv")
+        .withField("packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The packages requested, normalized; empty for the workspace root's")
+        .withField("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Every workspace member was requested")
         .withField("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Local packages installed non-editable (source baked into site-packages, not path-linked)")
         .withField("handlers", typeDef.withListOf(typeDef.withInterface("BuildBackendHandler")), description: "Build backend handlers, whose hooks run around the local packages' build")
         .withField("root_inputs_dir", typeDef.withOptional(true).withObject("Directory"), description: "The files the local packages' `/`-prefixed build inputs name, at workspace-root-relative paths"),
@@ -355,6 +357,11 @@ type ModuleTypes {
             .withArg("container", typeDef.withObject("Container"), description: "Container to copy the venv and its Python into.")
             .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Where to mount the venv; relative paths resolve against the container's workdir. Defaults to `.venv`.", defaultValue: ("\".venv\"" :: Dagger.JSON!))
             .withArg("set_env_vars", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Also set the standard activation env vars (`VIRTUAL_ENV` and a `PATH` with the venv's `bin/` first).", defaultValue: ("false" :: Dagger.JSON!))
+        )
+        .withFunction(
+          function("dist", typeDef.withObject("Directory"))
+            .withDescription("The requested packages' sdists and wheels, built with `uv build`.\n\nBuilds from the packages' real source, so call it right after `build`:\nnothing needs installing first. The build backends' hooks run around\nthe builds, as for `with_local_dependencies` (e.g. maturin's Cargo\ntarget cache).")
+            .withArg("python_version", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Python versions to build wheels for (e.g. ['3.12', '3.13']), for packages with compiled extensions. Defaults to the build's Python.", defaultValue: ("null" :: Dagger.JSON!))
         )
         .withFunction(
           function("venv", typeDef.withObject("UvVenv"))

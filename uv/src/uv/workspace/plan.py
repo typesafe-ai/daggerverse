@@ -211,6 +211,16 @@ class UvSyncPlan:
         Doc("Precomputed uv sync argv"),
     ] = field()
 
+    packages: Annotated[
+        list[str],
+        Doc("The packages requested, normalized; empty for the workspace root's"),
+    ] = field(default=list)
+
+    all_packages: Annotated[
+        bool,
+        Doc("Every workspace member was requested"),
+    ] = field(default=False)
+
     no_editable: Annotated[
         bool,
         Doc("Local packages installed non-editable (source baked into site-packages, not path-linked)"),
@@ -345,6 +355,8 @@ class UvSyncPlan:
             needed_local=[local_packages[name] for name in needed_local],
             flat_packages=flat_packages,
             uv_sync_args=sync_args,
+            packages=packages,
+            all_packages=all_packages,
             no_editable=no_editable,
             handlers=handlers,
         )

@@ -89,6 +89,7 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
       WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
       B -->|with_dependencies / with_*| B
       B -->|container / copy_venv| C["Container"]
+      B -->|dist| D["Directory<br/><i>(sdists and wheels)</i>"]
       B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
@@ -100,8 +101,8 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
       environment ready, plus the resolved sync plan. `with_dependencies` installs
       everything; its individual steps let you run your own steps between them. Every
-      step returns the build, and `container` or [`venv`](virtual-environments.md)
-      finishes it.
+      step returns the build, and `container`, [`venv`](virtual-environments.md) or
+      `dist` (sdists and wheels) finishes it.
 
 ## Where to go next
 

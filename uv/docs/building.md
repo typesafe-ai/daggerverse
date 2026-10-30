@@ -25,6 +25,7 @@ everything in an order that caches well, so you don't assemble the build context
       WS -->|build| B["UvWorkspaceBuild<br/><i>(container + Python environment + sync plan)</i>"]
       B -->|with_dependencies / with_*| B
       B -->|container / copy_venv| C["Container"]
+      B -->|dist| D["Directory<br/><i>(sdists and wheels)</i>"]
       B -->|venv| V["UvVenv<br/><i>(venv + its Python)</i>"]
     ```
 
@@ -36,8 +37,8 @@ everything in an order that caches well, so you don't assemble the build context
     - **`UvWorkspaceBuild`** is an in-progress build: a container with its Python
       environment ready, plus the resolved sync plan. `with_dependencies` installs
       everything; its individual steps let you run your own steps between them. Every
-      step returns the build, and `container` or [`venv`](virtual-environments.md)
-      finishes it.
+      step returns the build, and `container`, [`venv`](virtual-environments.md) or
+      `dist` (sdists and wheels) finishes it.
 
 ## Installing everything: `with_dependencies`
 
@@ -151,6 +152,18 @@ The module parses their native configuration files and copies files required to 
 !!! warning "Non-editable installs"
     With `no_editable=True`, changes to source code trigger a rebuild of the package.
     Third-party dependencies remain cached.
+
+## Building distributions: `dist`
+
+`dist` builds the requested packages' sdists and wheels with `uv build`, from their
+real source, so it follows `build` directly. The build backend handlers' hooks run
+around it, as for an install, e.g. maturin's Cargo target cache. Pass
+`python_version` to build a wheel per Python version for packages with compiled
+extensions:
+
+```python
+dist = uv(ws).workspace(".").build(package=["my-app"]).dist(python_version=["3.12", "3.13"])
+```
 
 ## Running the pipeline step by step
 

@@ -287,6 +287,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
             tg.start_soon(_run, "uv_maturin_outside_workspace", self.uv_maturin_outside_workspace)
             tg.start_soon(_run, "uv_maturin_editable_cached_build", self.uv_maturin_editable_cached_build)
+            tg.start_soon(_run, "uv_maturin_dist", self.uv_maturin_dist)
             tg.start_soon(_run, "uv_workspace_inputs", self.uv_workspace_inputs)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
@@ -677,6 +678,37 @@ class TypesafeDaggerverse:
         expected = sorted(path for path in await source.glob("**/*.*") if not path.startswith("docs/"))
         if found != expected:
             raise AssertionError(f"inputs: expected {expected}, got {found}")
+
+    @function
+    async def uv_maturin_dist(self) -> None:
+        """`dist` builds a maturin package's sdist and wheel against a crate outside its uv workspace."""
+        uv_ = uv(_fixture("uv/tests/_packages/maturin-outside-workspace"))
+        maturin = (
+            uv_.build_backend_handlers()
+            .maturin()
+            .with_package_config(
+                name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
+            )
+        )
+        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
+        dist = (
+            uv_.with_build_backend_handlers([maturin])
+            .workspace("py")
+            .build(base_container=base, package=["outside-app"])
+            .dist(python_version=["3.13"])
+        )
+        entries = await dist.entries()
+        if not any(e.endswith(".whl") for e in entries) or not any(e.endswith(".tar.gz") for e in entries):
+            raise AssertionError(f"expected an sdist and a wheel, got {entries}")
+        await (
+            core()
+            .container()
+            .from_("ghcr.io/astral-sh/uv:python3.13-bookworm-slim")
+            .with_directory("/dist", dist)
+            .with_exec(["sh", "-c", "uv venv /venv && uv pip install --python /venv /dist/*.whl"])
+            .with_exec(["/venv/bin/python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"])
+            .sync()
+        )
 
     @function
     async def uv_maturin_editable_cached_build(self) -> None:

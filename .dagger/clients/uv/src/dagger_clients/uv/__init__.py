@@ -2518,6 +2518,25 @@ class UvSyncPlan(_Type):
         _ctx = self._select("allLocal", _args)
         return await _ctx.execute_object_list(UvLocalPackage)
 
+    async def all_packages(self) -> bool:
+        """Every workspace member was requested
+
+        Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("allPackages", _args)
+        return await _ctx.execute(bool)
+
     async def flat_packages(self) -> list[str]:
         """Virtual/deps-only packages: pyproject scaffolded, source skipped
 
@@ -2600,6 +2619,27 @@ class UvSyncPlan(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("noEditable", _args)
         return await _ctx.execute(bool)
+
+    async def packages(self) -> list[str]:
+        """The packages requested, normalized; empty for the workspace root's
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("packages", _args)
+        return await _ctx.execute(list[str])
 
     def root_inputs_dir(self) -> Directory:
         """The files the local packages' `/`-prefixed build inputs name, at
@@ -2834,6 +2874,29 @@ class UvWorkspaceBuild(_Type):
         ]
         _ctx = self._select("copyVenv", _args)
         return Container(_ctx)
+
+    def dist(self, *, python_version: list[str] | None = None,) -> Directory:
+        """
+        The requested packages' sdists and wheels, built with `uv build`.
+
+        Builds from the packages' real source, so call it right after `build`:
+        nothing needs installing first. The build backends' hooks run around
+        the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
+        target cache).
+
+        Parameters
+        ----------
+        python_version:
+            Python versions to build wheels for (e.g. ['3.12', '3.13']), for
+            packages with compiled extensions. Defaults to the build's Python.
+        """
+        if not (python_version is None or (isinstance(python_version, list) and all(isinstance(_v0, str) for _v0 in python_version))):
+            raise _type_error("UvWorkspaceBuild.dist", "python_version", python_version, "list[str] | None")
+        _args = [
+            _Arg("pythonVersion", python_version, None),
+        ]
+        _ctx = self._select("dist", _args)
+        return Directory(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this UvWorkspaceBuild.
