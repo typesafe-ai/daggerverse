@@ -52,6 +52,18 @@ source-relative path, and leaves matching projects out of `projects`:
 exclude = ["**/tests/_packages/**"]
 ```
 
+### Configuring deptry
+
+`dagger check` runs checks with their default arguments, so deptry's options are
+constructor settings too: `version` picks the deptry release, and `args` adds
+arguments before the project root. String settings are JSON, so they need inner quotes:
+
+```toml title="dagger.toml"
+[modules.deptry.settings]
+version = '"0.25.1"'
+args = ["--no-ansi"]
+```
+
 ## Where to go next
 
 - [SDK reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/deptry)

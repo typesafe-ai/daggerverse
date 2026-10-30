@@ -12,6 +12,8 @@ from dagger import Doc, check, collection, field, function, get, keys, object_ty
 from dagger_clients.core import Container, Directory, Workspace, core
 from dagger_clients.pyproject import pyproject
 
+from deptry.args import Exclude
+
 _DEFAULT_VERSION = "0.25.1"
 
 
@@ -130,36 +132,20 @@ class DeptryProject:
         Doc("Project path, relative to the workspace root. `.` for the root."),
     ] = field()
 
+    # Not `field()`s: internal state.
     module: str | None
     files: Directory
+    ctr: Container
+    args: list[str]
 
     @check
     @function
-    async def check(
-        self,
-        version: Annotated[
-            str,
-            Doc("deptry version to use (ignored when `ctr` is set)."),
-        ] = _DEFAULT_VERSION,
-        ctr: Annotated[
-            Container | None,
-            Doc(
-                "Container with deptry installed. Defaults to the official "
-                "ghcr.io/astral-sh/uv image with deptry installed as a uv tool. "
-                "Overrides `version`."
-            ),
-        ] = None,
-        args: Annotated[
-            list[str] | None,
-            Doc("Additional arguments to pass to deptry (added before the project root)."),
-        ] = None,
-    ) -> None:
+    async def check(self) -> None:
         """Run `deptry .` in this project and fail on any dependency issue.
 
         Only the files this project owns are loaded: its directory less the
         projects nested in it, such as generated Dagger code or test fixtures.
         """
-        container = ctr if ctr is not None else _container(version)
         known = ["--known-first-party", self.module] if self.module else []
         project_dir = self.files if self.path == "." else self.files.directory(self.path)
         try:
@@ -167,11 +153,11 @@ class DeptryProject:
                 # `FORCE_COLOR` makes deptry colorize its report even though its
                 # stdout is a pipe, so Dagger's rendered exec logs show color. The
                 # copy folded into the raised error has the codes stripped (see
-                # `_format_failure`). Pass `--no-ansi` via `args` to opt out.
-                container.with_env_variable("FORCE_COLOR", "1")
+                # `_format_failure`). Pass `--no-ansi` via the `args` setting to opt out.
+                self.ctr.with_env_variable("FORCE_COLOR", "1")
                 .with_workdir("/work")
                 .with_directory("/work", project_dir)
-                .with_exec(["deptry", *known, *(args or []), "."])
+                .with_exec(["deptry", *known, *self.args, "."])
                 .sync()
             )
         except dagger.ExecError as exc:
@@ -236,9 +222,22 @@ class Deptry:
     async def create(
         cls,
         ws: Workspace,
-        exclude: Annotated[
+        exclude: Exclude = None,
+        version: Annotated[
+            str,
+            Doc("deptry version to use (ignored when `ctr` is set)."),
+        ] = _DEFAULT_VERSION,
+        ctr: Annotated[
+            Container | None,
+            Doc(
+                "Container with deptry installed. Defaults to the official "
+                "ghcr.io/astral-sh/uv image with deptry installed as a uv tool. "
+                "Overrides `version`."
+            ),
+        ] = None,
+        args: Annotated[
             list[str] | None,
-            Doc("Glob patterns of project paths to leave out of projects, e.g. **/tests/_packages/**."),
+            Doc("Additional arguments to pass to deptry (added before the project root)."),
         ] = None,
     ) -> Deptry:
         """Discover the projects: one per `pyproject.toml` the `pyproject` module
@@ -255,6 +254,7 @@ class Deptry:
         # contents, so discovery stays cached until one of the files it reads changes.
         discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
         found = await pyproject(discovery_ws, exclude=exclude).project_list()
+        container = ctr if ctr is not None else _container(version)
 
         async def _project(project) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.
@@ -266,7 +266,7 @@ class Deptry:
             checkable, module, configured = _project_info(await project.pyproject().contents())
             if checkable and (configured or await _has_package_layout(ws, path, module)):
                 files = ws.directory("/", include=files_include, exclude=files_exclude, gitignore=True)
-                return DeptryProject(path=path, module=module, files=files)
+                return DeptryProject(path=path, module=module, files=files, ctr=container, args=args or [])
             return None
 
         projects = await asyncio.gather(*(_project(project) for project in found))
