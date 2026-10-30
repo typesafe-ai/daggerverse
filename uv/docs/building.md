@@ -123,6 +123,21 @@ If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a director
 
 The module automatically runs `uv cache prune --ci` when the cache size exceeds a certain threshold (100 GiB by default).
 
+A workspace's cache key depends on where it comes from: the current workspace
+gets a new one on every local run (and every commit remotely), while one made
+with `directory.as_workspace()` is keyed by the directory's contents. A module
+that hands its workspace to `uv` can load just the files a build reads and pass
+those on, so its builds stay cached until one of them changes:
+
+```python
+handlers = [maturin]
+inputs = uv(ws).workspace(".").inputs(build_backend_handlers=handlers)
+ctr = uv(inputs.as_workspace()).workspace(".").install(build_backend_handlers=handlers)
+```
+
+Merge your own files into `inputs` (`inputs.with_directory(".", ...)`) before
+passing it on when your module reads more of the workspace.
+
 ## Supported build backends
 
 The module supports Python build backends such as `uv_build`, `hatchling`, `pdm-backend`, `flit_core`, or `poetry-core`.

@@ -101,6 +101,7 @@ class Uv:
                 projects=[sources[root] for root in roots if root in sources],
                 # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.
                 src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
+                ws=ws,
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.

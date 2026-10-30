@@ -55,9 +55,8 @@ maturin = (
 ctr = uv_.workspace(".").install(build_backend_handlers=[maturin])
 ```
 
-Workspace-root-relative inputs are read from the `ws` argument, which defaults to
-the current workspace, filtered to just those files. When you gave `uv()` a
-different workspace, such as `directory.as_workspace()`, pass the same one as `ws`.
+Workspace-root-relative inputs are read from the workspace given to `uv()`,
+filtered to just those files.
 
 !!! warning "Declared targets"
     Cargo loads every workspace member's declared targets, so list their files too,

@@ -248,6 +248,10 @@ type ModuleTypes {
             .withDescription("Full workspace build with all extras (from my-app) and all groups (from root) installed.")
         )
         .withFunction(
+          function("uv_workspace_inputs", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A workspace loaded from `inputs` holds only what a build reads, and builds the same.")
+        )
+        .withFunction(
           function("uv_workspace_layer_cache", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Keep workspace metadata/dependencies stable when only package source changes.")
         )

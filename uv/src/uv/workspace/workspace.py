@@ -53,14 +53,6 @@ BuildBackendHandlerList: TypeAlias = Annotated[
     ),
 ]
 
-BuildInputsWorkspace: TypeAlias = Annotated[
-    Workspace | None,
-    Doc(
-        "Where the build backend handlers' `/`-prefixed build inputs are read from. Defaults to the current "
-        "workspace; pass the one given to `uv()` when it differs."
-    ),
-]
-
 logger = logging.getLogger(__name__)
 
 _VENV_WARNING = (
@@ -113,6 +105,10 @@ class UvWorkspaceSource:
         str,
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
+
+    # The workspace `uv()` was given, for the build backend handlers' `/`-prefixed build inputs.
+    # Not a `field()`: Dagger can't expose a `Workspace` as one.
+    ws: Workspace | None = None
 
     def _ws_dir(self) -> Directory:
         return self.manifests if self.path == "." else self.manifests.directory(self.path)
@@ -382,6 +378,36 @@ class UvWorkspaceSource:
         """
         return core().container().from_(debian_image_ref(await self.uv_version())).with_workdir("/work")
 
+    def _root_inputs_dir(self, root_inputs: list[str]) -> Directory:
+        """`root_inputs` loaded from the workspace, as they may lie outside every member (e.g. a Cargo workspace)."""
+        if self.ws is None:
+            msg = f"`/`-prefixed build inputs {root_inputs} need the workspace `uv()` was given"
+            raise ValueError(msg)
+        return self.ws.directory("/", include=root_inputs, gitignore=True)
+
+    @function
+    async def inputs(self, build_backend_handlers: BuildBackendHandlerList | None = None) -> Directory:
+        """Every file `build`, `install` and `venv` read with these handlers, at workspace-root-relative paths.
+
+        A module handing its workspace to `uv` can load just these files (merged
+        with its own) and pass them on as a workspace. A workspace made from a
+        directory is cached by its contents, so builds rerun only when one of
+        these files changes.
+        """
+        plan = await UvSyncPlan.create(
+            source_dir=self.source,
+            manifests_dir=self.manifests,
+            projects=self.projects,
+            src_paths=self.src_paths,
+            workspace_path=self.path,
+            all_packages=True,
+            handlers=build_backend_handlers,
+        )
+        inputs = self.manifests.with_directory(".", self.source)
+        if plan.root_inputs:
+            inputs = inputs.with_directory(".", self._root_inputs_dir(plan.root_inputs))
+        return inputs
+
     @function
     async def build(
         self,
@@ -401,7 +427,6 @@ class UvWorkspaceSource:
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
         build_backend_handlers: BuildBackendHandlerList | None = None,
-        ws: BuildInputsWorkspace = None,
         venv_relocatable: VenvRelocatable = False,
         activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
@@ -458,12 +483,7 @@ class UvWorkspaceSource:
             if plan.root_inputs:
                 # Loaded from the workspace, filtered to just these paths, as they may lie
                 # outside every member (e.g. a Cargo workspace above them).
-                if ws is None:
-                    msg = f"`/`-prefixed build inputs {plan.root_inputs} need `ws`"
-                    raise ValueError(msg)
-                plan = dataclasses.replace(
-                    plan, root_inputs_dir=ws.directory("/", include=plan.root_inputs, gitignore=True)
-                )
+                plan = dataclasses.replace(plan, root_inputs_dir=self._root_inputs_dir(plan.root_inputs))
 
             ctr = base_container if base_container is not None else await self._default_base_container()
             cache_dir = await ctr.env_variable("UV_CACHE_DIR")
@@ -530,7 +550,6 @@ class UvWorkspaceSource:
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
         build_backend_handlers: BuildBackendHandlerList | None = None,
-        ws: BuildInputsWorkspace = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -561,7 +580,6 @@ class UvWorkspaceSource:
             no_editable=no_editable,
             no_default_groups=no_default_groups,
             build_backend_handlers=build_backend_handlers,
-            ws=ws,
             venv_relocatable=venv_relocatable,
             activate_venv=activate_venv,
             auto_install_uv=auto_install_uv,
@@ -588,7 +606,6 @@ class UvWorkspaceSource:
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
         build_backend_handlers: BuildBackendHandlerList | None = None,
-        ws: BuildInputsWorkspace = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -619,7 +636,6 @@ class UvWorkspaceSource:
             no_editable=no_editable,
             no_default_groups=no_default_groups,
             build_backend_handlers=build_backend_handlers,
-            ws=ws,
             venv_relocatable=True,
             auto_install_uv=auto_install_uv,
         )

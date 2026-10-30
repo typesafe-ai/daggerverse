@@ -279,6 +279,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
             tg.start_soon(_run, "uv_maturin_outside_workspace", self.uv_maturin_outside_workspace)
             tg.start_soon(_run, "uv_maturin_editable_cached_build", self.uv_maturin_editable_cached_build)
+            tg.start_soon(_run, "uv_workspace_inputs", self.uv_workspace_inputs)
             tg.start_soon(_run, "build_standalone", self.uv_workspace_build_standalone)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_all_extras", self.uv_workspace_standalone_all_extras)
@@ -595,7 +596,7 @@ class TypesafeDaggerverse:
             ctr = (
                 uv(ws)
                 .workspace(".")
-                .install(no_editable=no_editable, build_backend_handlers=[setuptools_package_dir()], ws=ws)
+                .install(no_editable=no_editable, build_backend_handlers=[setuptools_package_dir()])
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
             )
             # The handler's `setup` ran before the build and its `teardown` after it.
@@ -624,13 +625,41 @@ class TypesafeDaggerverse:
         for no_editable in (False, True):
             await (
                 uv_.workspace("py")
-                .install(base_container=base, no_editable=no_editable, build_backend_handlers=[maturin], ws=ws)
+                .install(base_container=base, no_editable=no_editable, build_backend_handlers=[maturin])
                 # Isolated (`-I`), so the installed package is imported rather than the source.
                 .with_exec(
                     ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
                 )
                 .sync()
             )
+
+    @function
+    async def uv_workspace_inputs(self) -> None:
+        """A workspace loaded from `inputs` holds only what a build reads, and builds the same."""
+        source = _src("uv/tests/_packages/maturin-outside-workspace").with_new_file("docs/unrelated.md", "unread")
+        maturin = (
+            uv(source.as_workspace())
+            .build_backend_handlers()
+            .maturin()
+            .with_package_config(
+                name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
+            )
+        )
+        inputs = uv(source.as_workspace()).workspace("py").inputs(build_backend_handlers=[maturin])
+        found = sorted(await inputs.glob("**/*.*"))
+        expected = sorted(path for path in await source.glob("**/*.*") if not path.startswith("docs/"))
+        if found != expected:
+            raise AssertionError(f"inputs: expected {expected}, got {found}")
+        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
+        await (
+            uv(inputs.as_workspace())
+            .workspace("py")
+            .install(base_container=base, build_backend_handlers=[maturin])
+            .with_exec(
+                ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
+            )
+            .sync()
+        )
 
     @function
     async def uv_maturin_editable_cached_build(self) -> None:
@@ -653,7 +682,7 @@ class TypesafeDaggerverse:
         base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
         scaffold = (
             uv_.workspace("py")
-            .build(base_container=base, build_backend_handlers=[maturin], ws=ws)
+            .build(base_container=base, build_backend_handlers=[maturin])
             .with_remote_dependencies()
             .with_workspace_files()
         )
@@ -772,8 +801,7 @@ class TypesafeDaggerverse:
                     for path in project["packages"]
                 ]
                 base = core().container().from_(project["base"]) if "base" in project else None
-                project_ws = source.as_workspace()
-                project_uv = uv(project_ws)
+                project_uv = uv(source.as_workspace())
                 builtin = project_uv.build_backend_handlers()
                 handlers = []
                 for backend, packages in project.get("handlers", {}).items():
@@ -786,7 +814,6 @@ class TypesafeDaggerverse:
                     no_editable=no_editable,
                     base_container=base,
                     build_backend_handlers=handlers,
-                    ws=project_ws,
                     **project.get("install", {}),
                 )
                 script = "".join(f"import {module}\n" for module in project["imports"])
