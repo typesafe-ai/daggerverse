@@ -81,6 +81,21 @@ def _base() -> Container:
     )
 
 
+def _go_test(module: str) -> Container:
+    """Run a Go module's unit tests, on the Go image its Dagger entrypoint builds with."""
+    return (
+        core()
+        .container()
+        .from_("golang:1.26.1-alpine")
+        .with_mounted_cache("/go/pkg/mod", core().cache_volume("go-mod"))
+        .with_mounted_cache("/root/.cache/go-build", core().cache_volume("go-build"))
+        .with_env_variable("CGO_ENABLED", "0")
+        .with_directory("/src", _src(module))
+        .with_workdir("/src")
+        .with_exec(["go", "test", "./..."])
+    )
+
+
 def _assert_modules_script(present: list[str], absent: list[str]) -> str:
     return (
         "import importlib, sys\n"
@@ -138,17 +153,15 @@ class TypesafeDaggerverse:
     ) -> Directory:
         """Build a module's static docs site and return the generated `site/` dir.
 
-        Built on the same base as the tests, with the module installed and its
-        `docs` uv group (which ships zensical) synced, so docs that introspect
-        the codebase can import it. `build` only copies each package's `src/`, so
-        the docs sources are supplied separately by `_zensical_site`.
+        Built on the same base as the tests with the module's `docs` uv group
+        (which ships zensical) synced and no package installed, as the docs
+        don't import the code. `_zensical_site` supplies the docs sources.
         """
         src = _src(module)
         ctr = (
             await uv(src.as_workspace())
             .workspace(".")
             .builder(base_container=_base())
-            .with_packages([module])
             .with_groups(["docs"])
             .with_dependencies()
             .container()
@@ -1169,7 +1182,7 @@ print("LAYER_CACHE_OK")
     async def all_pyproject(self) -> None:
         """Run all checks for the `pyproject` module in parallel."""
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.pyproject_pytest_self)
+            tg.start_soon(self.pyproject_go_test)
             tg.start_soon(self.pyproject_discovers_projects_and_workspaces)
             tg.start_soon(self.pyproject_workspace_markers)
             tg.start_soon(self.pyproject_respects_gitignore)
@@ -1178,20 +1191,9 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.pyproject_workspace_source_and_manifests)
 
     @function
-    async def pyproject_pytest_self(self) -> None:
-        """Run the pyproject module's own pytest suite (the discovery logic, engine-free)."""
-        ctr = (
-            await uv(_fixture("pyproject"))
-            .workspace(".")
-            .builder(base_container=_base())
-            .with_packages(["pyproject"])
-            .with_all_groups()
-            .with_dependencies()
-            .container()
-        )
-        workdir = await ctr.workdir()
-        ctr = ctr.with_directory(f"{workdir}/tests", _src("pyproject/tests"))
-        await _with_pytest_otel(ctr).with_exec(["pytest", "-q"]).stdout()
+    async def pyproject_go_test(self) -> None:
+        """Run the pyproject module's Go unit tests (the discovery logic, engine-free)."""
+        await _go_test("pyproject").sync()
 
     @function
     async def pyproject_discovers_projects_and_workspaces(self) -> None:
