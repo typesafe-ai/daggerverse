@@ -58,6 +58,12 @@ is-module = true
 [modules.pyproject]
 source = "pyproject"
 
-[sdks.python.scopes.pyproject]
+[modules.go-sdk]
+source = "github.com/dagger/go-sdk@bfaea2ba7b8fb36504ea7a27c79cce2fdd0ce967"
+
+[sdks.go]
+module = "go-sdk"
+
+[sdks.go.scopes.pyproject]
 is-module = true
 name = "pyproject"

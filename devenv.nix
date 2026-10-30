@@ -40,5 +40,7 @@ in {
     pkgs.prek
     pkgs.git-cliff
     pkgs-unstable.uv
+    # gofmt for the prek hook on the Go modules.
+    pkgs.go
   ];
 }
