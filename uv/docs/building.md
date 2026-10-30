@@ -126,15 +126,16 @@ The module automatically runs `uv cache prune --ci` when the cache size exceeds 
 
 A workspace's cache key depends on where it comes from: the current workspace
 gets a new one on every local run (and every commit remotely), while one made
-with `directory.as_workspace()` is keyed by the directory's contents. So
-`workspace` and `workspaces` load each uv workspace from a workspace made of
-just the files its builds read: manifests, members, their path dependencies,
-and the build backend handlers' build inputs. Its builds stay cached until one
-of those files changes.
+with `directory.as_workspace()` and passed to a module is keyed by the
+directory's contents. So `uv` passes `pyproject` a workspace of just the files
+discovery reads, and discovery stays cached until one of them changes. Each uv
+workspace's directories hold just the files its builds read: manifests,
+members, their path dependencies, and the build backend handlers' build
+inputs, so a build reruns only when one of those files changes.
 
 A module that reads more of the workspace than `uv` does can merge its own
-files into `inputs()` and hand the result on with `as_workspace()`, keeping its
-own functions cached the same way.
+files into `inputs()` and pass the result to another module with
+`as_workspace()`, keeping that module's functions cached the same way.
 
 ## Supported build backends
 

@@ -7,7 +7,7 @@ from typing import Annotated, Self
 
 from dagger import Doc, field, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Directory, Workspace
+from dagger_clients.core import Directory
 
 from uv.utils import (
     build_uv_sync_args,
@@ -368,8 +368,8 @@ class UvSyncPlanner:
     """Resolves a workspace's sync plan for a package selection.
 
     Holds what planning reads: the workspace's manifests and sources, its build
-    backend handlers, and the workspace those were loaded from, for the
-    handlers' `/`-prefixed build inputs.
+    backend handlers, and every file its builds read, for the handlers'
+    `/`-prefixed build inputs.
     """
 
     manifests: Annotated[
@@ -377,15 +377,16 @@ class UvSyncPlanner:
         Doc("What resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files"),
     ] = field()
     source: Annotated[Directory, Doc("The workspace's members and their path dependencies")] = field()
+    # Not a `field()`: every file the workspace's builds read, for the handlers' `/`-prefixed build inputs.
+    inputs_dir: Directory
     workspace_path: Annotated[str, Doc("Workspace root path within the sources. `.` for a root workspace.")] = field(
         default="."
     )
 
-    # Not `field()`s: internal state, and Dagger can't expose a `Workspace` as one.
+    # Not `field()`s: internal state.
     projects: list[ProjectSource] = dataclasses.field(default_factory=list)
     src_paths: list[str] = dataclasses.field(default_factory=list)
     handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
-    ws: Workspace | None = None
 
     async def plan(
         self,
@@ -423,10 +424,6 @@ class UvSyncPlanner:
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
         if not plan.root_inputs:
             return plan
-        # Loaded from the workspace, filtered to just these paths, as they may lie
-        # outside every member (e.g. a Cargo workspace above them).
-        if self.ws is None:
-            msg = f"`/`-prefixed build inputs {plan.root_inputs} need the workspace `uv()` was given"
-            raise ValueError(msg)
-        root_inputs = self.ws.directory("/", include=plan.root_inputs, gitignore=True)
-        return dataclasses.replace(plan, root_inputs_dir=root_inputs)
+        # Filtered to just these paths, as they may lie outside every member (e.g. a
+        # Cargo workspace above them).
+        return dataclasses.replace(plan, root_inputs_dir=self.inputs_dir.filter(include=plan.root_inputs))

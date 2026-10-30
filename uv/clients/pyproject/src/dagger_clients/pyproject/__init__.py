@@ -154,6 +154,49 @@ class PyprojectProject(_Type):
         _ctx = self._select("files", _args)
         return Directory(_ctx)
 
+    async def files_exclude(self) -> list[str]:
+        """Glob patterns `files` leaves out: caches, virtualenvs, build output
+        and the projects nested inside.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("filesExclude", _args)
+        return await _ctx.execute(list[str])
+
+    async def files_include(self) -> list[str]:
+        """Glob patterns of what `files` loads: the project's tree.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("filesInclude", _args)
+        return await _ctx.execute(list[str])
+
     async def generated(self) -> bool:
         """Whether Dagger generated this project (`[tool.dagger] generated`),
         such as a module's `sdk/` or `clients/*`.

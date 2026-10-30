@@ -28,6 +28,9 @@ def pinned_image(name: str) -> str:
 # The uv image deptry is installed into.
 _BASE_IMAGE = pinned_image("uv")
 
+# What `pyproject` discovery reads, with its default workspace markers.
+_DISCOVERY_INCLUDE = ["**/pyproject.toml", "**/.gitignore", "**/uv.lock", "**/pylock.toml"]
+
 
 def _root_path(path: str, *names: str) -> str:
     return "/" + posixpath.normpath(posixpath.join(path, *names))
@@ -248,16 +251,22 @@ class Deptry:
         The workspace is walked on the host, and only the pyproject.toml files
         are loaded.
         """
-        found = await pyproject(ws, exclude=exclude).project_list()
+        # A workspace made from a directory and passed to a module is keyed by its
+        # contents, so discovery stays cached until one of the files it reads changes.
+        discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
+        found = await pyproject(discovery_ws, exclude=exclude).project_list()
 
         async def _project(project) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.
             if await project.generated():
                 return None
-            path = await project.path()
+            path, files_include, files_exclude = await asyncio.gather(
+                project.path(), project.files_include(), project.files_exclude()
+            )
             checkable, module, configured = _project_info(await project.pyproject().contents())
             if checkable and (configured or await _has_package_layout(ws, path, module)):
-                return DeptryProject(path=path, module=module, files=project.files())
+                files = ws.directory("/", include=files_include, exclude=files_exclude, gitignore=True)
+                return DeptryProject(path=path, module=module, files=files)
             return None
 
         projects = await asyncio.gather(*(_project(project) for project in found))
