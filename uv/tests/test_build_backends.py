@@ -495,9 +495,8 @@ def test_handlers_by_backend_indexes_each_backend():
     assert handlers_by_backend([]) == {}
 
 
-def test_handlers_by_backend_rejects_two_handlers_for_one_backend():
-    with pytest.raises(ValueError, match="more than one build backend handler for maturin"):
-        handlers_by_backend(["maturin", "hatchling.build", "maturin"])
+def test_handlers_by_backend_last_handler_wins():
+    assert handlers_by_backend(["maturin", "hatchling.build", "maturin"]) == {"maturin": 2, "hatchling.build": 1}
 
 
 def test_builtin_handler_adds_package_config_to_the_builtin_answers():

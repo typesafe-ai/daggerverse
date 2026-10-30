@@ -16,7 +16,7 @@ class UvVenv:
     interpreter so the two can be dropped into a fresh container (one without any
     Python of its own) and run without uv.
 
-    Only valid for a venv created with `build(venv_relocatable=True)` against a
+    Only valid for a venv created with `builder(venv_relocatable=True)` against a
     *uv-managed* (standalone) Python: uv's standalone Pythons are themselves
     relocatable, and a relocatable venv keeps working when its directory is moved.
     The venv may be mounted at any path, but the Python must be remounted at
@@ -53,7 +53,7 @@ class UvVenv:
         """
         cfg = parse_pyvenv_cfg(await container.file(posixpath.join(venv_path, "pyvenv.cfg")).contents())
         if cfg.get("relocatable", "").lower() != "true":
-            msg = "UvVenv requires a relocatable venv; create it with build(venv_relocatable=True)."
+            msg = "UvVenv requires a relocatable venv; create it with builder(venv_relocatable=True)."
             raise ValueError(msg)
         # `home` is the interpreter's bin/ dir: <store>/<impl-dir>/bin, where <store> is uv's
         # managed-Python store (default ~/.local/share/uv/python, or $UV_PYTHON_INSTALL_DIR) and

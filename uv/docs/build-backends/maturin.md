@@ -39,7 +39,7 @@ The base container needs a Rust toolchain.
 Crates outside the package, such as a Cargo workspace's `Cargo.toml` and `Cargo.lock`
 or path dependencies, aren't staged automatically. Add them per package with the
 maturin handler's `with_package_config`, as workspace-root-relative
-`extra_build_inputs`, and pass it to `build()`, `install()` or `venv()`. They may
+`extra_build_inputs`, and pass it to `Uv.with_build_backend_handlers`. They may
 lie outside the uv workspace, e.g. a crate shared with a sibling project:
 
 ```python
@@ -52,12 +52,11 @@ maturin = (
         extra_build_inputs=["/Cargo.toml", "/Cargo.lock", "/crates/jiter/Cargo.toml", "/crates/jiter/src/**"],
     )
 )
-ctr = uv_.workspace(".").install(build_backend_handlers=[maturin])
+ctr = uv_.with_build_backend_handlers([maturin]).workspace(".").builder().with_dependencies().container()
 ```
 
-Workspace-root-relative inputs are read from the `ws` argument, which defaults to
-the current workspace, filtered to just those files. When you gave `uv()` a
-different workspace, such as `directory.as_workspace()`, pass the same one as `ws`.
+Workspace-root-relative inputs are read from the workspace given to `uv()`,
+filtered to just those files.
 
 !!! warning "Declared targets"
     Cargo loads every workspace member's declared targets, so list their files too,

@@ -4,7 +4,7 @@ import logging
 import posixpath
 import tomllib
 from pathlib import PurePosixPath
-from typing import Annotated, TypeAlias
+from typing import Annotated
 
 import dagger
 from dagger import Doc, check, field, function, object_type
@@ -13,17 +13,7 @@ from dagger_clients.core import Container, Directory, File, ReturnType, Workspac
 
 from uv.args import (
     ActivateVenv,
-    AllExtras,
-    AllGroups,
-    AllPackages,
-    Extra,
-    Group,
-    LockTimeout,
-    MaxCacheSize,
-    NoDefaultGroups,
     NoEditable,
-    Package,
-    PruneCache,
     VenvRelocatable,
 )
 from uv.utils import (
@@ -38,28 +28,11 @@ from uv.utils import (
     python_request,
     resolve_specifier,
 )
-from uv.workspace.build import UvWorkspaceBuild
+from uv.workspace.build import UvWorkspaceBuilder
 from uv.workspace.build_backends.handler import BuildBackendHandler
 from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_workspace_indices
 from uv.workspace.package import UvPackageSource
-from uv.workspace.plan import ProjectSource, UvSyncPlan
-from uv.workspace.venv import UvVenv
-
-BuildBackendHandlerList: TypeAlias = Annotated[
-    list[BuildBackendHandler],
-    Doc(
-        "Handlers for the local packages' build backends: from `build_backend_handlers()`, or another "
-        "module's `BuildBackendHandler`. They take precedence over the module's own support for their backends."
-    ),
-]
-
-BuildInputsWorkspace: TypeAlias = Annotated[
-    Workspace | None,
-    Doc(
-        "Where the build backend handlers' `/`-prefixed build inputs are read from. Defaults to the current "
-        "workspace; pass the one given to `uv()` when it differs."
-    ),
-]
+from uv.workspace.plan import ProjectSource, UvSyncPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +48,7 @@ class UvWorkspaceSource:
 
     Carries the source tree and the workspace's path within it (`"."` for a
     root workspace), relative to the Dagger workspace root. From those it derives everything it needs to `audit` the
-    locked dependencies or `build` a minimal container for a package, so
+    locked dependencies or get a `builder` for its packages, so
     the parent `Uv` stays a thin, container-free entrypoint.
 
     Every directory keeps workspace-root-relative paths, so builds can reach a
@@ -99,20 +72,20 @@ class UvWorkspaceSource:
         Doc("Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files."),
     ] = field()
 
-    projects: Annotated[
-        list[ProjectSource],
-        Doc("Each member's and local dependency's files, loaded only when a build installs that project."),
-    ] = field(default=list)
-
-    src_paths: Annotated[
-        list[str],
-        Doc("The entries directly under the projects' `src/`, which mark a `src` layout."),
-    ] = field(default=list)
-
     path: Annotated[
         str,
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
+
+    # Not `field()`s: internal state, and Dagger can't expose a `Workspace` as one.
+    # Each member's and local dependency's files, loaded only when a build installs that project.
+    projects: list[ProjectSource] = dataclasses.field(default_factory=list)
+    # The entries directly under the projects' `src/`, which mark a `src` layout.
+    src_paths: list[str] = dataclasses.field(default_factory=list)
+    # Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`.
+    build_backend_handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
+    # The workspace the directories were loaded from, for the handlers' `/`-prefixed build inputs.
+    ws: Workspace | None = None
 
     def _ws_dir(self) -> Directory:
         return self.manifests if self.path == "." else self.manifests.directory(self.path)
@@ -155,7 +128,7 @@ class UvWorkspaceSource:
         """The Python version pinned by the workspace's `.python-version`, if any.
 
         Returns its contents (e.g. `3.13.7`), or `None` when the file is absent.
-        `build` stages this pin so the environment and `uv sync` use the exact interpreter
+        `builder` stages this pin so the environment and `uv sync` use the exact interpreter
         instead of resolving `requires-python`.
         """
         ws = self._ws_dir()
@@ -382,8 +355,34 @@ class UvWorkspaceSource:
         """
         return core().container().from_(debian_image_ref(await self.uv_version())).with_workdir("/work")
 
+    def _planner(self) -> UvSyncPlanner:
+        return UvSyncPlanner(
+            manifests=self.manifests,
+            source=self.source,
+            workspace_path=self.path,
+            projects=self.projects,
+            src_paths=self.src_paths,
+            handlers=self.build_backend_handlers,
+            ws=self.ws,
+        )
+
     @function
-    async def build(
+    async def inputs(self) -> Directory:
+        """Every file a `builder` reads, at workspace-root-relative paths.
+
+        `Uv.workspace` loads the workspace from just these files. A module that
+        reads more of the workspace can merge its own files into them and hand
+        the result on with `as_workspace()`.
+        """
+        planner = self._planner()
+        plan = await planner.plan(all_packages=True)
+        inputs = self.manifests.with_directory(".", self.source)
+        if plan.root_inputs_dir is not None:
+            inputs = inputs.with_directory(".", plan.root_inputs_dir)
+        return inputs
+
+    @function
+    async def builder(
         self,
         base_container: Annotated[
             Container | None,
@@ -392,16 +391,7 @@ class UvWorkspaceSource:
                 "a Debian-based uv image at the workspace's uv version (uv provisions Python on demand)."
             ),
         ] = None,
-        package: Package | None = None,
-        extra: Extra | None = None,
-        group: Group | None = None,
-        all_extras: AllExtras = False,
-        all_groups: AllGroups = False,
-        all_packages: AllPackages = False,
         no_editable: NoEditable = False,
-        no_default_groups: NoDefaultGroups = False,
-        build_backend_handlers: BuildBackendHandlerList | None = None,
-        ws: BuildInputsWorkspace = None,
         venv_relocatable: VenvRelocatable = False,
         activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
@@ -411,12 +401,11 @@ class UvWorkspaceSource:
                 "Set to False if your base_container already ships uv."
             ),
         ] = True,
-    ) -> UvWorkspaceBuild:
-        """Prepare a build for this workspace without installing anything yet.
+    ) -> UvWorkspaceBuilder:
+        """A builder for this workspace's packages, with nothing installed yet.
 
-        Resolves the sync plan, mounts the uv cache, prepares the environment uv
-        installs into, and copies the root pyproject.toml and uv.lock into the
-        container.
+        Mounts the uv cache, prepares the environment uv installs into, and
+        copies the root pyproject.toml and uv.lock into the container.
 
         The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets it.
         Otherwise the default base, or one without a suitable Python, gets a
@@ -425,45 +414,18 @@ class UvWorkspaceSource:
         `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
         redundant `.venv`.
 
-        The returned `UvWorkspaceBuild` drives the pipeline from here:
-        `with_remote_dependencies()` to install remote deps, `with_workspace_files()`
-        to scaffold local packages, then `with_local_dependencies()` to install them.
-        Skip `with_remote_dependencies()` when another tool (e.g. `pulumi install`)
-        handles dependency installation.
+        Select what to build on the returned `UvWorkspaceBuilder` (`with_packages`,
+        `with_extras`, `with_groups`, ...); it defaults to the workspace root's
+        package. Then `with_dependencies()` installs everything, or run its steps
+        individually: `with_remote_dependencies()`, `with_workspace_files()`,
+        then `with_local_dependencies()`. Skip `with_remote_dependencies()` when
+        another tool (e.g. `pulumi install`) handles dependency installation.
+        Finish with `container()`, `venv()` (with `venv_relocatable=True`), or
+        `build()` for the packages' sdists and wheels.
         """
-        with get_tracer().start_as_current_span("prepare workspace build") as span:
+        with get_tracer().start_as_current_span("prepare workspace builder") as span:
             span.set_attribute("workspace.path", self.path)
-            span.set_attribute("build.packages", package or [])
-            span.set_attribute("build.all_packages", all_packages)
             span.set_attribute("build.default_base_container", base_container is None)
-
-            plan = await UvSyncPlan.create(
-                source_dir=self.source,
-                manifests_dir=self.manifests,
-                projects=self.projects,
-                src_paths=self.src_paths,
-                workspace_path=self.path,
-                package=package,
-                extra=extra,
-                group=group,
-                all_extras=all_extras,
-                all_groups=all_groups,
-                all_packages=all_packages,
-                no_editable=no_editable,
-                no_default_groups=no_default_groups,
-                handlers=build_backend_handlers,
-            )
-            span.set_attribute("uv.sync_args", plan.uv_sync_args)
-            span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
-            if plan.root_inputs:
-                # Loaded from the workspace, filtered to just these paths, as they may lie
-                # outside every member (e.g. a Cargo workspace above them).
-                if ws is None:
-                    msg = f"`/`-prefixed build inputs {plan.root_inputs} need `ws`"
-                    raise ValueError(msg)
-                plan = dataclasses.replace(
-                    plan, root_inputs_dir=ws.directory("/", include=plan.root_inputs, gitignore=True)
-                )
 
             ctr = base_container if base_container is not None else await self._default_base_container()
             cache_dir = await ctr.env_variable("UV_CACHE_DIR")
@@ -491,12 +453,14 @@ class UvWorkspaceSource:
             python_version = await self.python_version()
             if python_version:
                 ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, ".python-version"), python_version)
+            builder = UvWorkspaceBuilder(container=ctr, planner=self._planner(), no_editable=no_editable)
             if auto_install_uv and not await self._has_uv(ctr):
-                ctr = (await UvWorkspaceBuild(container=ctr, plan=plan).with_uv(await self.uv_version())).container
+                ctr = (await builder.with_uv(await self.uv_version())).container
 
+            ws_dir = self._ws_dir()
             pyproject_contents, uv_lock_contents = await asyncio.gather(
-                plan.ws_dir.file("pyproject.toml").contents(),
-                plan.ws_dir.file("uv.lock").contents(),
+                ws_dir.file("pyproject.toml").contents(),
+                ws_dir.file("uv.lock").contents(),
             )
             ctr = await self._with_project_environment(
                 ctr,
@@ -508,124 +472,4 @@ class UvWorkspaceSource:
             ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, "pyproject.toml"), pyproject_contents).with_new_file(
                 posixpath.join(ws_ctr_path, "uv.lock"), uv_lock_contents
             )
-            ctr = await ctr.sync()
-            return UvWorkspaceBuild(container=ctr, plan=plan)
-
-    @function
-    async def install(
-        self,
-        base_container: Annotated[
-            Container | None,
-            Doc(
-                "Container to build on (auth, system packages, etc.). Defaults to "
-                "a Debian-based uv image at the workspace's uv version (uv provisions Python on demand)."
-            ),
-        ] = None,
-        package: Package | None = None,
-        extra: Extra | None = None,
-        group: Group | None = None,
-        all_extras: AllExtras = False,
-        all_groups: AllGroups = False,
-        all_packages: AllPackages = False,
-        no_editable: NoEditable = False,
-        no_default_groups: NoDefaultGroups = False,
-        build_backend_handlers: BuildBackendHandlerList | None = None,
-        ws: BuildInputsWorkspace = None,
-        prune_cache: PruneCache = True,
-        max_cache_size: MaxCacheSize = 100,
-        lock_timeout: LockTimeout = 600,
-        venv_relocatable: VenvRelocatable = False,
-        activate_venv: ActivateVenv = True,
-        auto_install_uv: Annotated[
-            bool,
-            Doc(
-                "Automatically install the uv binary if it is not already on $PATH. "
-                "Set to False if your base_container already ships uv."
-            ),
-        ] = True,
-    ) -> Container:
-        """Build a minimal container with deps installed for the given package(s).
-
-        Convenience method composing `build`, `with_remote_dependencies`,
-        `with_workspace_files`, and `with_local_dependencies`. For fine-grained control (e.g. running
-        `pulumi install` between remote deps and local source), call them individually.
-        """
-        b = await self.build(
-            base_container,
-            package=package,
-            extra=extra,
-            group=group,
-            all_extras=all_extras,
-            all_groups=all_groups,
-            all_packages=all_packages,
-            no_editable=no_editable,
-            no_default_groups=no_default_groups,
-            build_backend_handlers=build_backend_handlers,
-            ws=ws,
-            venv_relocatable=venv_relocatable,
-            activate_venv=activate_venv,
-            auto_install_uv=auto_install_uv,
-        )
-        b = await b.with_remote_dependencies(
-            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
-        )
-        b = await b.with_workspace_files()
-        return await b.with_local_dependencies()
-
-    @function
-    async def venv(
-        self,
-        base_container: Annotated[
-            Container | None,
-            Doc("Container to build on; defaults to a Debian-based uv image at the workspace's uv version."),
-        ] = None,
-        package: Package | None = None,
-        extra: Extra | None = None,
-        group: Group | None = None,
-        all_extras: AllExtras = False,
-        all_groups: AllGroups = False,
-        all_packages: AllPackages = False,
-        no_editable: NoEditable = False,
-        no_default_groups: NoDefaultGroups = False,
-        build_backend_handlers: BuildBackendHandlerList | None = None,
-        ws: BuildInputsWorkspace = None,
-        prune_cache: PruneCache = True,
-        max_cache_size: MaxCacheSize = 100,
-        lock_timeout: LockTimeout = 600,
-        auto_install_uv: Annotated[
-            bool,
-            Doc(
-                "Automatically install the uv binary if it is not already on $PATH. "
-                "Set to False if your base_container already ships uv."
-            ),
-        ] = True,
-    ) -> UvVenv:
-        """Install into a relocatable venv and export it with the Python it links against.
-
-        Like `install`, but always builds a relocatable venv and returns a `UvVenv`
-        (the venv plus its uv-managed Python) that `.into(container, path)` can drop
-        into any image. Use this instead of `install` when copying the
-        environment into another container. Pair with `no_editable=True` so the
-        exported venv carries no dependency on the workspace source.
-        """
-        b = await self.build(
-            base_container,
-            package=package,
-            extra=extra,
-            group=group,
-            all_extras=all_extras,
-            all_groups=all_groups,
-            all_packages=all_packages,
-            no_editable=no_editable,
-            no_default_groups=no_default_groups,
-            build_backend_handlers=build_backend_handlers,
-            ws=ws,
-            venv_relocatable=True,
-            auto_install_uv=auto_install_uv,
-        )
-        b = await b.with_remote_dependencies(
-            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
-        )
-        b = await b.with_workspace_files()
-        b = b.with_container(await b.with_local_dependencies())
-        return await b.venv()
+            return builder.with_container(await ctr.sync())

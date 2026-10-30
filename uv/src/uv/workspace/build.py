@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import posixpath
 from typing import Annotated
 
@@ -8,11 +9,11 @@ from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
 from dagger_clients.core import Container, Directory, ExistsType, core
 
-from uv.args import LockTimeout, MaxCacheSize, PruneCache
+from uv.args import Extra, Group, LockTimeout, MaxCacheSize, Package, PruneCache
 from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
 from uv.workspace.build_backends import BACKENDS, BackendHooks
 from uv.workspace.build_backends.paths import is_file
-from uv.workspace.plan import LocalPackage, UvSyncPlan
+from uv.workspace.plan import LocalPackage, UvSyncPlan, UvSyncPlanner
 from uv.workspace.venv import UvVenv
 
 _BUSYBOX = pinned_image("busybox")
@@ -24,6 +25,8 @@ _DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 # normalize mtimes to 1, which backends that stamp files from their mtime (flit)
 # reject unless SOURCE_DATE_EPOCH is set.
 _SOURCE_DATE_EPOCH = "315532800"
+# Where `dist` has `uv build` write the distributions.
+_DIST_DIR = "/tmp/uv-dist"
 
 
 def _module_stubs(pkg: LocalPackage) -> list[str]:
@@ -43,12 +46,16 @@ def _module_stubs(pkg: LocalPackage) -> list[str]:
 
 
 @object_type
-class UvWorkspaceBuild:
-    """An in-progress workspace build: a container plus its resolved sync plan.
+class UvWorkspaceBuilder:
+    """Builds a workspace's packages: a container, the package selection, and its sync plan.
 
-    Drives the install pipeline: `with_remote_dependencies` to install remote
-    deps, `with_workspace_files` to scaffold local packages, then
-    `with_local_dependencies` to install them.
+    Select the packages with `with_packages` (default: the workspace root's),
+    `with_extras` and `with_groups`. Then drive the install pipeline:
+    `with_remote_dependencies` to install remote deps, `with_workspace_files`
+    to scaffold local packages, then `with_local_dependencies` to install them,
+    or `with_dependencies` for all three. Every step returns the builder;
+    finish with `container`, `venv` to export the environment, or `build` for
+    the packages' sdists and wheels.
     """
 
     container: Annotated[
@@ -56,12 +63,74 @@ class UvWorkspaceBuild:
         Doc("Container carrying the workspace's pyproject.toml and uv.lock"),
     ] = field()
 
-    plan: Annotated[
-        UvSyncPlan,
-        Doc("Build configuration carried through the pipeline"),
-    ] = field()
+    planner: Annotated[UvSyncPlanner, Doc("Resolves the selection's sync plan")] = field()
 
-    async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> UvWorkspaceBuild:
+    packages: Annotated[list[str], Doc("Packages selected; empty for the workspace root's")] = field(default=list)
+    all_packages: Annotated[bool, Doc("Every workspace member is selected")] = field(default=False)
+    extras: Annotated[list[str] | None, Doc("Extras selected")] = field(default=None)
+    all_extras: Annotated[bool, Doc("Every extra is selected")] = field(default=False)
+    groups: Annotated[list[str] | None, Doc("Dependency groups selected")] = field(default=None)
+    all_groups: Annotated[bool, Doc("Every dependency group is selected")] = field(default=False)
+    no_default_groups: Annotated[bool, Doc("The default dependency groups are left out")] = field(default=False)
+    no_editable: Annotated[bool, Doc("Local packages install non-editable")] = field(default=False)
+
+    plan: Annotated[
+        UvSyncPlan | None,
+        Doc("The selection's sync plan, resolved by the first step that needs it"),
+    ] = field(default=None)
+
+    async def _planned(self) -> UvWorkspaceBuilder:
+        """This builder with its selection's sync plan resolved."""
+        if self.plan is not None:
+            return self
+        plan = await self.planner.plan(
+            packages=self.packages,
+            extras=self.extras,
+            groups=self.groups,
+            all_extras=self.all_extras,
+            all_groups=self.all_groups,
+            all_packages=self.all_packages,
+            no_default_groups=self.no_default_groups,
+            no_editable=self.no_editable,
+        )
+        return dataclasses.replace(self, plan=plan)
+
+    @function
+    def with_packages(self, packages: Package) -> UvWorkspaceBuilder:
+        """This builder with `packages` added to the selection (`uv sync --package`, `uv build --package`)."""
+        return dataclasses.replace(self, packages=[*self.packages, *packages], plan=None)
+
+    @function
+    def with_all_packages(self) -> UvWorkspaceBuilder:
+        """This builder with every workspace member selected (`--all-packages`)."""
+        return dataclasses.replace(self, all_packages=True, plan=None)
+
+    @function
+    def with_extras(self, extras: Extra) -> UvWorkspaceBuilder:
+        """This builder with `extras` added to the selection (`uv sync --extra`)."""
+        return dataclasses.replace(self, extras=[*(self.extras or []), *extras], plan=None)
+
+    @function
+    def with_all_extras(self) -> UvWorkspaceBuilder:
+        """This builder with every extra selected (`uv sync --all-extras`)."""
+        return dataclasses.replace(self, all_extras=True, plan=None)
+
+    @function
+    def with_groups(self, groups: Group) -> UvWorkspaceBuilder:
+        """This builder with `groups` added to the selection (`uv sync --group`)."""
+        return dataclasses.replace(self, groups=[*(self.groups or []), *groups], plan=None)
+
+    @function
+    def with_all_groups(self) -> UvWorkspaceBuilder:
+        """This builder with every dependency group selected (`uv sync --all-groups`)."""
+        return dataclasses.replace(self, all_groups=True, plan=None)
+
+    @function
+    def without_default_groups(self) -> UvWorkspaceBuilder:
+        """This builder without the default dependency groups (`uv sync --no-default-groups`)."""
+        return dataclasses.replace(self, no_default_groups=True, plan=None)
+
+    async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> UvWorkspaceBuilder:
         """Run `argv` in the build container under a span, returning a new build with the result.
 
         `with_exec` is lazy; sync() inside the span so it captures the actual work
@@ -80,7 +149,7 @@ class UvWorkspaceBuild:
             str | None,
             Doc("uv version to install. Defaults to the version detected from the workspace."),
         ] = None,
-    ) -> UvWorkspaceBuild:
+    ) -> UvWorkspaceBuilder:
         """Copy the uv binary into the build container.
 
         Useful when using a custom `base_container` that doesn't ship uv.
@@ -103,7 +172,7 @@ class UvWorkspaceBuild:
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
-    ) -> UvWorkspaceBuild:
+    ) -> UvWorkspaceBuilder:
         """Install remote (non-local) dependencies via `uv sync --no-install-local`.
 
         When `prune_cache` is set (the default), the
@@ -112,6 +181,9 @@ class UvWorkspaceBuild:
         `max_cache_size` GiB, and `lock_timeout` bounds how long that prune waits
         for the cache lock.
         """
+        if self.plan is None:
+            return await (await self._planned()).with_remote_dependencies(prune_cache, max_cache_size, lock_timeout)
+
         args = [*self.plan.uv_sync_args, "--no-install-local"]
         build = await self._exec_step("install remote dependencies", args, {"uv.sync_args": args})
         if prune_cache:
@@ -123,7 +195,7 @@ class UvWorkspaceBuild:
         self,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
-    ) -> UvWorkspaceBuild:
+    ) -> UvWorkspaceBuilder:
         """Prune the uv cache with `uv cache prune --ci`, gated on cache size.
 
         Measures the cache dir (`uv cache dir`) and only prunes when it exceeds `max_cache_size`
@@ -172,7 +244,7 @@ class UvWorkspaceBuild:
             str,
             Doc("Python version to install via `uv python install` (e.g. `3.12`, `3.13.7`)."),
         ],
-    ) -> UvWorkspaceBuild:
+    ) -> UvWorkspaceBuilder:
         """Install a managed Python via `uv python install`.
 
         Useful on a bare base with no system Python; pass the version the
@@ -188,7 +260,7 @@ class UvWorkspaceBuild:
             str,
             Doc("Python version to pin via `uv python pin` (writes a `.python-version` file)."),
         ],
-    ) -> UvWorkspaceBuild:
+    ) -> UvWorkspaceBuilder:
         """Pin the project's Python with `uv python pin` (writes `.python-version`).
 
         Makes subsequent `uv sync` select this exact version.
@@ -202,8 +274,8 @@ class UvWorkspaceBuild:
 
         Bundles the venv and the exact interpreter it links against into a
         `UvVenv` (see `UvVenv.create`). Call after the venv is populated (e.g.
-        after `with_remote_dependencies`/`with_local_dependencies`). Requires a
-        relocatable venv built against a uv-managed Python; raises otherwise.
+        after `with_dependencies`). Requires a relocatable venv (`builder` with
+        `venv_relocatable=True`) built against a uv-managed Python; raises otherwise.
         """
         workdir = await self.container.workdir()
         return await UvVenv.create(self.container, posixpath.join(workdir, ".venv"))
@@ -303,18 +375,24 @@ class UvWorkspaceBuild:
             return await ctr.sync()
 
     @function
-    async def with_workspace_files(self) -> UvWorkspaceBuild:
+    async def with_workspace_files(self) -> UvWorkspaceBuilder:
         """Scaffold needed local package stubs (pyproject.toml + empty src/) into the container."""
+        if self.plan is None:
+            return await (await self._planned()).with_workspace_files()
+
         workdir = await self.container.workdir()
         ctr = await self._scaffold(self.plan.needed_local, workdir, "scaffold local dependencies")
-        return UvWorkspaceBuild(container=ctr, plan=self.plan)
+        return self.with_container(ctr)
 
     @function
-    async def with_all_workspace_members(self) -> UvWorkspaceBuild:
+    async def with_all_workspace_members(self) -> UvWorkspaceBuilder:
         """Like with_workspace_files but scaffolds every local package, not just transitive deps."""
+        if self.plan is None:
+            return await (await self._planned()).with_all_workspace_members()
+
         workdir = await self.container.workdir()
         ctr = await self._scaffold(self.plan.all_local, workdir, "scaffold all workspace members")
-        return UvWorkspaceBuild(container=ctr, plan=self.plan)
+        return self.with_container(ctr)
 
     @function
     def with_container(
@@ -323,9 +401,9 @@ class UvWorkspaceBuild:
             Container,
             Doc("Replacement container (e.g. after installing non-Python packages)"),
         ],
-    ) -> UvWorkspaceBuild:
-        """Return a new UvWorkspaceBuild with a different container but the same plan."""
-        return UvWorkspaceBuild(container=container, plan=self.plan)
+    ) -> UvWorkspaceBuilder:
+        """This builder with `container`, keeping its selection and plan."""
+        return dataclasses.replace(self, container=container)
 
     def _copy_package(self, overlay: Directory, workdir: str, pkg: LocalPackage) -> Directory:
         resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
@@ -427,30 +505,93 @@ class UvWorkspaceBuild:
             if pkg.name not in self.plan.flat_packages and pkg.build_backend.editable_writes_source
         ]
 
+    async def _exec_with_hooks(self, ctr: Container, commands: list[list[str]]) -> Container:
+        """Run the local packages' builds (`commands`), with their backends' hooks around them."""
+        hooks = self._hooks()
+        for hook in hooks.values():
+            ctr = hook.setup(ctr)
+        # Set SOURCE_DATE_EPOCH for these builds only, keeping a value the base sets.
+        set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
+        if set_epoch:
+            ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
+        for argv in commands:
+            ctr = ctr.with_exec(argv)
+        if set_epoch:
+            ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
+        for hook in reversed(hooks.values()):
+            ctr = hook.teardown(ctr)
+        # `with_exec` is lazy; sync() inside the span so it captures the actual
+        # builds rather than just the query-graph construction.
+        return await ctr.sync()
+
     async def _sync_local(self, ctr: Container) -> Container:
         """Build and install the local packages, with the backends' hooks around the `uv sync`."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
-            hooks = self._hooks()
             args = [*self.plan.uv_sync_args, *self._rebuild_args()]
             span.set_attribute("uv.sync_args", args)
-            span.set_attribute("build.backend_hooks", list(hooks))
-            for hook in hooks.values():
-                ctr = hook.setup(ctr)
-            # Set SOURCE_DATE_EPOCH for this sync only, keeping a value the base sets.
-            set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
-            if set_epoch:
-                ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
-            ctr = ctr.with_exec(args)
-            if set_epoch:
-                ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
-            for hook in reversed(hooks.values()):
-                ctr = hook.teardown(ctr)
-            # `with_exec` is lazy; sync() inside the span so it captures the actual
-            # install rather than just the query-graph construction.
-            return await ctr.sync()
+            span.set_attribute("build.backend_hooks", list(self._hooks()))
+            return await self._exec_with_hooks(ctr, [args])
 
     @function
-    async def with_local_dependencies(self) -> Container:
+    async def build(
+        self,
+        python_version: Annotated[
+            list[str] | None,
+            Doc(
+                "Python versions to build wheels for (e.g. ['3.12', '3.13']), for packages with "
+                "compiled extensions. Defaults to the build's Python."
+            ),
+        ] = None,
+    ) -> Directory:
+        """The selected packages' sdists and wheels, built with `uv build`.
+
+        Builds from the packages' real source, so call it right after selecting:
+        nothing needs installing first. The build backends' hooks run around
+        the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
+        target cache).
+        """
+        if self.plan is None:
+            return await (await self._planned()).build(python_version)
+
+        workdir = await self.container.workdir()
+        root = self._root_path(workdir)
+        ctr = self.container.with_directory(root, self.plan.source_dir)
+        if self.plan.root_inputs_dir is not None:
+            ctr = ctr.with_directory(root, self.plan.root_inputs_dir)
+        if self.plan.all_packages:
+            targets = [["--all-packages"]]
+        else:
+            targets = [[f"--package={package}"] for package in self.plan.packages] or [[]]
+        versions = [[f"--python={version}"] for version in python_version or []] or [[]]
+        commands = [
+            ["uv", "build", "--out-dir", _DIST_DIR, *target, *version] for target in targets for version in versions
+        ]
+        with get_tracer().start_as_current_span("build distributions") as span:
+            span.set_attribute("uv.build_commands", [" ".join(argv) for argv in commands])
+            span.set_attribute("build.backend_hooks", list(self._hooks()))
+            ctr = await self._exec_with_hooks(ctr, commands)
+        return ctr.directory(_DIST_DIR)
+
+    @function
+    async def with_dependencies(
+        self,
+        prune_cache: PruneCache = True,
+        max_cache_size: MaxCacheSize = 100,
+        lock_timeout: LockTimeout = 600,
+    ) -> UvWorkspaceBuilder:
+        """Install every dependency: `with_remote_dependencies`, `with_workspace_files`, then `with_local_dependencies`.
+
+        Run the steps individually to do something between them, e.g. `pulumi
+        install` between the remote dependencies and the local source.
+        """
+        build = await self.with_remote_dependencies(
+            prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
+        )
+        build = await build.with_workspace_files()
+        return await build.with_local_dependencies()
+
+    @function
+    async def with_local_dependencies(self) -> UvWorkspaceBuilder:
         """Install the scaffolded local packages, copying their real source at the right time.
 
         For **editable** installs (the default), run `uv sync` against the package
@@ -463,12 +604,15 @@ class UvWorkspaceBuild:
         source must be copied in *before* the sync: there are no path links for a
         copy-last to make live, and syncing against the stubs would bake empty modules.
         """
+        if self.plan is None:
+            return await (await self._planned()).with_local_dependencies()
+
         workdir = await self.container.workdir()
         if self.plan.no_editable:
             ctr = await self._copy_sources(self.container, workdir)
-            return await self._sync_local(ctr)
+            return self.with_container(await self._sync_local(ctr))
         ctr = await self._sync_local(self.container)
         # Copy real source last: the editable installs above already point at these
         # paths, so the code goes live with no re-sync, keeping the install layer
         # cached across source-only changes.
-        return await self._copy_sources(ctr, workdir)
+        return self.with_container(await self._copy_sources(ctr, workdir))

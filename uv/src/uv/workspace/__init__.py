@@ -1,4 +1,4 @@
-from uv.workspace.build import UvWorkspaceBuild as UvWorkspaceBuild
+from uv.workspace.build import UvWorkspaceBuilder as UvWorkspaceBuilder
 from uv.workspace.index import UvIndex as UvIndex
 from uv.workspace.package import UvPackageSource as UvPackageSource
 from uv.workspace.plan import LocalPackage as LocalPackage

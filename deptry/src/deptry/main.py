@@ -255,9 +255,9 @@ class Deptry:
             if await project.generated():
                 return None
             path = await project.path()
-            checkable, module, configured = _project_info(await project.pyproject(ws).contents())
+            checkable, module, configured = _project_info(await project.pyproject().contents())
             if checkable and (configured or await _has_package_layout(ws, path, module)):
-                return DeptryProject(path=path, module=module, files=project.files(ws))
+                return DeptryProject(path=path, module=module, files=project.files())
             return None
 
         projects = await asyncio.gather(*(_project(project) for project in found))

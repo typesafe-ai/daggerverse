@@ -253,7 +253,7 @@ class MaturinHandler(_Builtin):
 
 @object_type
 class BuildBackendHandlers:
-    """Handlers for the module's built-in backends, to pass as `build_backend_handlers` to `build`, `install` or `venv`.
+    """Handlers for the module's built-in backends, to pass to `Uv.with_build_backend_handlers`.
 
     Use them to configure a backend for some packages, e.g. maturin with the
     crates a package's Cargo workspace keeps above it.
