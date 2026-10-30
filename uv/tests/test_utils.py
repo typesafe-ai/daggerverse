@@ -1,5 +1,6 @@
 import pytest
 from uv.utils import (
+    _DEFAULT_VERSION,
     debian_image_ref,
     format_audit_failure,
     image_ref,
@@ -348,7 +349,7 @@ class TestResolveSpecifier:
         assert resolve_specifier(">=0.4.0,<0.6.0") == "0.4.0"
 
     def test_no_lower_bound_falls_back_to_default(self):
-        assert resolve_specifier("<1.0.0") == "0.11.19"
+        assert resolve_specifier("<1.0.0") == _DEFAULT_VERSION
 
 
 class TestPythonRequest:

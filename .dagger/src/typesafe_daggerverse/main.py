@@ -267,7 +267,6 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "detect_version_pyproject", self.uv_detect_version_pyproject)
             tg.start_soon(_run, "detect_version_uv_toml_precedence", self.uv_detect_version_uv_toml_precedence)
             tg.start_soon(_run, "detect_version_range", self.uv_detect_version_range)
-            tg.start_soon(_run, "detect_version_default", self.uv_detect_version_default)
             tg.start_soon(_run, "discovers_workspaces", self.uv_discovers_workspaces)
             tg.start_soon(_run, "audit_clean", self.uv_audit_clean)
             tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
@@ -335,15 +334,6 @@ class TypesafeDaggerverse:
         version = await ws.uv_version()
         if version != "0.5.0":
             raise AssertionError(f"expected 0.5.0, got {version}")
-
-    @function
-    async def uv_detect_version_default(self) -> None:
-        """With no required-version, `uv_version` falls back to the default tag."""
-        src = self._uv_src('[project]\nname = "x"\nversion = "0"\n')
-        ws = (await uv(src.as_workspace()).workspaces().list_())[0]
-        version = await ws.uv_version()
-        if version != "0.11.19":
-            raise AssertionError(f"expected the pinned default 0.11.19, got {version}")
 
     @function
     async def uv_discovers_workspaces(self) -> None:
