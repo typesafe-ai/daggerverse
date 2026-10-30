@@ -62,7 +62,8 @@ $ dagger install github.com/typesafe-ai/daggerverse/pyproject
 stay relative to the workspace root, so a path source like `../lib` resolves
 once the directory is mounted as the root. `files()` returns only the files
 the project owns, its tree less nested projects, for tools such as linters that
-work on one project's own code. `pyproject()` returns the manifest.
+work on one project's own code, and `files_include`/`files_exclude` are its
+patterns. `pyproject()` returns the manifest.
 
 ### Workspaces
 
@@ -97,6 +98,21 @@ virtualenvs, build output, VCS metadata and gitignored files are always left out
 Path sources that point at missing directories are kept and load nothing, so
 discovery still works on a partial checkout. Path sources above the workspace
 root can't be loaded and are skipped.
+
+## Caching
+
+The functions load from the workspace `pyproject` was given. A caller that
+only needs discovery can pass a workspace of just the files it reads:
+
+```python
+discovery_ws = ws.directory(
+    "/", include=["**/pyproject.toml", "**/.gitignore", "**/uv.lock", "**/pylock.toml"], gitignore=True
+).as_workspace()
+```
+
+A workspace made this way and passed to a module is keyed by its contents, so
+discovery stays cached until one of those files changes. Load sources from
+your own workspace with the `include`/`exclude` patterns.
 
 ## Settings
 

@@ -14,24 +14,20 @@ from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
 
 # A uv workspace is a directory holding a uv.lock.
 _WORKSPACE_MARKERS = ["uv.lock"]
+# What `pyproject` discovery reads.
+_DISCOVERY_INCLUDE = ["**/pyproject.toml", "**/.gitignore", *(f"**/{marker}" for marker in _WORKSPACE_MARKERS)]
 
 
 async def _load(
     ws: Workspace | None, layouts: list[UvWorkspaceLayout], handlers: list[BuildBackendHandler], path: str
 ) -> UvWorkspaceSource:
-    """The workspace at `path`, loaded from a workspace of just the files its builds read.
-
-    The workspace `uv()` was given gets a new cache key on every run, and so
-    does everything loaded from it. One made from a directory is keyed by its
-    contents, so loading the workspace from it keeps its builds cached.
-    """
+    """The workspace at `path`, its directories filtered from just the files its builds read."""
     assert ws is not None
     layout = next((layout for layout in layouts if layout.path == path), None)
     if layout is None:
         msg = f"no uv workspace (uv.lock) at {path!r}"
         raise ValueError(msg)
-    inputs = await layout.load(ws, handlers).inputs()
-    return layout.load(inputs.as_workspace(), handlers)
+    return layout.load(await layout.inputs(ws, handlers), handlers)
 
 
 def _project_of_src_path(path: str) -> str:
@@ -95,7 +91,10 @@ class Uv:
             Doc("Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**."),
         ] = None,
     ) -> Self:
-        discovered = pyproject(ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
+        # A workspace made from a directory and passed to a module is keyed by its
+        # contents, so discovery stays cached until one of the files it reads changes.
+        discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
+        discovered = pyproject(discovery_ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
         found, projects = await asyncio.gather(discovered.workspace_list(), discovered.project_list())
 
         # Keep only the patterns `pyproject` computed: `workspace` loads each

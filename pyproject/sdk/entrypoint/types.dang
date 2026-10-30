@@ -12,6 +12,8 @@ type ModuleTypes {
         .withField("local_dependencies", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Roots of the projects this one depends on through `[tool.uv.sources]` (path and workspace sources, transitively), wherever they live.")
         .withField("include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of what `source` loads: the project and its local dependencies.")
         .withField("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `source` leaves out: caches, virtualenvs, build output and unrelated nested projects.")
+        .withField("files_include", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of what `files` loads: the project's tree.")
+        .withField("files_exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns `files` leaves out: caches, virtualenvs, build output and the projects nested inside.")
         .withFunction(
           function("files", typeDef.withObject("Directory"))
             .withDescription("The files this project owns, at their workspace-root-relative paths.\n\nIts tree less the projects nested in it, caches, virtualenvs, build\noutput and gitignored files. This is what a tool that works on one\nproject's own code, such as a linter, should see.")

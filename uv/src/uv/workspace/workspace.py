@@ -9,7 +9,7 @@ from typing import Annotated
 import dagger
 from dagger import Doc, check, field, function, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Container, Directory, File, ReturnType, Workspace, core
+from dagger_clients.core import Container, Directory, File, ReturnType, core
 
 from uv.args import (
     ActivateVenv,
@@ -72,20 +72,21 @@ class UvWorkspaceSource:
         Doc("Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files."),
     ] = field()
 
+    # Not a `field()`: every file the builds read, which `inputs` returns.
+    inputs_dir: Directory
+
     path: Annotated[
         str,
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
 
-    # Not `field()`s: internal state, and Dagger can't expose a `Workspace` as one.
+    # Not `field()`s: internal state.
     # Each member's and local dependency's files, loaded only when a build installs that project.
     projects: list[ProjectSource] = dataclasses.field(default_factory=list)
     # The entries directly under the projects' `src/`, which mark a `src` layout.
     src_paths: list[str] = dataclasses.field(default_factory=list)
     # Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`.
     build_backend_handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
-    # The workspace the directories were loaded from, for the handlers' `/`-prefixed build inputs.
-    ws: Workspace | None = None
 
     def _ws_dir(self) -> Directory:
         return self.manifests if self.path == "." else self.manifests.directory(self.path)
@@ -359,27 +360,22 @@ class UvWorkspaceSource:
         return UvSyncPlanner(
             manifests=self.manifests,
             source=self.source,
+            inputs_dir=self.inputs_dir,
             workspace_path=self.path,
             projects=self.projects,
             src_paths=self.src_paths,
             handlers=self.build_backend_handlers,
-            ws=self.ws,
         )
 
     @function
-    async def inputs(self) -> Directory:
+    def inputs(self) -> Directory:
         """Every file a `builder` reads, at workspace-root-relative paths.
 
-        `Uv.workspace` loads the workspace from just these files. A module that
-        reads more of the workspace can merge its own files into them and hand
-        the result on with `as_workspace()`.
+        `Uv.workspace` loads the workspace's directories from just these files.
+        A module that reads more of the workspace can merge its own files into
+        them and hand the result on with `as_workspace()`.
         """
-        planner = self._planner()
-        plan = await planner.plan(all_packages=True)
-        inputs = self.manifests.with_directory(".", self.source)
-        if plan.root_inputs_dir is not None:
-            inputs = inputs.with_directory(".", plan.root_inputs_dir)
-        return inputs
+        return self.inputs_dir
 
     @function
     async def builder(
