@@ -4,7 +4,7 @@ import logging
 import posixpath
 import tomllib
 from pathlib import PurePosixPath
-from typing import Annotated, TypeAlias
+from typing import Annotated
 
 import dagger
 from dagger import Doc, check, field, function, object_type
@@ -44,14 +44,6 @@ from uv.workspace.index import UvIndex, dicts_to_indices, merge_indices, read_wo
 from uv.workspace.package import UvPackageSource
 from uv.workspace.plan import ProjectSource, UvSyncPlan
 from uv.workspace.venv import UvVenv
-
-BuildBackendHandlerList: TypeAlias = Annotated[
-    list[BuildBackendHandler],
-    Doc(
-        "Handlers for the local packages' build backends: from `build_backend_handlers()`, or another "
-        "module's `BuildBackendHandler`. They take precedence over the module's own support for their backends."
-    ),
-]
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +97,11 @@ class UvWorkspaceSource:
         str,
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
+
+    build_backend_handlers: Annotated[
+        list[BuildBackendHandler],
+        Doc("Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`."),
+    ] = field(default=list)
 
     # The workspace `uv()` was given, for the build backend handlers' `/`-prefixed build inputs.
     # Not a `field()`: Dagger can't expose a `Workspace` as one.
@@ -386,8 +383,8 @@ class UvWorkspaceSource:
         return self.ws.directory("/", include=root_inputs, gitignore=True)
 
     @function
-    async def inputs(self, build_backend_handlers: BuildBackendHandlerList | None = None) -> Directory:
-        """Every file `build`, `install` and `venv` read with these handlers, at workspace-root-relative paths.
+    async def inputs(self) -> Directory:
+        """Every file `build`, `install` and `venv` read, at workspace-root-relative paths.
 
         A module handing its workspace to `uv` can load just these files (merged
         with its own) and pass them on as a workspace. A workspace made from a
@@ -401,7 +398,7 @@ class UvWorkspaceSource:
             src_paths=self.src_paths,
             workspace_path=self.path,
             all_packages=True,
-            handlers=build_backend_handlers,
+            handlers=self.build_backend_handlers,
         )
         inputs = self.manifests.with_directory(".", self.source)
         if plan.root_inputs:
@@ -426,7 +423,6 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
-        build_backend_handlers: BuildBackendHandlerList | None = None,
         venv_relocatable: VenvRelocatable = False,
         activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
@@ -476,7 +472,7 @@ class UvWorkspaceSource:
                 all_packages=all_packages,
                 no_editable=no_editable,
                 no_default_groups=no_default_groups,
-                handlers=build_backend_handlers,
+                handlers=self.build_backend_handlers,
             )
             span.set_attribute("uv.sync_args", plan.uv_sync_args)
             span.set_attribute("build.local_packages", [pkg.name for pkg in plan.needed_local])
@@ -549,7 +545,6 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
-        build_backend_handlers: BuildBackendHandlerList | None = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -579,7 +574,6 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
-            build_backend_handlers=build_backend_handlers,
             venv_relocatable=venv_relocatable,
             activate_venv=activate_venv,
             auto_install_uv=auto_install_uv,
@@ -605,7 +599,6 @@ class UvWorkspaceSource:
         all_packages: AllPackages = False,
         no_editable: NoEditable = False,
         no_default_groups: NoDefaultGroups = False,
-        build_backend_handlers: BuildBackendHandlerList | None = None,
         prune_cache: PruneCache = True,
         max_cache_size: MaxCacheSize = 100,
         lock_timeout: LockTimeout = 600,
@@ -635,7 +628,6 @@ class UvWorkspaceSource:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
-            build_backend_handlers=build_backend_handlers,
             venv_relocatable=True,
             auto_install_uv=auto_install_uv,
         )

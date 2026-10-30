@@ -595,8 +595,9 @@ class TypesafeDaggerverse:
         for no_editable in (False, True):
             ctr = (
                 uv(ws)
+                .with_build_backend_handlers([setuptools_package_dir()])
                 .workspace(".")
-                .install(no_editable=no_editable, build_backend_handlers=[setuptools_package_dir()])
+                .install(no_editable=no_editable)
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
             )
             # The handler's `setup` ran before the build and its `teardown` after it.
@@ -621,11 +622,12 @@ class TypesafeDaggerverse:
             )
             .with_max_target_size(0)
         )
+        uv_ = uv_.with_build_backend_handlers([maturin])
         base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
         for no_editable in (False, True):
             await (
                 uv_.workspace("py")
-                .install(base_container=base, no_editable=no_editable, build_backend_handlers=[maturin])
+                .install(base_container=base, no_editable=no_editable)
                 # Isolated (`-I`), so the installed package is imported rather than the source.
                 .with_exec(
                     ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
@@ -645,7 +647,7 @@ class TypesafeDaggerverse:
                 name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
             )
         )
-        inputs = uv(source.as_workspace()).workspace("py").inputs(build_backend_handlers=[maturin])
+        inputs = uv(source.as_workspace()).with_build_backend_handlers([maturin]).workspace("py").inputs()
         found = sorted(await inputs.glob("**/*.*"))
         expected = sorted(path for path in await source.glob("**/*.*") if not path.startswith("docs/"))
         if found != expected:
@@ -653,8 +655,9 @@ class TypesafeDaggerverse:
         base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
         await (
             uv(inputs.as_workspace())
+            .with_build_backend_handlers([maturin])
             .workspace("py")
-            .install(base_container=base, build_backend_handlers=[maturin])
+            .install(base_container=base)
             .with_exec(
                 ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
             )
@@ -681,8 +684,9 @@ class TypesafeDaggerverse:
         )
         base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
         scaffold = (
-            uv_.workspace("py")
-            .build(base_container=base, build_backend_handlers=[maturin])
+            uv_.with_build_backend_handlers([maturin])
+            .workspace("py")
+            .build(base_container=base)
             .with_remote_dependencies()
             .with_workspace_files()
         )
@@ -809,12 +813,15 @@ class TypesafeDaggerverse:
                     for name, extra_build_inputs in packages.items():
                         handler = handler.with_package_config(name=name, extra_build_inputs=extra_build_inputs)
                     handlers.append(handler)
-                ctr = await project_uv.workspace(".").install(
-                    package=names,
-                    no_editable=no_editable,
-                    base_container=base,
-                    build_backend_handlers=handlers,
-                    **project.get("install", {}),
+                ctr = (
+                    await project_uv.with_build_backend_handlers(handlers)
+                    .workspace(".")
+                    .install(
+                        package=names,
+                        no_editable=no_editable,
+                        base_container=base,
+                        **project.get("install", {}),
+                    )
                 )
                 script = "".join(f"import {module}\n" for module in project["imports"])
                 # Isolated (`-I`), so the installed package is imported rather than the source

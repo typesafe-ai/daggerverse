@@ -130,9 +130,8 @@ that hands its workspace to `uv` can load just the files a build reads and pass
 those on, so its builds stay cached until one of them changes:
 
 ```python
-handlers = [maturin]
-inputs = uv(ws).workspace(".").inputs(build_backend_handlers=handlers)
-ctr = uv(inputs.as_workspace()).workspace(".").install(build_backend_handlers=handlers)
+inputs = uv(ws).with_build_backend_handlers([maturin]).workspace(".").inputs()
+ctr = uv(inputs.as_workspace()).with_build_backend_handlers([maturin]).workspace(".").install()
 ```
 
 Merge your own files into `inputs` (`inputs.with_directory(".", ...)`) before

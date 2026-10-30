@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import posixpath
 from typing import Annotated, Self
 
@@ -8,7 +9,7 @@ from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
 from uv.workspace import UvWorkspaceSource
-from uv.workspace.build_backends.handler import BuildBackendHandlers
+from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendHandlers
 from uv.workspace.plan import ProjectSource
 
 # A uv workspace is a directory holding a uv.lock.
@@ -58,7 +59,8 @@ class Uv:
     Hands out one `UvWorkspaceSource` per uv workspace, as the `pyproject`
     module discovers them.
     Use `workspace` to grab a single workspace by path or `workspaces` to get them all,
-    and `build_backend_handlers` for handlers that configure the built-in backends.
+    `build_backend_handlers` for handlers that configure the built-in backends, and
+    `with_build_backend_handlers` to apply them.
 
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""
 
@@ -113,10 +115,36 @@ class Uv:
     def build_backend_handlers(self) -> BuildBackendHandlers:
         """Handlers for the module's built-in build backends, to configure them for some packages.
 
-        Pass them as `build_backend_handlers` to `build`, `install` or `venv`, e.g. a
-        maturin handler with the crates a package's Cargo workspace keeps above it.
+        Pass them to `with_build_backend_handlers`, e.g. a maturin handler with
+        the crates a package's Cargo workspace keeps above it.
         """
         return BuildBackendHandlers()
+
+    @function
+    def with_build_backend_handlers(
+        self,
+        handlers: Annotated[
+            list[BuildBackendHandler],
+            Doc(
+                "Handlers for the local packages' build backends: from `build_backend_handlers()`, or another "
+                "module's `BuildBackendHandler`. They take precedence over the module's own support for their "
+                "backends."
+            ),
+        ],
+    ) -> Self:
+        """These workspaces with `handlers` added to their build backend handlers.
+
+        Every workspace's `inputs`, `build`, `install` and `venv` use them. A
+        handler configures every package that uses its backend, so pass one per
+        backend.
+        """
+        return dataclasses.replace(
+            self,
+            items=[
+                dataclasses.replace(item, build_backend_handlers=[*item.build_backend_handlers, *handlers])
+                for item in self.items
+            ],
+        )
 
     @function
     def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
