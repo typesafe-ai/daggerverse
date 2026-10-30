@@ -3,44 +3,18 @@
 type ModuleTypes {
   pub all: [TypeDef!]! {
     [
-      typeDef.withObject("RuffChecker", description: "Ruff linter (`ruff check`).")
+      typeDef.withObject("Ruff", description: "Ruff Python linter and formatter.\n\n`check` and `format` are generators: `dagger generate` applies their fixes,\nand `dagger check --generated` fails while either would change a file. `check` also\nfails on violations ruff can't fix.")
         .withField("ctr", typeDef.withObject("Container"), description: "Container with ruff installed.")
-        .withField("source", typeDef.withObject("Directory"), description: "Source tree to run on.")
+        .withField("source", typeDef.withObject("Directory"), description: "Source tree: the Dagger workspace, less `exclude` and gitignored files.")
         .withFunction(
-          function("fix", typeDef.withObject("Changeset"))
-            .withDescription("Auto-fix lint violations and return a Changeset.")
-            .withArg("extra_args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to `ruff check --fix`.", defaultValue: ("null" :: Dagger.JSON!))
+          function("check", typeDef.withObject("Changeset"))
+            .withDescription("Fix lint violations with `ruff check --fix`.\n\nFails when violations ruff can't fix remain.")
+            .withGenerator
         )
         .withFunction(
-          function("lint", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run `ruff check` and report violations.\n\nExits non-zero when violations are found.")
-            .withCheck
-            .withArg("extra_args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to `ruff check`.", defaultValue: ("null" :: Dagger.JSON!))
-        ),
-      typeDef.withObject("RuffFormatter", description: "Ruff formatter (`ruff format`).")
-        .withField("ctr", typeDef.withObject("Container"), description: "Container with ruff installed.")
-        .withField("source", typeDef.withObject("Directory"), description: "Source tree to run on.")
-        .withFunction(
-          function("fix", typeDef.withObject("Changeset"))
-            .withDescription("Auto-format source files and return a Changeset.")
-            .withArg("extra_args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to `ruff format`.", defaultValue: ("null" :: Dagger.JSON!))
-        )
-        .withFunction(
-          function("lint", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run `ruff format --check` and report unformatted files.\n\nExits non-zero when files would be reformatted.")
-            .withCheck
-            .withArg("extra_args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to `ruff format --check`.", defaultValue: ("null" :: Dagger.JSON!))
-        ),
-      typeDef.withObject("Ruff", description: "Ruff Python linter and formatter.")
-        .withField("ctr", typeDef.withObject("Container"), description: "Container with ruff installed.")
-        .withField("source", typeDef.withObject("Directory"), description: "Source tree: the Dagger workspace, less caches, virtualenvs and gitignored files.")
-        .withFunction(
-          function("check", typeDef.withObject("RuffChecker"))
-            .withDescription("Return the ruff linter (`ruff check`).")
-        )
-        .withFunction(
-          function("format", typeDef.withObject("RuffFormatter"))
-            .withDescription("Return the ruff formatter (`ruff format`).")
+          function("format", typeDef.withObject("Changeset"))
+            .withDescription("Format source files with `ruff format`.")
+            .withGenerator
         )
         .withFunction(
           function("version", typeDef.withKind(TypeDefKind.STRING_KIND))
@@ -52,6 +26,7 @@ type ModuleTypes {
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("ctr", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container with ruff installed. Defaults to the official ghcr.io/astral-sh/ruff image.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Ruff image tag. Only used when `ctr` is not provided. Defaults to the version the workspace pins.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of workspace paths that are not uploaded to the Dagger engine.", defaultValue: ("[\"**/.git\"]" :: Dagger.JSON!))
         ),
     ]
   }

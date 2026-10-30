@@ -9,8 +9,9 @@ description: A Dagger module for linting and formatting Python code with Ruff.
 A [Dagger](https://dagger.io) module for linting and formatting Python code with
 [Ruff](https://docs.astral.sh/ruff/).
 
-It has two sub-objects, a checker (`ruff check`) and a formatter (`ruff format`).
-Each has a `lint` check and a `fix` function that returns a `Changeset`.
+It exposes two generators: `check` (`ruff check --fix`) and `format` (`ruff format`).
+`dagger generate` applies their changes, and `dagger check --generated` fails while
+either would change a file. `check` also fails on violations ruff can't fix.
 
 ## Installation
 
@@ -22,18 +23,29 @@ $ dagger install github.com/typesafe-ai/daggerverse/ruff
 
 ### Checks
 
-Run the lint and format checks:
+Fail when the workspace isn't linted or formatted:
 
 ```console
-$ dagger check ruff:check
-$ dagger check ruff:format
+$ dagger check --ruff --generated
 ```
 
 ### Auto-fix
 
+Apply the fixes and formatting to the workspace:
+
 ```console
-$ dagger call ruff check fix
-$ dagger call ruff format fix
+$ dagger generate --ruff
+```
+
+### Excluding paths
+
+Gitignored files are never uploaded to the Dagger engine. `exclude` sets the glob
+patterns of other workspace paths to leave out, replacing the default `["**/.git"]`.
+Set it in `dagger.toml`:
+
+```toml
+[modules.ruff.settings]
+exclude = ["**/.git", "**/tests/_fixtures/**"]
 ```
 
 ## `ruff` version detection

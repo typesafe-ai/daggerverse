@@ -1,17 +1,20 @@
 from typing import Annotated, Self
 
-from dagger import Doc, field, function, object_type
-from dagger_clients.core import Container, Directory, Workspace, core
+from dagger import Doc, field, function, generate, object_type
+from dagger_clients.core import Changeset, Container, Directory, Workspace, core
 
-from ruff.args import SOURCE_EXCLUDE, VERSION_FILES
-from ruff.checker import RuffChecker
-from ruff.formatter import RuffFormatter
+from ruff.args import SOURCE_EXCLUDE, VERSION_FILES, Exclude
 from ruff.utils import _DEFAULT_IMAGE, resolve_version
 
 
 @object_type
 class Ruff:
-    """Ruff Python linter and formatter."""
+    """Ruff Python linter and formatter.
+
+    `check` and `format` are generators: `dagger generate` applies their fixes,
+    and `dagger check --generated` fails while either would change a file. `check` also
+    fails on violations ruff can't fix.
+    """
 
     ctr: Annotated[
         Container,
@@ -20,7 +23,7 @@ class Ruff:
 
     source: Annotated[
         Directory,
-        Doc("Source tree: the Dagger workspace, less caches, virtualenvs and gitignored files."),
+        Doc("Source tree: the Dagger workspace, less `exclude` and gitignored files."),
     ] = field()
 
     @classmethod
@@ -35,24 +38,46 @@ class Ruff:
             str | None,
             Doc("Ruff image tag. Only used when `ctr` is not provided. Defaults to the version the workspace pins."),
         ] = None,
+        exclude: Exclude = SOURCE_EXCLUDE,
     ) -> Self:
         if ctr is None:
             if version is None:
-                version = await resolve_version(ws.directory("/", include=VERSION_FILES))
+                version = await resolve_version(ws.directory("/", include=VERSION_FILES, gitignore=True))
             ctr = core().container().from_(f"{_DEFAULT_IMAGE}:{version}")
-        return cls(ctr=ctr, source=ws.directory("/", exclude=SOURCE_EXCLUDE, gitignore=True))
+        # The workspace gets a new cache key on every run, and so does everything
+        # loaded from it. Re-loading the source as a workspace of its own keys it
+        # by its contents, so ruff reruns only when a file changes.
+        source = ws.directory("/", exclude=exclude, gitignore=True).as_workspace().directory("/")
+        return cls(ctr=ctr, source=source)
 
     @function(cache="1h")
     async def version(self) -> str:
         """The resolved ruff version."""
         return (await self.ctr.with_exec(["/ruff", "version"]).stdout()).strip()
 
-    @function
-    def check(self) -> RuffChecker:
-        """Return the ruff linter (`ruff check`)."""
-        return RuffChecker(ctr=self.ctr, source=self.source)
+    def _fix(self, args: list[str]) -> Changeset:
+        """The edits `ruff <args> .` makes to the source."""
+        fixed = (
+            self.ctr.with_workdir("/work")
+            .with_mounted_directory("/work", self.source)
+            .with_exec(["/ruff", *args, "--no-cache", "."])
+            .directory("/work")
+        )
+        before = core().directory().with_directory(".", self.source)
+        after = core().directory().with_directory(".", fixed)
+        return after.changes(before)
 
+    @generate
     @function
-    def format(self) -> RuffFormatter:
-        """Return the ruff formatter (`ruff format`)."""
-        return RuffFormatter(ctr=self.ctr, source=self.source)
+    def check(self) -> Changeset:
+        """Fix lint violations with `ruff check --fix`.
+
+        Fails when violations ruff can't fix remain.
+        """
+        return self._fix(["check", "--fix"])
+
+    @generate
+    @function
+    def format(self) -> Changeset:
+        """Format source files with `ruff format`."""
+        return self._fix(["format"])

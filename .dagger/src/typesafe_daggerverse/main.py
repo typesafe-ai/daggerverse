@@ -7,7 +7,7 @@ from typing import Annotated
 
 import anyio
 import yaml
-from dagger import Doc, check, function, object_type
+from dagger import Doc, QueryError, check, function, object_type
 from dagger.telemetry import get_tracer
 from dagger_clients.core import Changeset, Check, Container, Directory, ReturnType, Secret, Service, Workspace, core
 from dagger_clients.deptry import deptry
@@ -1186,6 +1186,9 @@ print("LAYER_CACHE_OK")
             )
         )
 
+    def _ruff_clean_source(self) -> Directory:
+        return core().directory().with_new_file("clean.py", contents="x = 1\ny = [1, 2, 3]\n")
+
     async def _assert_changeset_only_modifies(self, changeset: Changeset, expected: set[str]) -> str:
         added = await changeset.added_paths()
         modified = await changeset.modified_paths()
@@ -1208,46 +1211,43 @@ print("LAYER_CACHE_OK")
         async with anyio.create_task_group() as tg:
             tg.start_soon(self.ruff_check_fix)
             tg.start_soon(self.ruff_format_fix)
-            tg.start_soon(self.ruff_check_lint_clean)
-            tg.start_soon(self.ruff_format_lint_clean)
+            tg.start_soon(self.ruff_check_clean)
+            tg.start_soon(self.ruff_format_clean)
+            tg.start_soon(self.ruff_check_unfixable)
 
     @function
     async def ruff_check_fix(self) -> str:
-        """Run ruff check --fix on a dirty file and verify only dirty.py is changed."""
-        changeset = ruff(self._ruff_dirty_source().as_workspace()).check().fix()
+        """The `check` generator fixes a dirty file and changes nothing else."""
+        changeset = ruff(self._ruff_dirty_source().as_workspace()).check()
         return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
 
     @function
     async def ruff_format_fix(self) -> str:
-        """Run ruff format on a dirty file and verify only dirty.py is changed."""
-        changeset = ruff(self._ruff_dirty_source().as_workspace()).format().fix()
+        """The `format` generator formats a dirty file and changes nothing else."""
+        changeset = ruff(self._ruff_dirty_source().as_workspace()).format()
         return await self._assert_changeset_only_modifies(changeset, {"dirty.py"})
 
     @function
-    async def ruff_check_lint_clean(self) -> None:
-        """Run ruff check on a clean file and verify it passes."""
-        clean = (
-            core()
-            .directory()
-            .with_new_file(
-                "clean.py",
-                contents="x = 1\ny = [1, 2, 3]\n",
-            )
-        )
-        await _run_check(ruff(clean.as_workspace()).check().lint())
+    async def ruff_check_clean(self) -> None:
+        """The `check` generator changes nothing on a clean file."""
+        if not await ruff(self._ruff_clean_source().as_workspace()).check().is_empty():
+            raise AssertionError("expected ruff check to change nothing on a clean file")
 
     @function
-    async def ruff_format_lint_clean(self) -> None:
-        """Run ruff format --check on a clean file and verify it passes."""
-        clean = (
-            core()
-            .directory()
-            .with_new_file(
-                "clean.py",
-                contents="x = 1\ny = [1, 2, 3]\n",
-            )
-        )
-        await _run_check(ruff(clean.as_workspace()).format().lint())
+    async def ruff_format_clean(self) -> None:
+        """The `format` generator changes nothing on a clean file."""
+        if not await ruff(self._ruff_clean_source().as_workspace()).format().is_empty():
+            raise AssertionError("expected ruff format to change nothing on a clean file")
+
+    @function
+    async def ruff_check_unfixable(self) -> None:
+        """The `check` generator fails on a violation ruff can't fix."""
+        source = core().directory().with_new_file("unfixable.py", contents="print(undefined)\n")
+        try:
+            await ruff(source.as_workspace()).check().sync()
+        except QueryError:
+            return
+        raise AssertionError("expected ruff check to fail on an undefined name")
 
     @function
     async def uv_workspace_build_partial_workspace(self) -> None:
