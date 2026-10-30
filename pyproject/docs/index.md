@@ -56,11 +56,11 @@ $ dagger install github.com/typesafe-ai/daggerverse/pyproject
 | `nested` | Topmost projects nested inside this one. Their files are their own. |
 | `local_dependencies` | Projects this one depends on through `[tool.uv.sources]` path and workspace sources, transitively, wherever they live. |
 
-`source(ws)` returns the project's own files plus its local dependencies'. Paths
+`source()` returns the project's own files plus its local dependencies'. Paths
 stay relative to the workspace root, so a path source like `../lib` resolves
-once the directory is mounted as the root. `files(ws)` returns only the files
+once the directory is mounted as the root. `files()` returns only the files
 the project owns, its tree less nested projects, for tools such as linters that
-work on one project's own code. `pyproject(ws)` returns the manifest.
+work on one project's own code. `pyproject()` returns the manifest.
 
 ### Workspaces
 
@@ -77,8 +77,8 @@ decides. Any other workspace has its root project alone, or none for a bare
 lockfile.
 
 - `projects()` is the collection of the members.
-- `source(ws)` returns every member's files and their local dependencies'.
-- `manifests(ws)` returns only what dependency resolution reads: the markers,
+- `source()` returns every member's files and their local dependencies'.
+- `manifests()` returns only what dependency resolution reads: the markers,
   `uv.toml`, and each member's and local dependency's `pyproject.toml` and
   `.python-version`. Build a dependency layer from it (e.g. `uv sync --frozen
   --no-install-local`) and source edits leave that layer cached.
