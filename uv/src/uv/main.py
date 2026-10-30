@@ -96,7 +96,7 @@ class Uv:
         ] = None,
     ) -> Self:
         discovered = pyproject(ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
-        found, projects = await asyncio.gather(discovered.workspaces().list_(), discovered.projects().list_())
+        found, projects = await asyncio.gather(discovered.workspace_list(), discovered.project_list())
 
         # Keep only the patterns `pyproject` computed: `workspace` loads each
         # workspace from them, so no call goes back to the `pyproject` module.

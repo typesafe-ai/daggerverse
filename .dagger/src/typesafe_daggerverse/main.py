@@ -1381,6 +1381,13 @@ print("LAYER_CACHE_OK")
         self._assert_equal(await a.workspace(), ".")
         self._assert_equal(await a.local_dependencies(), ["packages/b", "vendor/shared"])
         self._assert_equal(await found.projects().get("tools/x").workspace(), None)
+        # The batch functions hold the same items, in the collections' order.
+        self._assert_equal(
+            [await project.path() for project in await found.project_list()], await found.projects().keys()
+        )
+        self._assert_equal(
+            [await workspace.path() for workspace in await found.workspace_list()], await found.workspaces().keys()
+        )
 
     @function
     async def pyproject_workspace_markers(self) -> None:

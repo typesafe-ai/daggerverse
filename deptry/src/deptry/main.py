@@ -248,7 +248,7 @@ class Deptry:
         The workspace is walked on the host, and only the pyproject.toml files
         are loaded.
         """
-        found = await pyproject(ws, exclude=exclude).projects().list_()
+        found = await pyproject(ws, exclude=exclude).project_list()
 
         async def _project(project) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.

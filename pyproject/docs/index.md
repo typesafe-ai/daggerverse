@@ -40,7 +40,9 @@ $ dagger install github.com/typesafe-ai/daggerverse/pyproject
     from dagger_clients.pyproject import pyproject
 
     found = pyproject(ws, exclude=["**/tests/fixtures/**"])
-    for workspace in await found.workspaces().list_():
+    # `workspace_list` reads every workspace in one call; listing the collection
+    # gets each workspace with its own call.
+    for workspace in await found.workspace_list():
         deps = workspace.manifests()  # resolver inputs only
         src = workspace.source()  # members and their local dependencies
     ```

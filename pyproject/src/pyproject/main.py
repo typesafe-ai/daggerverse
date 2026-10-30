@@ -304,3 +304,21 @@ class Pyproject:
     def workspaces(self) -> PyprojectWorkspaces:
         """Every workspace in the workspace, less those matching `exclude`."""
         return PyprojectWorkspaces(paths=[w.path for w in self.workspace_items], items=self.workspace_items)
+
+    @function
+    def project_list(self) -> list[PyprojectProject]:
+        """The projects `projects` holds, in one call.
+
+        Listing a collection gets each item with its own call; use this to read
+        every project at once.
+        """
+        return self.project_items
+
+    @function
+    def workspace_list(self) -> list[PyprojectWorkspace]:
+        """The workspaces `workspaces` holds, in one call.
+
+        Listing a collection gets each item with its own call; use this to read
+        every workspace at once.
+        """
+        return self.workspace_items
