@@ -86,36 +86,14 @@ class Deptry(_Type):
 class DeptryProject(_Type):
     """ One Python project that deptry checks.  """
 
-    def check(self, *, version: str = '0.25.1', ctr: Container | None = None, args: list[str] | None = None,) -> Check:
+    def check(self) -> Check:
         """
         Run `deptry .` in this project and fail on any dependency issue.
 
         Only the files this project owns are loaded: its directory less the
         projects nested in it, such as generated Dagger code or test fixtures.
-
-        Parameters
-        ----------
-        version:
-            deptry version to use (ignored when `ctr` is set).
-        ctr:
-            Container with deptry installed. Defaults to the official
-            ghcr.io/astral-sh/uv image with deptry installed as a uv tool.
-            Overrides `version`.
-        args:
-            Additional arguments to pass to deptry (added before the project
-            root).
         """
-        if not (isinstance(version, str)):
-            raise _type_error("DeptryProject.check", "version", version, "str")
-        if not (ctr is None or isinstance(ctr, Container)):
-            raise _type_error("DeptryProject.check", "ctr", ctr, "Container | None")
-        if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
-            raise _type_error("DeptryProject.check", "args", args, "list[str] | None")
-        _args = [
-            _Arg("version", version, '0.25.1'),
-            _Arg("ctr", ctr, None),
-            _Arg("args", args, None),
-        ]
+        _args: list[_Arg] = []
         _ctx = self._select("check", _args)
         return Check(_ctx)
 
@@ -258,7 +236,7 @@ class DeptryProjects(_Type):
 
 
 
-def deptry(ws: Workspace, *, exclude: list[str] | None = None, session: _Session | None = None,) -> Deptry:
+def deptry(ws: Workspace, *, exclude: list[str] | None = None, version: str = '0.25.1', ctr: Container | None = None, args: list[str] | None = None, session: _Session | None = None,) -> Deptry:
     """
     Discover the projects: one per `pyproject.toml` the `pyproject` module
     finds, other than Dagger-generated ones, that declares dependencies
@@ -281,14 +259,32 @@ def deptry(ws: Workspace, *, exclude: list[str] | None = None, session: _Session
     exclude:
         Glob patterns of project paths to leave out of projects, e.g.
         **/tests/_packages/**.
+    version:
+        deptry version to use (ignored when `ctr` is set).
+    ctr:
+        Container with deptry installed. Defaults to the official
+        ghcr.io/astral-sh/uv image with deptry installed as a uv tool.
+        Overrides `version`.
+    args:
+        Additional arguments to pass to deptry (added before the project
+        root).
     """
     if not (isinstance(ws, Workspace)):
         raise _type_error("deptry", "ws", ws, "Workspace")
     if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
         raise _type_error("deptry", "exclude", exclude, "list[str] | None")
+    if not (isinstance(version, str)):
+        raise _type_error("deptry", "version", version, "str")
+    if not (ctr is None or isinstance(ctr, Container)):
+        raise _type_error("deptry", "ctr", ctr, "Container | None")
+    if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
+        raise _type_error("deptry", "args", args, "list[str] | None")
     _args = [
         _Arg("ws", ws),
         _Arg("exclude", exclude, None),
+        _Arg("version", version, '0.25.1'),
+        _Arg("ctr", ctr, None),
+        _Arg("args", args, None),
     ]
     return _client_root(Deptry, _TARGET, "deptry", _args, session=session)
 
