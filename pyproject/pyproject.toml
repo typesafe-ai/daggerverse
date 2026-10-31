@@ -2,7 +2,7 @@
 name = "pyproject"
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = ["dagger-io", "dagger-clients-core", "pathspec>=0.12.1"]
+dependencies = ["dagger-io", "dagger-clients-core"]
 
 [build-system]
 requires = ["uv_build>=0.8.4,<0.12.0"]
