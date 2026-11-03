@@ -7,7 +7,9 @@ from uv.audit import (
     UpdateStrategy,
     Vulnerability,
     add_exemptions,
+    by_package,
     cooldown_cutoff,
+    fixed_by,
     has_user_exemption,
     locked_version,
     minimal_fix,
@@ -51,6 +53,22 @@ class TestMinimalFix:
         assert minimal_fix([_vuln("a", ["2.7.0"]), _vuln("b", [])]) is None
 
 
+class TestFixedBy:
+    def test_advisories_fixed_at_or_below_version(self):
+        vulns = [_vuln("a", ["2.7.0"]), _vuln("b", ["2.8.0"])]
+        assert fixed_by(vulns, "2.7.0") == vulns[:1]
+        assert fixed_by(vulns, "2.9.0") == vulns
+
+    def test_unmoved_package_fixes_nothing(self):
+        assert fixed_by([_vuln("a", ["2.7.0"])], "2.6.3") == []
+
+
+class TestByPackage:
+    def test_forked_package(self):
+        with pytest.raises(ValueError, match="urllib3 at several versions"):
+            by_package([_vuln("a", ["2.7.0"]), _vuln("b", ["2.7.0"], version="1.26.0")])
+
+
 class TestUpgradeSpec:
     def test_latest(self):
         assert upgrade_spec("urllib3", "2.8.0", UpdateStrategy.LATEST) == "urllib3"
@@ -85,6 +103,11 @@ class TestLock:
     def test_locked_version(self):
         assert locked_version(_LOCK, "urllib3") == "2.8.0"
         assert locked_version(_LOCK, "requests") is None
+
+    def test_locked_version_forked(self):
+        lock = _LOCK + '\n[[package]]\nname = "urllib3"\nversion = "1.26.20"\n'
+        with pytest.raises(ValueError, match="urllib3 at several versions"):
+            locked_version(lock, "urllib3")
 
     def test_cooldown_cutoff_span(self):
         now = datetime(2026, 10, 29, tzinfo=UTC)

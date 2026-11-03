@@ -23,7 +23,7 @@ exclude = ["**/tests/_packages/**"]
 exclude = ["**/tests/_packages/**"]
 
 [modules.python-sdk]
-source = "github.com/dagger/python-sdk@main"
+source = "github.com/dagger/python-sdk@v1.6.0"
 
 [sdks.python]
 module = "python-sdk"

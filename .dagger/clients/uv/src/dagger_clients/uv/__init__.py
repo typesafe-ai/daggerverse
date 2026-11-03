@@ -3564,11 +3564,15 @@ class UvWorkspaceSource(_Type):
         `audit_cooldown`. Returns
         the uv.lock (and, for cooldown exemptions, uv settings) changes.
 
-        Fails when vulnerabilities remain and nothing could be fixed, so its
-        staleness
-        check (`dagger check --generated`) passes only for a clean workspace.
+        Keeps a relock only when it fixes some advisory, and fails with uv's
+        report when
+        vulnerabilities remain and none could be fixed, so its staleness check
+        (`dagger check --generated`) passes only for a clean workspace.
 
-        Only `manifests` is mounted, so a source edit leaves the audit cached.
+        The audit mounts only `manifests`, so a source edit leaves a clean
+        workspace's
+        audit cached. Relocking mounts `inputs`: uv builds members with
+        dynamic metadata.
 
         Parameters
         ----------

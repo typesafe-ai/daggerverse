@@ -1,10 +1,10 @@
 ---
 icon: lucide/shield-check
-title: Auditing dependencies
+title: Auditing Dependencies
 description: Audit the locked dependencies of every uv workspace in a source tree for known vulnerabilities, and upgrade the vulnerable ones.
 ---
 
-# Auditing dependencies
+# Auditing Dependencies
 
 `audit` is a [generator](https://docs.dagger.io/using/generating/): it runs
 `uv audit --frozen` against a workspace's committed `uv.lock`, relocks every vulnerable
@@ -19,12 +19,16 @@ fails on a vulnerability whether or not `audit` can fix it:
 - **Not fixable** (no fixed release, a constraint like `urllib3==2.6.3` rules it out, or
   the cooldown holds it back): `audit` fails with uv's report.
 
-When it fixes some vulnerabilities but not others, it returns the fixes and logs the rest;
-the next run fails on them.
+It keeps a relock only when the vulnerable package lands on a version that fixes at
+least one of its advisories, so a workspace it can't fix gets uv's report, never just a
+reformatted `uv.lock`. When it fixes some vulnerabilities but not others, it returns the
+fixes and logs the rest; the next run fails on them. A package `uv.lock` holds at several
+versions (a forked resolution) fails the audit: upgrade it by hand.
 
-It mounts only the lockfile, `uv.toml` and the members' `pyproject.toml` files, so a
-source edit doesn't re-run it. Relocking reaches the package indexes: pass a
-`base_container` carrying their credentials when they're private.
+The audit itself reads only the lockfile, `uv.toml` and the members' `pyproject.toml`
+files, so a source edit doesn't re-run it on a clean workspace. Relocking reads the
+packages' sources too, since uv builds members with dynamic metadata, and reaches the
+package indexes: pass a `base_container` carrying their credentials when they're private.
 
 ## Auditing a whole source tree
 

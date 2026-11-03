@@ -82,7 +82,19 @@ def by_package(vulns: list[Vulnerability]) -> dict[str, list[Vulnerability]]:
     grouped: dict[str, list[Vulnerability]] = {}
     for v in vulns:
         grouped.setdefault(v.package, []).append(v)
+    for package, group in grouped.items():
+        _single_version(package, {v.version for v in group})
     return grouped
+
+
+def _single_version(package: str, versions: set[str]) -> None:
+    """Raise when uv.lock forks `package` across several versions: `audit` can't tell which to upgrade."""
+    if len(versions) > 1:
+        msg = (
+            f"uv.lock holds {package} at several versions ({', '.join(sorted(versions))}), "
+            f"so `audit` can't upgrade it: upgrade it by hand"
+        )
+        raise ValueError(msg)
 
 
 def _versions(values: list[str]) -> list[Version]:
@@ -111,6 +123,12 @@ def minimal_fix(vulns: list[Vulnerability]) -> str | None:
     return str(max(needed))
 
 
+def fixed_by(vulns: list[Vulnerability], version: str) -> list[Vulnerability]:
+    """The advisories in `vulns` (one package) that upgrading it to `version` fixes."""
+    current, new = Version(vulns[0].version), Version(version)
+    return [v for v in vulns if any(current < f <= new for f in _versions(v.fix_versions))]
+
+
 def upgrade_spec(package: str, target: str, strategy: UpdateStrategy) -> str:
     """The `uv lock --upgrade-package` value upgrading `package` past `target` (its minimal fix)."""
     return package if strategy is UpdateStrategy.LATEST else f"{package}=={target}"
@@ -132,10 +150,13 @@ def upload_cutoff(lock: str, package: str, version: str) -> str:
 
 
 def locked_version(lock: str, package: str) -> str | None:
-    for pkg in tomllib.loads(lock).get("package", []):
-        if normalize_package_name(pkg["name"]) == package:
-            return pkg.get("version")
-    return None
+    versions = {
+        pkg["version"]
+        for pkg in tomllib.loads(lock).get("package", [])
+        if normalize_package_name(pkg["name"]) == package and "version" in pkg
+    }
+    _single_version(package, versions)
+    return versions.pop() if versions else None
 
 
 def _parse_time(value: str) -> datetime:

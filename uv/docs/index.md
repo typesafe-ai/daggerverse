@@ -110,5 +110,5 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
 
 - [Building containers](building.md) — assemble a monorepo package's build context and install it.
 - [Virtual environments](virtual-environments.md) — export a portable, relocatable venv.
-- [Auditing dependencies](checks/audit.md) — scan locked dependencies for known vulnerabilities and upgrade them.
+- [Auditing Dependencies](auditing.md) — scan locked dependencies for known vulnerabilities and upgrade them.
 - [SDK reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv)
