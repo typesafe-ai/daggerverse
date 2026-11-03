@@ -19,9 +19,9 @@ from uv.args import (
 )
 from uv.audit import (
     AuditCooldown,
-    AuditStrategy,
+    AuditUpgradeStrategy,
     CooldownPolicy,
-    UpdateStrategy,
+    UpgradeStrategy,
     Vulnerability,
     add_exemptions,
     by_package,
@@ -100,7 +100,7 @@ class UvWorkspaceSource:
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
 
-    audit_strategy: AuditStrategy = field(default=UpdateStrategy.LATEST)
+    upgrade_strategy: AuditUpgradeStrategy = field(default=UpgradeStrategy.LATEST)
 
     audit_cooldown: AuditCooldown = field(default=CooldownPolicy.RESPECT)
 
@@ -111,6 +111,9 @@ class UvWorkspaceSource:
     src_paths: list[str] = dataclasses.field(default_factory=list)
     # Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`.
     build_backend_handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
+    # From the `Uv` settings: the workspaces `audit` skips, and the container it runs in.
+    audit_exclude: list[str] = dataclasses.field(default_factory=list)
+    audit_base_container: Container | None = None
 
     def _ws_dir(self) -> Directory:
         return self.manifests if self.path == "." else self.manifests.directory(self.path)
@@ -253,14 +256,7 @@ class UvWorkspaceSource:
             str | None,
             Doc(
                 "uv version (Debian image tag) to audit and relock with. Defaults to the version "
-                "detected from the workspace; ignored when `base_container` is set."
-            ),
-        ] = None,
-        base_container: Annotated[
-            Container | None,
-            Doc(
-                "Container with uv on PATH to audit and relock in, e.g. one carrying private index "
-                "credentials. Defaults to the Debian uv image at `uv_version`."
+                "detected from the workspace; ignored when the `audit_base_container` setting is set."
             ),
         ] = None,
     ) -> Changeset:
@@ -268,8 +264,10 @@ class UvWorkspaceSource:
 
         Runs `uv audit --frozen` on the committed uv.lock (vulnerability data comes
         from the public OSV service), then relocks each vulnerable package that has a
-        fix with `uv lock --upgrade-package`, per `audit_strategy` and `audit_cooldown`. Returns
+        fix with `uv lock --upgrade-package`, per `upgrade_strategy` and `audit_cooldown`. Returns
         the uv.lock (and, for cooldown exemptions, uv settings) changes.
+
+        With `upgrade_strategy=SKIP` it only audits, and fails on any vulnerability.
 
         Keeps a relock only when it fixes some advisory, and fails with uv's report when
         vulnerabilities remain and none could be fixed, so its staleness check
@@ -278,25 +276,36 @@ class UvWorkspaceSource:
         The audit mounts only `manifests`, so a source edit leaves a clean workspace's
         audit cached. Relocking mounts `inputs`: uv builds members with dynamic metadata.
         """
+        if any(PurePosixPath(self.path).full_match(pattern) for pattern in self.audit_exclude):
+            return self.manifests.changes(self.manifests)
         ws_dir = posixpath.join("/work", self.path)
         base = (
-            (base_container or core().container().from_(debian_image_ref(uv_version or await self.uv_version())))
+            (
+                self.audit_base_container
+                or core().container().from_(debian_image_ref(uv_version or await self.uv_version()))
+            )
             .with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR)
             .with_mounted_cache(_UV_CACHE_DIR, core().cache_volume("uv-cache"))
             .with_workdir(ws_dir)
         )
         audited = base.with_directory("/work", self.manifests)
+        if self.upgrade_strategy is UpgradeStrategy.SKIP:
+            await self._fail_audit(audited)
+            return self.manifests.changes(self.manifests)
         ctr = base.with_directory("/work", self.inputs_dir)
         config = "uv.toml" if await self._uv_toml() is not None else "pyproject.toml"
         uv_toml = config == "uv.toml"
 
-        # Drop the cooldown exemptions earlier runs wrote once the cooldown has caught up.
+        # Drop the exemptions earlier runs wrote that the cooldown has caught up with, so
+        # they don't hold back this run's upgrades. They reach the result only through a
+        # kept relock: on their own they're harmless, and a clean workspace must stay
+        # clean as the cooldown moves.
         config_text, lock_text = await asyncio.gather(
             self._ws_dir().file(config).contents(), self._ws_dir().file("uv.lock").contents()
         )
         pruned = prune_exemptions(config_text, cooldown_cutoff(lock_text, datetime.now(UTC)), uv_toml=uv_toml)
         if pruned != config_text:
-            ctr = await self._relock(ctr.with_new_file(config, pruned), []) or ctr
+            ctr = ctr.with_new_file(config, pruned)
 
         report = by_package(await self._audit_report(audited))
         fixed: list[Vulnerability] = []
@@ -307,7 +316,7 @@ class UvWorkspaceSource:
             # Keep a partial upgrade (e.g. one the cooldown stops short of the fix) as long
             # as it fixes some advisories; one that doesn't would only churn uv.lock.
             upgraded = await self._relock(
-                ctr, ["--upgrade-package", upgrade_spec(package, target, self.audit_strategy)]
+                ctr, ["--upgrade-package", upgrade_spec(package, target, self.upgrade_strategy)]
             )
             fixes = await self._fixes(upgraded, vulns)
             if fixes:
@@ -338,6 +347,8 @@ class UvWorkspaceSource:
         if unfixed:
             ids = ", ".join(sorted(f"{v.package} {v.id}" for v in unfixed))
             logger.warning("uv audit: still vulnerable after upgrading %s: %s", self.path, ids)
+        if not fixed:
+            return self.manifests.changes(self.manifests)
 
         def relocked(name: str) -> File:
             return ctr.file(posixpath.join(ws_dir, name))

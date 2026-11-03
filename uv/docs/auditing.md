@@ -6,34 +6,9 @@ description: Audit the locked dependencies of every uv workspace in a source tre
 
 # Auditing Dependencies
 
-`audit` is a [generator](https://docs.dagger.io/using/generating/): it runs
-`uv audit --frozen` against a workspace's committed `uv.lock`, relocks every vulnerable
-package that has a fix with `uv lock --upgrade-package`, and returns the changes to
-`uv.lock` (and, for [cooldown exemptions](#cooldown), the uv settings).
+The module `uv` module provides an `audit` check that runs `uv audit` under the hood to find vulnerabilities in your Python dependencies. It's also a Dagger [generator](https://docs.dagger.io/using/generating/), so it also has the ability to automatically suggest upgrades for vulnerable dependencies, according to the configured [upgrade policy](#configuration-options).
 
-Its staleness check passes only for a clean workspace, so `dagger check --generated`
-fails on a vulnerability whether or not `audit` can fix it:
-
-- **Fixable**: `audit` would change `uv.lock`, so the workspace is stale. `dagger generate`
-  applies the upgrade.
-- **Not fixable** (no fixed release, a constraint like `urllib3==2.6.3` rules it out, or
-  the cooldown holds it back): `audit` fails with uv's report.
-
-It keeps a relock only when the vulnerable package lands on a version that fixes at
-least one of its advisories, so a workspace it can't fix gets uv's report, never just a
-reformatted `uv.lock`. When it fixes some vulnerabilities but not others, it returns the
-fixes and logs the rest; the next run fails on them. A package `uv.lock` holds at several
-versions (a forked resolution) fails the audit: upgrade it by hand.
-
-The audit itself reads only the lockfile, `uv.toml` and the members' `pyproject.toml`
-files, so a source edit doesn't re-run it on a clean workspace. Relocking reads the
-packages' sources too, since uv builds members with dynamic metadata, and reaches the
-package indexes: pass a `base_container` carrying their credentials when they're private.
-
-## Auditing a whole source tree
-
-`workspaces` is a [collection](https://docs.dagger.io/reference/sdks/python/#collections)
-with one item per `uv.lock` in the source tree, keyed by the workspace's path.
+## Running the `audit` generator
 
 Install the module into your workspace, then check every workspace, or apply the fixes:
 
@@ -43,88 +18,113 @@ $ dagger check --generated --uv
 $ dagger generate --uv
 ```
 
-List the workspaces it found:
+!!! note "Working with Workspaces"
+    The workspaces form a [collection](https://docs.dagger.io/reference/sdks/python/#collections),
+    `workspaces`, keyed by each workspace's path, so each one runs as its own generator.
+    List them, or [select one](https://docs.dagger.io/using/checking/#select-collection-items)
+    by its path:
 
-```console
-$ dagger generate -l -a --uv
-```
+    ```console
+    $ dagger generate -l -a --uv
+    $ dagger generate --uv --uv-workspace-source=services/api
+    ```
 
-### Skipping workspaces
+## What `audit` does
 
-Test fixtures and intentionally vulnerable sample projects shouldn't fail your build.
-The `exclude` setting takes glob patterns, matched against each workspace's
-source-relative path, and leaves matching workspaces out of `workspaces`:
+For each workspace, `audit` runs [`uv audit --frozen`](https://docs.astral.sh/uv/reference/cli/#uv-audit) against the committed `uv.lock`,
+with vulnerability data from the public OSV service. A clean workspace ends there,
+with no changes.
 
-```toml title="dagger.toml"
-[modules.uv.settings]
-exclude = ["**/tests/_packages/**"]
-```
+For every vulnerable package that has a fixed release, `audit` relocks with
+[`uv lock --upgrade-package`](https://docs.astral.sh/uv/concepts/projects/sync/#upgrading-locked-package-versions). It keeps a relock only when the package lands on a
+version that fixes at least one of its advisories; the rest of the lock stays as it is.
+That gives each workspace one of three outcomes:
 
-## Update strategy
+- **Fixed:** `audit` changes `uv.lock`, so `dagger check --generated` reports the
+  workspace as stale until `dagger generate` applies the upgrade.
+- **Partially fixed:** `audit` returns the fixes it could make and logs the rest. Once you
+  apply them, the next run fails on what's left.
+- **Not fixable:** there is no compatible release available (for example, a strict constraint such as `urllib3==2.6.3` rules
+  it out, or the cooldown setting forbids it). In this case `audit` fails with uv's error message.
 
-The `auditStrategy` setting sets how far a vulnerable package moves:
+### Cooldown exemptions
 
-| `auditStrategy` | Upgrades to |
-| --- | --- |
-| `LATEST` (default) | The newest version the workspace's constraints and cooldown allow. |
-| `MINIMAL` | The lowest version that fixes every advisory against the package. |
-
-Only the vulnerable packages move (and whatever their new version needs); the rest
-of the lock stays as it is.
-
-## Cooldown
-
-A cooldown (`exclude-newer`, such as `"7 days"`) keeps freshly published releases out of
-the lock, so a fix released inside the window is held back. The `auditCooldown` setting
-decides what happens then:
-
-| `auditCooldown` | When the cooldown holds back a fix |
-| --- | --- |
-| `RESPECT` (default) | It stays held back. `audit` keeps any upgrade the cooldown allows and fails on the rest. |
-| `EXEMPT` | `audit` admits the minimal fixing version, and nothing newer, past the cooldown. |
-
-An exemption has to live in the uv settings: a lock resolved with an exemption that
-only the command line knows about fails `uv lock --locked`. `audit` writes it to
-`exclude-newer-package`, in `uv.toml` if the workspace has one, otherwise in
-`pyproject.toml`, pinned to the fixing version's upload time and marked:
+A cooldown ([`exclude-newer`](https://docs.astral.sh/uv/reference/settings/#exclude-newer), such as `"7 days"`) keeps freshly published releases
+out of the lock, so it can hold back a fix. With `auditCooldown` set to `EXEMPT`, `audit`
+admits just the fixing version by writing a marked
+[`exclude-newer-package`](https://docs.astral.sh/uv/reference/settings/#exclude-newer-package) entry, to `uv.toml` if the workspace has
+one, otherwise to `pyproject.toml`:
 
 ```toml title="pyproject.toml"
 [tool.uv]
 exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
-urllib3 = "2026-09-15T19:29:37Z" # uv audit: security fix exempt from cooldown
+urllib3 = "2026-09-15T19:29:37Z" # UvAudit[dagger]: security fix exempt from cooldown
 ```
 
-Once the cooldown catches up with that time, the entry would hold the package back
-instead, so the next `audit` removes it. It only ever removes its own marked entries,
-and leaves a package alone when you've set your own `exclude-newer-package` for it.
+The entry is pinned to the fixing version's upload time. The trailing
+`UvAudit[dagger]:` comment marks it as written by `audit`: entries without it are
+yours, and `audit` never changes or removes them. It also won't exempt a package you've
+set your own `exclude-newer-package` entry for.
 
-## Configuration
+Once the cooldown catches up with an exemption, the global cutoff admits that version
+anyway, and the entry only holds the package back. The next `audit` that upgrades
+something removes it in the same change. An expired exemption on its own never makes
+`audit` return changes, so a clean workspace stays clean as the cooldown moves.
 
-`dagger generate` and `dagger check --generated` run `audit` with its defaults, so its
-policy lives in the module's settings. Each value is JSON, so a string setting is quoted twice:
+!!! tip "Keeping an exemption"
+
+    Delete the `UvAudit[dagger]:` comment to make an entry yours. `audit` then leaves it
+    in place for good.
+
+## Configuration options
+
+| Option | Set on | Default | What it does |
+| --- | --- | --- | --- |
+| `exclude` | module setting | none | Glob patterns of workspace paths to leave out of discovery: no `audit`, and `workspace` can't load them. |
+| `upgradeStrategy` | module setting | `LATEST` | How far a vulnerable package moves: `LATEST` (as far as constraints and cooldown allow), `MINIMAL` (the lowest version fixing every advisory), or `SKIP` (no upgrade, report only). |
+| `auditCooldown` | module setting | `RESPECT` | When the cooldown holds back a fix: `RESPECT` it, or `EXEMPT` the fixing version. |
+| `auditExclude` | module setting | none | Glob patterns of workspace paths to leave unaudited. They stay buildable. |
+| `auditBaseContainer` | module setting | Debian uv image | Container with uv on `PATH` to audit and relock in, e.g. one carrying private index [credentials](https://docs.astral.sh/uv/concepts/indexes/#authentication). |
+| `uv_version` | `audit` argument | the workspace's | uv version of the default image. |
+
+Set them in `dagger.toml`:
 
 ```toml title="dagger.toml"
 [modules.uv.settings]
-auditStrategy = '"MINIMAL"'
+exclude = ["**/tests/_packages/**"]
+upgradeStrategy = '"MINIMAL"'
 auditCooldown = '"EXEMPT"'
 ```
 
-## Auditing a single workspace
+From your own module, pass the same options to the constructor:
 
-Select one workspace by its path (see
-[Select collection items](https://docs.dagger.io/using/checking/#select-collection-items)):
+```python
+changes = uv(ws, upgrade_strategy=UvUpgradeStrategy.SKIP, audit_exclude=["examples/**"]).workspace(".").audit()
+```
 
-=== "CLI"
+!!! warning "Setting values are JSON"
 
-    ```console
-    $ dagger generate --uv --uv-workspace-source=services/api
+    String and enum values are parsed as JSON, so they're quoted twice: `'"MINIMAL"'`,
+    not `"MINIMAL"`. A `dag://` reference to another module's function is not.
+
+!!! tip "Private indexes"
+
+    When working with a private index, [wire](https://docs.dagger.io/config/module-wiring)
+    a container carrying its
+    [credentials](https://docs.astral.sh/uv/concepts/indexes/#providing-credentials-directly)
+    into `auditBaseContainer`, here from a function `base` on your own module `ci`:
+
+    ```toml title="dagger.toml"
+    [modules.uv.settings]
+    auditBaseContainer = "dag://ci/base"
     ```
 
-=== "Python SDK"
+    Without credentials, set `upgradeStrategy` to `SKIP`: `audit` then never relocks, and
+    only fails on vulnerabilities:
 
-    ```python
-    changes = uv(ws, audit_cooldown=UvCooldownPolicy.EXEMPT).workspace("services/api").audit()
-    await changes.export(".")
+    ```toml title="dagger.toml"
+    [modules.uv.settings]
+    upgradeStrategy = '"SKIP"'
     ```

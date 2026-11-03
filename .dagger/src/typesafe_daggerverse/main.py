@@ -16,7 +16,7 @@ from dagger_clients.pyproject import pyproject
 from dagger_clients.ruff import ruff
 from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
-from dagger_clients.uv import UvCooldownPolicy, UvUpdateStrategy, uv
+from dagger_clients.uv import UvCooldownPolicy, UvUpgradeStrategy, uv
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
@@ -281,8 +281,10 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "discovers_workspaces", self.uv_discovers_workspaces)
             tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
             tg.start_soon(_run, "audit_subset", self.uv_audit_subset)
+            tg.start_soon(_run, "audit_exclude", self.uv_audit_exclude)
             tg.start_soon(_run, "audit_upgrades_latest", self.uv_audit_upgrades_latest)
             tg.start_soon(_run, "audit_upgrades_minimal", self.uv_audit_upgrades_minimal)
+            tg.start_soon(_run, "audit_skip_upgrades", self.uv_audit_skip_upgrades)
             tg.start_soon(_run, "audit_respects_cooldown", self.uv_audit_respects_cooldown)
             tg.start_soon(_run, "audit_exempts_cooldown", self.uv_audit_exempts_cooldown)
             tg.start_soon(_run, "project_environment", self.uv_project_environment)
@@ -366,10 +368,26 @@ class TypesafeDaggerverse:
 
     @function
     async def uv_audit_upgrades_minimal(self) -> None:
-        """`audit_strategy=MINIMAL` upgrades to the lowest version that fixes every advisory."""
-        lock, _ = await self._uv_audit_fixes("uv/tests/_packages/upgradable", audit_strategy=UvUpdateStrategy.MINIMAL)
+        """`upgrade_strategy=MINIMAL` upgrades to the lowest version that fixes every advisory."""
+        lock, _ = await self._uv_audit_fixes(
+            "uv/tests/_packages/upgradable", upgrade_strategy=UvUpgradeStrategy.MINIMAL
+        )
         if self._locked_version(lock, "urllib3") != (2, 8, 0):
             raise AssertionError(f"expected urllib3 == 2.8.0, got:\n{lock}")
+
+    @function
+    async def uv_audit_skip_upgrades(self) -> None:
+        """`upgrade_strategy=SKIP` fails on a fixable vulnerability instead of upgrading it."""
+        try:
+            await (
+                uv(_fixture("uv/tests/_packages/upgradable"), upgrade_strategy=UvUpgradeStrategy.SKIP)
+                .workspace(".")
+                .audit()
+                .is_empty()
+            )
+        except QueryError:
+            return
+        raise AssertionError("expected audit to fail for the upgradable fixture with upgrade_strategy=SKIP")
 
     @function
     async def uv_audit_respects_cooldown(self) -> None:
@@ -390,7 +408,7 @@ class TypesafeDaggerverse:
         if self._locked_version(lock, "urllib3") != (2, 8, 0):
             raise AssertionError(f"expected urllib3 == 2.8.0, got:\n{lock}")
         exemption = tomllib.loads(pyproject)["tool"]["uv"].get("exclude-newer-package", {}).get("urllib3")
-        if exemption != "2026-09-15T19:29:37Z" or "uv audit:" not in pyproject:
+        if exemption != "2026-09-15T19:29:37Z" or "UvAudit[dagger]:" not in pyproject:
             raise AssertionError(f"expected a marked urllib3 exemption at its upload time, got:\n{pyproject}")
 
     @function
@@ -403,6 +421,13 @@ class TypesafeDaggerverse:
             .with_directory("vulnerable", _src("uv/tests/_packages/vulnerable"))
         )
         await self._uv_audit_all(src, subset=["clean"])
+
+    @function
+    async def uv_audit_exclude(self) -> None:
+        """`audit_exclude` leaves a matching workspace unaudited, so a vulnerable one passes."""
+        src = core().directory().with_directory("vulnerable", _src("uv/tests/_packages/vulnerable"))
+        if not await uv(src.as_workspace(), audit_exclude=["vulnerable"]).workspace("vulnerable").audit().is_empty():
+            raise AssertionError("expected no audit changes for an excluded workspace")
 
     @function
     async def uv_project_environment(self) -> None:

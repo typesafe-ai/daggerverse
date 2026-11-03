@@ -4,11 +4,11 @@ import posixpath
 from typing import Annotated, Self
 
 from dagger import Doc, collection, function, get, keys, object_type
-from dagger_clients.core import Workspace
+from dagger_clients.core import Container, Workspace
 from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
-from uv.audit import AuditCooldown, AuditStrategy, CooldownPolicy, UpdateStrategy
+from uv.audit import AuditCooldown, AuditUpgradeStrategy, CooldownPolicy, UpgradeStrategy
 from uv.workspace import UvWorkspaceSource
 from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendHandlers
 from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
@@ -91,8 +91,19 @@ class Uv:
             list[str] | None,
             Doc("Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**."),
         ] = None,
-        audit_strategy: AuditStrategy = UpdateStrategy.LATEST,
+        upgrade_strategy: AuditUpgradeStrategy = UpgradeStrategy.LATEST,
         audit_cooldown: AuditCooldown = CooldownPolicy.RESPECT,
+        audit_exclude: Annotated[
+            list[str] | None,
+            Doc("Glob patterns of workspace paths `audit` leaves unaudited, e.g. examples/**. They stay buildable."),
+        ] = None,
+        audit_base_container: Annotated[
+            Container | None,
+            Doc(
+                "Container with uv on PATH that `audit` audits and relocks in, e.g. one carrying private "
+                "index credentials. Defaults to the Debian uv image at each workspace's uv version."
+            ),
+        ] = None,
     ) -> Self:
         # A workspace made from a directory and passed to a module is keyed by its
         # contents, so discovery stays cached until one of the files it reads changes.
@@ -126,8 +137,10 @@ class Uv:
                 projects=[layouts[root] for root in roots if root in layouts],
                 # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.
                 src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
-                audit_strategy=audit_strategy,
+                upgrade_strategy=upgrade_strategy,
                 audit_cooldown=audit_cooldown,
+                audit_exclude=audit_exclude or [],
+                audit_base_container=audit_base_container,
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.

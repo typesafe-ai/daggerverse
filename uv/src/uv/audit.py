@@ -18,14 +18,18 @@ from uv.utils import normalize_package_name
 
 
 @enum_type
-class UpdateStrategy(enum.Enum):
-    """How far `audit` upgrades a vulnerable package."""
+class UpgradeStrategy(enum.Enum):
+    """How far `audit` upgrades a vulnerable package, if at all."""
 
     LATEST = "latest"
     """The newest version the workspace's constraints (and cooldown) allow."""
 
     MINIMAL = "minimal"
     """The lowest version that fixes every advisory against the package."""
+
+    SKIP = "skip"
+    """No upgrade: `audit` only reports the vulnerabilities and fails on them. It never
+    relocks, so it needs no access to the package indexes."""
 
 
 @enum_type
@@ -40,21 +44,18 @@ class CooldownPolicy(enum.Enum):
     version's upload time. The exemption is removed once the cooldown catches up with it."""
 
 
-AuditStrategy: TypeAlias = Annotated[
-    UpdateStrategy,
-    Doc("How far `audit` upgrades a vulnerable package: as far as `LATEST` allowed, or to the `MINIMAL` fix."),
+AuditUpgradeStrategy: TypeAlias = Annotated[
+    UpgradeStrategy,
+    Doc("How far `audit` upgrades a vulnerable package."),
 ]
 
 AuditCooldown: TypeAlias = Annotated[
     CooldownPolicy,
-    Doc(
-        "What `audit` does when the cooldown (`exclude-newer`) holds back a fix: `RESPECT` it, or "
-        "`EXEMPT` the fixing version in `exclude-newer-package` until the cooldown catches up."
-    ),
+    Doc("What `audit` does when the cooldown (`exclude-newer`) holds back a fix."),
 ]
 
 # Marks the `exclude-newer-package` entries `audit` writes, so it only ever prunes its own.
-EXEMPTION_MARKER = "uv audit: security fix exempt from cooldown"
+EXEMPTION_MARKER = "UvAudit[dagger]: security fix exempt from cooldown"
 
 
 @dataclass(frozen=True)
@@ -129,9 +130,9 @@ def fixed_by(vulns: list[Vulnerability], version: str) -> list[Vulnerability]:
     return [v for v in vulns if any(current < f <= new for f in _versions(v.fix_versions))]
 
 
-def upgrade_spec(package: str, target: str, strategy: UpdateStrategy) -> str:
+def upgrade_spec(package: str, target: str, strategy: UpgradeStrategy) -> str:
     """The `uv lock --upgrade-package` value upgrading `package` past `target` (its minimal fix)."""
-    return package if strategy is UpdateStrategy.LATEST else f"{package}=={target}"
+    return package if strategy is UpgradeStrategy.LATEST else f"{package}=={target}"
 
 
 def upload_cutoff(lock: str, package: str, version: str) -> str:

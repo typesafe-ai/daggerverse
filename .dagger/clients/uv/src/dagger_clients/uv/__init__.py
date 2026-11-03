@@ -51,14 +51,19 @@ class UvCooldownPolicy(_Enum):
     """Leave the cooldown alone: a fix newer than the cutoff stays unapplied and the audit fails."""
 
 
-class UvUpdateStrategy(_Enum):
-    """ How far `audit` upgrades a vulnerable package.  """
+class UvUpgradeStrategy(_Enum):
+    """ How far `audit` upgrades a vulnerable package, if at all.  """
 
     LATEST = 'latest'
     """The newest version the workspace's constraints (and cooldown) allow."""
 
     MINIMAL = 'minimal'
     """The lowest version that fixes every advisory against the package."""
+
+    SKIP = 'skip'
+    """No upgrade: `audit` only reports the vulnerabilities and fails on them. It never
+    relocks, so it needs no access to the package indexes.
+    """
 
 
 @_runtime_checkable
@@ -3551,7 +3556,7 @@ class UvWorkspaceSource(_Type):
     avoid colliding with the top-level `Uv` constructor when composed in a
     parent module.  """
 
-    def audit(self, *, uv_version: str | None = None, base_container: Container | None = None,) -> Changeset:
+    def audit(self, *, uv_version: str | None = None) -> Changeset:
         """
         Audit this workspace's locked dependencies and upgrade the vulnerable
         ones.
@@ -3560,9 +3565,12 @@ class UvWorkspaceSource(_Type):
         comes
         from the public OSV service), then relocks each vulnerable package
         that has a
-        fix with `uv lock --upgrade-package`, per `audit_strategy` and
+        fix with `uv lock --upgrade-package`, per `upgrade_strategy` and
         `audit_cooldown`. Returns
         the uv.lock (and, for cooldown exemptions, uv settings) changes.
+
+        With `upgrade_strategy=SKIP` it only audits, and fails on any
+        vulnerability.
 
         Keeps a relock only when it fixes some advisory, and fails with uv's
         report when
@@ -3578,28 +3586,20 @@ class UvWorkspaceSource(_Type):
         ----------
         uv_version:
             uv version (Debian image tag) to audit and relock with. Defaults
-            to the version detected from the workspace; ignored when
-            `base_container` is set.
-        base_container:
-            Container with uv on PATH to audit and relock in, e.g. one
-            carrying private index credentials. Defaults to the Debian uv
-            image at `uv_version`.
+            to the version detected from the workspace; ignored when the
+            `audit_base_container` setting is set.
         """
         if not (uv_version is None or isinstance(uv_version, str)):
             raise _type_error("UvWorkspaceSource.audit", "uv_version", uv_version, "str | None")
-        if not (base_container is None or isinstance(base_container, Container)):
-            raise _type_error("UvWorkspaceSource.audit", "base_container", base_container, "Container | None")
         _args = [
             _Arg("uvVersion", uv_version, None),
-            _Arg("baseContainer", base_container, None),
         ]
         _ctx = self._select("audit", _args)
         return Changeset(_ctx)
 
     async def audit_cooldown(self) -> UvCooldownPolicy:
         """What `audit` does when the cooldown (`exclude-newer`) holds back a
-        fix: `RESPECT` it, or `EXEMPT` the fixing version in `exclude-newer-
-        package` until the cooldown catches up.
+        fix.
 
         Returns
         -------
@@ -3617,26 +3617,6 @@ class UvWorkspaceSource(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("auditCooldown", _args)
         return await _ctx.execute(UvCooldownPolicy)
-
-    async def audit_strategy(self) -> UvUpdateStrategy:
-        """How far `audit` upgrades a vulnerable package: as far as `LATEST`
-        allowed, or to the `MINIMAL` fix.
-
-        Returns
-        -------
-        UvUpdateStrategy
-             How far `audit` upgrades a vulnerable package.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        _args: list[_Arg] = []
-        _ctx = self._select("auditStrategy", _args)
-        return await _ctx.execute(UvUpdateStrategy)
 
     def builder(self, *, base_container: Container | None = None, no_editable: bool = False, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuilder:
         """
@@ -3863,6 +3843,25 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("source", _args)
         return Directory(_ctx)
 
+    async def upgrade_strategy(self) -> UvUpgradeStrategy:
+        """How far `audit` upgrades a vulnerable package.
+
+        Returns
+        -------
+        UvUpgradeStrategy
+             How far `audit` upgrades a vulnerable package, if at all.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("upgradeStrategy", _args)
+        return await _ctx.execute(UvUpgradeStrategy)
+
     async def uv_version(self) -> str:
         """
         The uv version this workspace requires, as a concrete image tag.
@@ -3984,7 +3983,7 @@ class UvWorkspaces(_Type):
 
 
 
-def uv(ws: Workspace, *, exclude: list[str] | None = None, audit_strategy: UvUpdateStrategy = UvUpdateStrategy.LATEST, audit_cooldown: UvCooldownPolicy = UvCooldownPolicy.RESPECT, session: _Session | None = None,) -> Uv:
+def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvUpgradeStrategy = UvUpgradeStrategy.LATEST, audit_cooldown: UvCooldownPolicy = UvCooldownPolicy.RESPECT, audit_exclude: list[str] | None = None, audit_base_container: Container | None = None, session: _Session | None = None,) -> Uv:
     """
     Entrypoint for the `uv` module.
 
@@ -4011,27 +4010,38 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, audit_strategy: UvUpd
     exclude:
         Glob patterns of workspace paths to leave out of workspaces, e.g.
         **/tests/_packages/**.
-    audit_strategy:
-        How far `audit` upgrades a vulnerable package: as far as `LATEST`
-        allowed, or to the `MINIMAL` fix.
+    upgrade_strategy:
+        How far `audit` upgrades a vulnerable package.
     audit_cooldown:
         What `audit` does when the cooldown (`exclude-newer`) holds back a
-        fix: `RESPECT` it, or `EXEMPT` the fixing version in `exclude-
-        newer-package` until the cooldown catches up.
+        fix.
+    audit_exclude:
+        Glob patterns of workspace paths `audit` leaves unaudited, e.g.
+        examples/**. They stay buildable.
+    audit_base_container:
+        Container with uv on PATH that `audit` audits and relocks in, e.g.
+        one carrying private index credentials. Defaults to the Debian uv
+        image at each workspace's uv version.
     """
     if not (isinstance(ws, Workspace)):
         raise _type_error("uv", "ws", ws, "Workspace")
     if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
         raise _type_error("uv", "exclude", exclude, "list[str] | None")
-    if not (isinstance(audit_strategy, UvUpdateStrategy)):
-        raise _type_error("uv", "audit_strategy", audit_strategy, "UvUpdateStrategy")
+    if not (isinstance(upgrade_strategy, UvUpgradeStrategy)):
+        raise _type_error("uv", "upgrade_strategy", upgrade_strategy, "UvUpgradeStrategy")
     if not (isinstance(audit_cooldown, UvCooldownPolicy)):
         raise _type_error("uv", "audit_cooldown", audit_cooldown, "UvCooldownPolicy")
+    if not (audit_exclude is None or (isinstance(audit_exclude, list) and all(isinstance(_v0, str) for _v0 in audit_exclude))):
+        raise _type_error("uv", "audit_exclude", audit_exclude, "list[str] | None")
+    if not (audit_base_container is None or isinstance(audit_base_container, Container)):
+        raise _type_error("uv", "audit_base_container", audit_base_container, "Container | None")
     _args = [
         _Arg("ws", ws),
         _Arg("exclude", exclude, None),
-        _Arg("auditStrategy", audit_strategy, UvUpdateStrategy.LATEST),
+        _Arg("upgradeStrategy", upgrade_strategy, UvUpgradeStrategy.LATEST),
         _Arg("auditCooldown", audit_cooldown, UvCooldownPolicy.RESPECT),
+        _Arg("auditExclude", audit_exclude, None),
+        _Arg("auditBaseContainer", audit_base_container, None),
     ]
     return _client_root(Uv, _TARGET, "uv", _args, session=session)
 
@@ -4054,7 +4064,7 @@ __all__ = [
     "UvProjectSource",
     "UvSyncPlan",
     "UvSyncPlanner",
-    "UvUpdateStrategy",
+    "UvUpgradeStrategy",
     "UvVenv",
     "UvWorkspaceBuilder",
     "UvWorkspaceSource",

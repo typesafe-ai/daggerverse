@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import pytest
 from uv.audit import (
     EXEMPTION_MARKER,
-    UpdateStrategy,
+    UpgradeStrategy,
     Vulnerability,
     add_exemptions,
     by_package,
@@ -71,10 +71,10 @@ class TestByPackage:
 
 class TestUpgradeSpec:
     def test_latest(self):
-        assert upgrade_spec("urllib3", "2.8.0", UpdateStrategy.LATEST) == "urllib3"
+        assert upgrade_spec("urllib3", "2.8.0", UpgradeStrategy.LATEST) == "urllib3"
 
     def test_minimal(self):
-        assert upgrade_spec("urllib3", "2.8.0", UpdateStrategy.MINIMAL) == "urllib3==2.8.0"
+        assert upgrade_spec("urllib3", "2.8.0", UpgradeStrategy.MINIMAL) == "urllib3==2.8.0"
 
 
 _LOCK = """\
