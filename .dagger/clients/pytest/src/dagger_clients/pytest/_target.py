@@ -3,4 +3,4 @@
 NAME = "pytest"
 REF = "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4"
 PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
-CORE_DIGEST = "sha256:bed28fa58a5987620cdc3d20ea0e63bc8cded176fbe1d7b31c9b42cce4c29757"
+CORE_DIGEST = "sha256:175e626422bfb81c2d51269ec16740ec9401baebfac4ac02d30aee15ef9efa71"
