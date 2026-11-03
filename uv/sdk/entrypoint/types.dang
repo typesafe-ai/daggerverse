@@ -484,12 +484,13 @@ type ModuleTypes {
         .withField("source", typeDef.withObject("Directory"), description: "The workspace's members and their path dependencies, at workspace-root-relative paths.")
         .withField("manifests", typeDef.withObject("Directory"), description: "Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files.")
         .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace.")
+        .withField("upgrade_strategy", typeDef.withEnum("UpgradeStrategy", description: "How far `audit` upgrades a vulnerable package, if at all."), description: "How far `audit` upgrades a vulnerable package.")
+        .withField("audit_cooldown", typeDef.withEnum("CooldownPolicy", description: "What `audit` does when the workspace's cooldown (`exclude-newer`) holds back a fix."), description: "What `audit` does when the cooldown (`exclude-newer`) holds back a fix.")
         .withFunction(
-          function("audit", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run `uv audit --frozen` on this workspace's locked dependencies.\n\nAudits straight from the committed uv.lock without re-resolving against\npackage indexes (`--frozen`); vulnerability data comes from the public\nOSV service, so no index credentials are required. Only `manifests` is\nmounted, so a source edit leaves the audit cached.\n\nThe image is resolved here: explicit `image` > `image_ref(uv_version)` >\nthe version detected from the workspace.")
-            .withCheck
-            .withArg("uv_version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "uv version (image tag) to audit with. Defaults to the version detected from the workspace; ignored when `image` is set.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("image", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "Full uv image reference to audit with. Overrides `uv_version`.", defaultValue: ("null" :: Dagger.JSON!))
+          function("audit", typeDef.withObject("Changeset"))
+            .withDescription("Audit this workspace's locked dependencies and upgrade the vulnerable ones.\n\nRuns `uv audit --frozen` on the committed uv.lock (vulnerability data comes\nfrom the public OSV service), then relocks each vulnerable package that has a\nfix with `uv lock --upgrade-package`, per `upgrade_strategy` and `audit_cooldown`. Returns\nthe uv.lock (and, for cooldown exemptions, uv settings) changes.\n\nWith `upgrade_strategy=SKIP` it only audits, and fails on any vulnerability.\n\nKeeps a relock only when it fixes some advisory, and fails with uv's report when\nvulnerabilities remain and none could be fixed, so its staleness check\n(`dagger check --generated`) passes only for a clean workspace.\n\nThe audit mounts only `manifests`, so a source edit leaves a clean workspace's\naudit cached. Relocking mounts `inputs`: uv builds members with dynamic metadata.")
+            .withGenerator
+            .withArg("uv_version", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "uv version (Debian image tag) to audit and relock with. Defaults to the version detected from the workspace; ignored when the `audit_base_container` setting is set.", defaultValue: ("null" :: Dagger.JSON!))
         )
         .withFunction(
           function("builder", typeDef.withObject("UvWorkspaceBuilder"))
@@ -522,7 +523,7 @@ type ModuleTypes {
           function("uv_version", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("The uv version this workspace requires, as a concrete image tag.\n\nReads `required-version` (a PEP 440 specifier) from `uv.toml` or the\n`[tool.uv]` table of `pyproject.toml`. Exact pins are used as-is; ranges\nresolve to their minimal compatible version (no PyPI lookup). Falls back\nto the module's pinned default when unspecified.")
         ),
-      typeDef.withObject("UvWorkspaces", description: "Every uv workspace in the source tree (one per uv.lock), keyed by its path.\n\n`audit` runs once per selected workspace, so each workspace is its own check\nthat can be selected or skipped on its own.")
+      typeDef.withObject("UvWorkspaces", description: "Every uv workspace in the source tree (one per uv.lock), keyed by its path.\n\n`audit` runs once per selected workspace, so each workspace is its own generator\nthat can be selected or skipped on its own.")
         .withCollection
         .withField("paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root.")
         .withCollectionKeys("paths")
@@ -544,7 +545,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("workspace", typeDef.withObject("UvWorkspaceSource"))
-            .withDescription("A single uv workspace at `path`, relative to the workspace root.\n\nThe returned `UvWorkspaceSource` can `audit` its locked dependencies or\nget a `builder` for its packages.")
+            .withDescription("A single uv workspace at `path`, relative to the workspace root.\n\nThe returned `UvWorkspaceSource` can `audit` (and upgrade) its locked dependencies or\nget a `builder` for its packages.")
             .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Path to the uv workspace root (holding uv.lock and pyproject.toml), relative to the workspace root.")
         )
         .withFunction(
@@ -555,7 +556,18 @@ type ModuleTypes {
           function("", typeDef.withObject("Uv"))
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("exclude", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of workspace paths to leave out of workspaces, e.g. **/tests/_packages/**.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("upgrade_strategy", typeDef.withEnum("UpgradeStrategy", description: "How far `audit` upgrades a vulnerable package, if at all."), description: "How far `audit` upgrades a vulnerable package.", defaultValue: ("\"LATEST\"" :: Dagger.JSON!))
+            .withArg("audit_cooldown", typeDef.withEnum("CooldownPolicy", description: "What `audit` does when the workspace's cooldown (`exclude-newer`) holds back a fix."), description: "What `audit` does when the cooldown (`exclude-newer`) holds back a fix.", defaultValue: ("\"RESPECT\"" :: Dagger.JSON!))
+            .withArg("audit_exclude", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of workspace paths `audit` leaves unaudited, e.g. examples/**. They stay buildable.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("audit_base_container", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container with uv on PATH that `audit` audits and relocks in, e.g. one carrying private index credentials. Defaults to the Debian uv image at each workspace's uv version.", defaultValue: ("null" :: Dagger.JSON!))
         ),
+      typeDef.withEnum("UpgradeStrategy", description: "How far `audit` upgrades a vulnerable package, if at all.")
+        .withEnumMember("LATEST", value: "latest", description: "The newest version the workspace's constraints (and cooldown) allow.")
+        .withEnumMember("MINIMAL", value: "minimal", description: "The lowest version that fixes every advisory against the package.")
+        .withEnumMember("SKIP", value: "skip", description: "No upgrade: `audit` only reports the vulnerabilities and fails on them. It never\nrelocks, so it needs no access to the package indexes."),
+      typeDef.withEnum("CooldownPolicy", description: "What `audit` does when the workspace's cooldown (`exclude-newer`) holds back a fix.")
+        .withEnumMember("RESPECT", value: "respect", description: "Leave the cooldown alone: a fix newer than the cutoff stays unapplied and the audit fails.")
+        .withEnumMember("EXEMPT", value: "exempt", description: "Exempt just the fix: pin the package's `exclude-newer-package` cutoff to the fixing\nversion's upload time. The exemption is removed once the cooldown catches up with it."),
     ]
   }
 }

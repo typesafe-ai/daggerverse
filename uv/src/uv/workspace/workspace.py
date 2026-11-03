@@ -3,25 +3,43 @@ import dataclasses
 import logging
 import posixpath
 import tomllib
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Annotated
 
 import dagger
-from dagger import Doc, check, field, function, object_type
+from dagger import Doc, field, function, generate, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Container, Directory, File, ReturnType, core
+from dagger_clients.core import Changeset, Container, Directory, File, ReturnType, core
 
 from uv.args import (
     ActivateVenv,
     NoEditable,
     VenvRelocatable,
 )
+from uv.audit import (
+    AuditCooldown,
+    AuditUpgradeStrategy,
+    CooldownPolicy,
+    UpgradeStrategy,
+    Vulnerability,
+    add_exemptions,
+    by_package,
+    cooldown_cutoff,
+    fixed_by,
+    has_user_exemption,
+    locked_version,
+    minimal_fix,
+    parse_report,
+    prune_exemptions,
+    upgrade_spec,
+    upload_cutoff,
+)
 from uv.utils import (
     _DEFAULT_VERSION,
     _UV_CACHE_DIR,
     debian_image_ref,
     format_audit_failure,
-    image_ref,
     parse_indices,
     parse_required_version_from_pyproject,
     parse_required_version_from_uv_toml,
@@ -35,6 +53,8 @@ from uv.workspace.package import UvPackageSource
 from uv.workspace.plan import ProjectSource, UvSyncPlanner
 
 logger = logging.getLogger(__name__)
+
+_AUDIT = ["uv", "audit", "--frozen", "--preview-features", "audit,json-output"]
 
 _VENV_WARNING = (
     "UV_PROJECT_ENVIRONMENT is not set, so uv creates a .venv. Unless you need one, set "
@@ -80,6 +100,10 @@ class UvWorkspaceSource:
         Doc("Workspace root path (holding uv.lock/pyproject.toml) within `source`. `.` for a root workspace."),
     ] = field(default=".")
 
+    upgrade_strategy: AuditUpgradeStrategy = field(default=UpgradeStrategy.LATEST)
+
+    audit_cooldown: AuditCooldown = field(default=CooldownPolicy.RESPECT)
+
     # Not `field()`s: internal state.
     # Each member's and local dependency's files, loaded only when a build installs that project.
     projects: list[ProjectSource] = dataclasses.field(default_factory=list)
@@ -87,6 +111,9 @@ class UvWorkspaceSource:
     src_paths: list[str] = dataclasses.field(default_factory=list)
     # Handlers for the local packages' build backends, from `Uv.with_build_backend_handlers`.
     build_backend_handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
+    # From the `Uv` settings: the workspaces `audit` skips, and the container it runs in.
+    audit_exclude: list[str] = dataclasses.field(default_factory=list)
+    audit_base_container: Container | None = None
 
     def _ws_dir(self) -> Directory:
         return self.manifests if self.path == "." else self.manifests.directory(self.path)
@@ -221,49 +248,150 @@ class UvWorkspaceSource:
             package_path=path,
         )
 
-    @check
+    @generate
     @function
     async def audit(
         self,
         uv_version: Annotated[
             str | None,
             Doc(
-                "uv version (image tag) to audit with. Defaults to the version "
-                "detected from the workspace; ignored when `image` is set."
+                "uv version (Debian image tag) to audit and relock with. Defaults to the version "
+                "detected from the workspace; ignored when the `audit_base_container` setting is set."
             ),
         ] = None,
-        image: Annotated[
-            str | None,
-            Doc("Full uv image reference to audit with. Overrides `uv_version`."),
-        ] = None,
-    ) -> None:
-        """Run `uv audit --frozen` on this workspace's locked dependencies.
+    ) -> Changeset:
+        """Audit this workspace's locked dependencies and upgrade the vulnerable ones.
 
-        Audits straight from the committed uv.lock without re-resolving against
-        package indexes (`--frozen`); vulnerability data comes from the public
-        OSV service, so no index credentials are required. Only `manifests` is
-        mounted, so a source edit leaves the audit cached.
+        Runs `uv audit --frozen` on the committed uv.lock (vulnerability data comes
+        from the public OSV service), then relocks each vulnerable package that has a
+        fix with `uv lock --upgrade-package`, per `upgrade_strategy` and `audit_cooldown`. Returns
+        the uv.lock (and, for cooldown exemptions, uv settings) changes.
 
-        The image is resolved here: explicit `image` > `image_ref(uv_version)` >
-        the version detected from the workspace.
+        With `upgrade_strategy=SKIP` it only audits, and fails on any vulnerability.
+
+        Keeps a relock only when it fixes some advisory, and fails with uv's report when
+        vulnerabilities remain and none could be fixed, so its staleness check
+        (`dagger check --generated`) passes only for a clean workspace.
+
+        The audit mounts only `manifests`, so a source edit leaves a clean workspace's
+        audit cached. Relocking mounts `inputs`: uv builds members with dynamic metadata.
         """
-        resolved = image if image is not None else image_ref(uv_version or await self.uv_version())
-        ctr = (
-            core()
-            .container()
-            .from_(resolved)
-            # the bare astral image ships uv at /uv (not on PATH); prepending /
-            # makes a plain `uv` work for both it and images with uv on PATH.
-            .with_env_variable("PATH", "/:${PATH}", expand=True)
-            .with_directory("/work", self.manifests)
-            .with_workdir(posixpath.join("/work", self.path))
+        if any(PurePosixPath(self.path).full_match(pattern) for pattern in self.audit_exclude):
+            return self.manifests.changes(self.manifests)
+        ws_dir = posixpath.join("/work", self.path)
+        base = (
+            (
+                self.audit_base_container
+                or core().container().from_(debian_image_ref(uv_version or await self.uv_version()))
+            )
+            .with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR)
+            .with_mounted_cache(_UV_CACHE_DIR, core().cache_volume("uv-cache"))
+            .with_workdir(ws_dir)
         )
+        audited = base.with_directory("/work", self.manifests)
+        if self.upgrade_strategy is UpgradeStrategy.SKIP:
+            await self._fail_audit(audited)
+            return self.manifests.changes(self.manifests)
+        ctr = base.with_directory("/work", self.inputs_dir)
+        config = "uv.toml" if await self._uv_toml() is not None else "pyproject.toml"
+        uv_toml = config == "uv.toml"
+
+        # Drop the exemptions earlier runs wrote that the cooldown has caught up with, so
+        # they don't hold back this run's upgrades. They reach the result only through a
+        # kept relock: on their own they're harmless, and a clean workspace must stay
+        # clean as the cooldown moves.
+        config_text, lock_text = await asyncio.gather(
+            self._ws_dir().file(config).contents(), self._ws_dir().file("uv.lock").contents()
+        )
+        pruned = prune_exemptions(config_text, cooldown_cutoff(lock_text, datetime.now(UTC)), uv_toml=uv_toml)
+        if pruned != config_text:
+            ctr = ctr.with_new_file(config, pruned)
+
+        report = by_package(await self._audit_report(audited))
+        fixed: list[Vulnerability] = []
+        for package, vulns in sorted(report.items()):
+            target = minimal_fix(vulns)
+            if target is None:
+                continue
+            # Keep a partial upgrade (e.g. one the cooldown stops short of the fix) as long
+            # as it fixes some advisories; one that doesn't would only churn uv.lock.
+            upgraded = await self._relock(
+                ctr, ["--upgrade-package", upgrade_spec(package, target, self.upgrade_strategy)]
+            )
+            fixes = await self._fixes(upgraded, vulns)
+            if fixes:
+                ctr = upgraded
+            if (
+                len(fixes) == len(vulns)
+                or self.audit_cooldown is not CooldownPolicy.EXEMPT
+                or has_user_exemption(await ctr.file(config).contents(), package, uv_toml=uv_toml)
+            ):
+                fixed += fixes
+                continue
+            exempted = await self._relock(
+                ctr, ["--upgrade-package", f"{package}=={target}", "--exclude-newer-package", f"{package}=false"]
+            )
+            if exempted is not None:
+                # Persist the narrowest exemption that admits the fix, so the lock's
+                # options match the settings and a later `uv lock --locked` passes.
+                cutoff = upload_cutoff(await exempted.file("uv.lock").contents(), package, target)
+                config_text = add_exemptions(await exempted.file(config).contents(), {package: cutoff}, uv_toml=uv_toml)
+                exempted = await self._relock(exempted.with_new_file(config, config_text), [])
+            if exempted_fixes := await self._fixes(exempted, vulns):
+                ctr, fixes = exempted, exempted_fixes
+            fixed += fixes
+
+        unfixed = [v for vulns in report.values() for v in vulns if v not in fixed]
+        if unfixed and not fixed:
+            await self._fail_audit(audited)
+        if unfixed:
+            ids = ", ".join(sorted(f"{v.package} {v.id}" for v in unfixed))
+            logger.warning("uv audit: still vulnerable after upgrading %s: %s", self.path, ids)
+        if not fixed:
+            return self.manifests.changes(self.manifests)
+
+        def relocked(name: str) -> File:
+            return ctr.file(posixpath.join(ws_dir, name))
+
+        after = self.manifests.with_file(posixpath.join(self.path, "uv.lock"), relocked("uv.lock")).with_file(
+            posixpath.join(self.path, config), relocked(config)
+        )
+        return after.changes(self.manifests)
+
+    async def _audit_report(self, ctr: Container) -> list[Vulnerability]:
+        """The vulnerabilities `uv audit` reports for the lock in `ctr`."""
+        audited = ctr.with_exec([*_AUDIT, "--output-format", "json"], expect=ReturnType.ANY)
+        exit_code, stdout, stderr = await asyncio.gather(audited.exit_code(), audited.stdout(), audited.stderr())
+        # 1 means vulnerabilities were found; anything else is uv failing.
+        if exit_code not in (0, 1):
+            raise RuntimeError(format_audit_failure(exit_code, stdout, stderr, self.path))
+        return parse_report(stdout)
+
+    async def _fail_audit(self, ctr: Container) -> None:
+        """Rerun `uv audit` for its human-readable report and raise it."""
         try:
-            await ctr.with_exec(["uv", "audit", "--frozen"]).sync()
+            await ctr.with_exec(_AUDIT).sync()
         except dagger.ExecError as exc:
             # The ExecError itself stringifies to a bare "exit code N"; fold uv's
-            # report into the check's error so the findings show up there.
+            # report into the error so the findings show up there.
             raise RuntimeError(format_audit_failure(exc.exit_code, exc.stdout, exc.stderr, self.path)) from exc
+
+    @staticmethod
+    async def _relock(ctr: Container, args: list[str]) -> Container | None:
+        """`ctr` relocked with `uv lock *args`, or `None` when uv can't resolve that."""
+        locked = ctr.with_exec(["uv", "lock", *args], expect=ReturnType.ANY)
+        if await locked.exit_code() != 0:
+            logger.warning("uv lock %s failed:\n%s", " ".join(args), await locked.stderr())
+            return None
+        return locked
+
+    @staticmethod
+    async def _fixes(ctr: Container | None, vulns: list[Vulnerability]) -> list[Vulnerability]:
+        """The advisories in `vulns` (one package) that `ctr`'s uv.lock fixes; none without `ctr`."""
+        if ctr is None:
+            return []
+        version = locked_version(await ctr.file("uv.lock").contents(), vulns[0].package)
+        return fixed_by(vulns, version) if version is not None else []
 
     @staticmethod
     async def _has_cache(ctr: Container, path: str) -> bool:
