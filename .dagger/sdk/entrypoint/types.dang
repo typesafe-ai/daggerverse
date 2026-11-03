@@ -134,10 +134,6 @@ type ModuleTypes {
             .withCheck
         )
         .withFunction(
-          function("uv_audit_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Auditing a workspace with no vulnerable deps passes.")
-        )
-        .withFunction(
           function("uv_audit_detects_vulnerability", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Auditing a workspace with a known-vulnerable dependency fails.\n\n(The audit report itself is folded into the check's error by\n`UvWorkspaceSource.audit`; the message construction is covered by the\n`format_audit_failure` unit tests.)")
         )
@@ -154,28 +150,12 @@ type ModuleTypes {
             .withDescription("Virtual members, renamed modules, multiple modules, custom roots, namespace and stub packages build together.\n\nBesides uv_build members, flit and pdm-backend members find a namespace and a stub package under `src/`.")
         )
         .withFunction(
-          function("uv_detect_version_default", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("With no required-version, `uv_version` falls back to the default tag.")
-        )
-        .withFunction(
-          function("uv_detect_version_pyproject", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`uv_version` reads `[tool.uv].required-version` from pyproject.toml.")
-        )
-        .withFunction(
-          function("uv_detect_version_range", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("A range specifier resolves to its minimal compatible version (no PyPI lookup).")
-        )
-        .withFunction(
           function("uv_detect_version_uv_toml_precedence", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("uv.toml `required-version` takes precedence over pyproject.toml.")
         )
         .withFunction(
           function("uv_discovers_workspaces", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`workspaces` finds one workspace per uv.lock in the source tree.")
-        )
-        .withFunction(
-          function("uv_install_venv", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`install(venv_relocatable=True)` creates an activated relocatable venv, then syncs into it.\n\nExercises the bare-image default (uv provisions Python) and local-package\nscaffolding; plain `python` resolves to the activated venv.")
         )
         .withFunction(
           function("uv_license_file_patterns", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -220,28 +200,12 @@ type ModuleTypes {
             .withDescription("Build with a base container that has no uv and verify auto_install_uv works.")
         )
         .withFunction(
-          function("uv_workspace_build_full_workspace", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Build the full workspace (no package filter) and verify every local package imports.")
-        )
-        .withFunction(
           function("uv_workspace_build_nested_standalone", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Build a standalone project at a non-root workspace path with a relative path dep.\n\nRegression test: when workspace_path != \".\" the container must mirror\nthe repo's directory structure so that relative paths like ../lib in\nuv.lock resolve correctly. Also verifies dev deps are installed.")
         )
         .withFunction(
           function("uv_workspace_build_partial_workspace", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Build a project whose uv.lock references local deps that don't exist in the source tree.\n\nThe missing dep (ext-pkg at ../../gone/ext-pkg) should be silently\nskipped. The present dep (my-dep at ../my-dep) should be installed.")
-        )
-        .withFunction(
-          function("uv_workspace_build_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Build the uv module from its own source on a fresh tree.")
-        )
-        .withFunction(
-          function("uv_workspace_build_standalone", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Build the standalone fixture and verify it imports.")
-        )
-        .withFunction(
-          function("uv_workspace_build_workspace", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Build the multi-package fixture and verify every local package imports.")
         )
         .withFunction(
           function("uv_workspace_build_workspace_app", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -268,24 +232,12 @@ type ModuleTypes {
             .withDescription("Run the uv module's own pytest suite inside a freshly built container.\n\n`install()` only copies `src/` for each package (to keep layer\ngranularity tight). `tests/` has to be mounted explicitly so\npytest can find them. Without it, `pytest -q` collects nothing\nand exits with code 5 (NO_TESTS_COLLECTED).")
         )
         .withFunction(
-          function("uv_workspace_standalone_all_extras", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`all_extras=True` installs every extra but no groups.")
-        )
-        .withFunction(
-          function("uv_workspace_standalone_all_groups", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`all_groups=True` installs every group but no extras.")
-        )
-        .withFunction(
           function("uv_workspace_standalone_selective_extra", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`extra=['viz']` installs only the viz extra's deps, not other extras or groups.")
         )
         .withFunction(
           function("uv_workspace_standalone_selective_group", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`group=['docs']` installs only the docs group's deps, not other groups or extras.")
-        )
-        .withFunction(
-          function("uv_workspaces_exclude", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`exclude` leaves matching workspaces out of `workspaces`.")
         )
         .withFunction(
           function("wait_dagger_checks", typeDef.withKind(TypeDefKind.STRING_KIND))
