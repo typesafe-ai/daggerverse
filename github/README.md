@@ -68,7 +68,7 @@ class MyModule:
       wait-dagger-checks
         --repo=${{ github.repository }}
         --ref=${{ github.event.pull_request.head.sha || github.sha }}
-        --token=env:GITHUB_TOKEN
+        --token=env://GITHUB_TOKEN
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -85,7 +85,7 @@ dagger call -m github.com/typesafe-ai/daggerverse/github \
   wait-for-statuses \
   --repo=owner/name \
   --ref=$SHA \
-  --token=env:GITHUB_TOKEN \
+  --token=env://GITHUB_TOKEN \
   --checks=build,test,lint
 ```
 

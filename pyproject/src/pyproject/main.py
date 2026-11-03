@@ -1,11 +1,12 @@
-import asyncio
+import tempfile
+from pathlib import Path
 from typing import Annotated, Self
 
 from dagger import Doc, collection, field, function, get, keys, object_type
 from dagger_clients.core import Directory, File, Workspace
 
 from pyproject import discovery
-from pyproject.discovery import DEFAULT_WORKSPACE_MARKERS, SOURCE_EXCLUDE, join, matches, root_relative, tree
+from pyproject.discovery import DEFAULT_WORKSPACE_MARKERS, SOURCE_EXCLUDE, join, matches, tree
 
 ProjectPath = Annotated[
     str, Doc("Project root (holding pyproject.toml), relative to the workspace root. `.` for the root.")
@@ -250,27 +251,23 @@ class Pyproject:
         ] = DEFAULT_WORKSPACE_MARKERS,
     ) -> Self:
         patterns = exclude or []
-        cwd = await ws.cwd()
 
-        # Discovery walks the workspace on the host; only manifests and .gitignore files are read.
-        async def roots(markers: list[str]) -> list[str]:
-            found = await ws.find_roots(markers, start="/", exclude=SOURCE_EXCLUDE)
-            return sorted({root_relative(cwd, root) for root in found})
-
-        ignore_dirs, project_paths, *marked = await asyncio.gather(
-            roots([".gitignore"]), roots(["pyproject.toml"]), *(roots([marker]) for marker in workspace_markers)
-        )
-        ignore_texts = await asyncio.gather(*(ws.file("/" + join(d, ".gitignore")).contents() for d in ignore_dirs))
-        ignored = discovery.Gitignore(dict(zip(ignore_dirs, ignore_texts, strict=True)))
-        project_paths = [p for p in project_paths if not ignored.ignores(join(p, "pyproject.toml"))]
-        texts = await asyncio.gather(*(ws.file("/" + join(p, "pyproject.toml")).contents() for p in project_paths))
+        # Discovery reads only the manifests and markers: load them, less gitignored
+        # files, in one call and walk them locally instead of one engine call per file.
+        names = ["pyproject.toml", *workspace_markers]
+        local = Path(tempfile.mkdtemp())
+        await _load(ws, [f"**/{name}" for name in names], SOURCE_EXCLUDE).export(str(local))
+        texts: dict[str, str] = {}
         lockfiles: dict[str, list[str]] = {}
-        for marker, paths in zip(workspace_markers, marked, strict=True):
-            for path in paths:
-                if not ignored.ignores(join(path, marker)):
-                    lockfiles.setdefault(path, []).append(marker)
+        for name in names:
+            for file in local.glob(f"**/{name}"):
+                path = file.parent.relative_to(local).as_posix()
+                if name == "pyproject.toml":
+                    texts[path] = file.read_text()
+                else:
+                    lockfiles.setdefault(path, []).append(name)
 
-        found = discovery.Discovery(dict(zip(project_paths, texts, strict=True)), lockfiles)
+        found = discovery.Discovery(texts, lockfiles)
         projects = {}
 
         def project(path: str) -> PyprojectProject:

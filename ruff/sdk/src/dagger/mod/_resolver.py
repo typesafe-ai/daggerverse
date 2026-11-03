@@ -53,7 +53,7 @@ AGENT_DEF_KEY: str = "__dagger_agent__"
 logger = logging.getLogger(__package__)
 
 T = TypeVar("T")
-R = TypeVar("R", infer_variance=True)
+R = TypeVar("R")
 P = ParamSpec("P")
 
 Func: TypeAlias = Callable[P, R]

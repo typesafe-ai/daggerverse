@@ -10,32 +10,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  DAGGER_VERSION: "1.0.0-beta.21"
-
 jobs:
+  # A no-op kept for anything that still expects a `check` status: Dagger Cloud
+  # reports the checks to GitHub itself (`Run Dagger Checks`), which the ruleset requires.
   check:
     name: check
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      statuses: read
+    permissions: {}
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-        with:
-          persist-credentials: false
-      - name: Wait for Dagger Cloud checks
-        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
-        with:
-          version: ${{ env.DAGGER_VERSION }}
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          dagger-flags: --engine=cloud
-          # On pull_request events, github.sha is the synthesized merge commit;
-          # external checks (Dagger Cloud) attach to the PR head commit instead.
-          call: |
-            wait-dagger-checks
-              --repo=${{ github.repository }}
-              --ref=${{ github.event.pull_request.head.sha || github.sha }}
-              --token=env:GITHUB_TOKEN
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo "Dagger Cloud reports the checks to GitHub as 'Run Dagger Checks'."

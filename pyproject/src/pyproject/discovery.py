@@ -19,8 +19,6 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import PurePosixPath
 
-import pathspec
-
 # Never part of any project's input: caches, virtualenvs, VCS metadata and build output.
 SOURCE_EXCLUDE = [
     "**/__pycache__",
@@ -46,16 +44,6 @@ DEFAULT_WORKSPACE_MARKERS = ["uv.lock", "pylock.toml"]
 def normalize_name(name: str) -> str:
     """PEP 503 name normalization: lowercase, collapse [-_.] runs to a single hyphen."""
     return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def root_relative(cwd: str, path: str) -> str:
-    """A workspace-root-relative path for `path`, which is relative to the workspace `cwd`.
-
-    `Workspace.find_roots` answers relative to the cwd (`.` for the cwd itself,
-    `../x` for a sibling); every path here is relative to the workspace root so
-    it doesn't depend on where `dagger` runs.
-    """
-    return posixpath.normpath(posixpath.join(cwd.lstrip("/"), path))
 
 
 def join(base: str, path: str) -> str:
@@ -122,32 +110,6 @@ def topmost(paths: Iterable[str]) -> list[str]:
     """The paths in `paths` that no other path in it contains."""
     unique = sorted(set(paths))
     return [p for p in unique if not any(q != p and under(p, q) for q in unique)]
-
-
-class Gitignore:
-    """The `.gitignore` files of a workspace, each applying below its own directory.
-
-    `Workspace.find_roots` walks gitignored directories too, on a git-backed
-    workspace as much as on a `Directory.as_workspace()` one, so a gitignored
-    copy of the repository (e.g. an agent's worktree) would otherwise turn up
-    as a second set of projects.
-    """
-
-    def __init__(self, files: Mapping[str, str]) -> None:
-        """`files` maps each root-relative directory to its `.gitignore` text."""
-        self._specs = [
-            (directory, pathspec.GitIgnoreSpec.from_lines(text.splitlines()))
-            for directory, text in sorted(files.items())
-        ]
-
-    def ignores(self, path: str) -> bool:
-        """Whether a root-relative path is ignored by any `.gitignore` above it."""
-        for directory, spec in self._specs:
-            if path != directory and under(path, directory):
-                relative = path if directory == "." else path[len(directory) + 1 :]
-                if spec.match_file(relative):
-                    return True
-        return False
 
 
 @dataclass(frozen=True)
