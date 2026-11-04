@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DAGGER_VERSION: "1.0.0-beta.24"
+  DAGGER_VERSION: "1.0.0-beta.25"
 
 jobs:
   deploy:
