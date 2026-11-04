@@ -318,6 +318,9 @@ class UvWorkspaceSource:
             upgraded = await self._relock(
                 ctr, ["--upgrade-package", upgrade_spec(package, target, self.upgrade_strategy)]
             )
+            if upgraded is None and self.upgrade_strategy is UpgradeStrategy.LATEST:
+                # The fix is out of reach (e.g. behind the cooldown): upgrade as far as allowed.
+                upgraded = await self._relock(ctr, ["--upgrade-package", package])
             fixes = await self._fixes(upgraded, vulns)
             if fixes:
                 ctr = upgraded
