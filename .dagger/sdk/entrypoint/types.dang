@@ -25,6 +25,11 @@ type ModuleTypes {
             .withCheck
         )
         .withFunction(
+          function("all_zensical", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run all checks for the `zensical` module in parallel.")
+            .withCheck
+        )
+        .withFunction(
           function("deptry_clean_flat_layout", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A flat-layout project whose deps are all declared and used passes.")
         )
@@ -271,6 +276,18 @@ type ModuleTypes {
             .withArg("ref", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Commit SHA to poll")
             .withArg("token", typeDef.withObject("Secret"), description: "GitHub token with read access")
             .withArg("fail_fast", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Raise as soon as any check fails instead of waiting for all.", defaultValue: ("false" :: Dagger.JSON!))
+        )
+        .withFunction(
+          function("zensical_builds_module_docs", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The deptry module's docs build in its uv workspace, with its `docs` group.")
+        )
+        .withFunction(
+          function("zensical_discovers_projects", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`projects` finds one site per zensical.toml, in the innermost uv workspace holding it.\n\nDocs in a workspace member build that member's package; docs outside\nevery uv workspace have none.")
+        )
+        .withFunction(
+          function("zensical_strict_fails_on_broken_link", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("With `strict` (the default), a broken link fails the build.")
         )
         .withConstructor(
           function("", typeDef.withObject("TypesafeDaggerverse"))

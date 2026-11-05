@@ -17,6 +17,7 @@ from dagger_clients.ruff import ruff
 from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
 from dagger_clients.uv import UvCooldownPolicy, UvUpgradeStrategy, uv
+from dagger_clients.zensical import zensical
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
@@ -148,7 +149,6 @@ class TypesafeDaggerverse:
             await uv(src.as_workspace())
             .workspace(".")
             .builder(base_container=_base())
-            .with_packages([module])
             .with_groups(["docs"])
             .with_dependencies()
             .container()
@@ -1397,6 +1397,62 @@ print("LAYER_CACHE_OK")
             projects = projects.subset(subset)
         for project in await projects.list_():
             await _run_check(project.check())
+
+    # ---- zensical module checks ----
+
+    @check
+    @function
+    async def all_zensical(self) -> None:
+        """Run all checks for the `zensical` module in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.zensical_discovers_projects)
+            tg.start_soon(self.zensical_builds_module_docs)
+            tg.start_soon(self.zensical_strict_fails_on_broken_link)
+
+    @function
+    async def zensical_discovers_projects(self) -> None:
+        """`projects` finds one site per zensical.toml, in the innermost uv workspace holding it.
+
+        Docs in a workspace member build that member's package; docs outside
+        every uv workspace have none.
+        """
+        src = (
+            core()
+            .directory()
+            .with_new_file("pyproject.toml", '[project]\nname = "root"\nversion = "0"\n')
+            .with_new_file("uv.lock", "version = 1\n")
+            .with_new_file("zensical.toml", "[project]\n")
+            .with_new_file("member/pyproject.toml", '[project]\nname = "member"\nversion = "0"\n')
+            .with_new_file("member/zensical.toml", "[project]\n")
+            .with_new_file("nested/uv.lock", "version = 1\n")
+            .with_new_file("nested/pyproject.toml", '[project]\nname = "nested"\nversion = "0"\n')
+            .with_new_file("nested/zensical.toml", "[project]\n")
+        )
+        projects = zensical(src.as_workspace()).projects()
+        paths = await projects.keys()
+        if paths != [".", "member", "nested"]:
+            raise AssertionError(f"expected ['.', 'member', 'nested'], got {paths}")
+        workspaces = {path: await projects.get(path).workspace() for path in paths}
+        if workspaces != {".": ".", "member": ".", "nested": "nested"}:
+            raise AssertionError(f"unexpected workspaces: {workspaces}")
+
+    @function
+    async def zensical_builds_module_docs(self) -> None:
+        """The deptry module's docs build in its uv workspace, with its `docs` group."""
+        site = zensical(_src("deptry").as_workspace()).projects().get(".").site()
+        entries = await site.entries()
+        if "index.html" not in entries:
+            raise AssertionError(f"expected index.html in the built site, got {entries}")
+
+    @function
+    async def zensical_strict_fails_on_broken_link(self) -> None:
+        """With `strict` (the default), a broken link fails the build."""
+        src = _src("deptry").with_new_file("docs/index.md", "[broken](missing.md)\n")
+        try:
+            await _run_check(zensical(src.as_workspace()).projects().get(".").check())
+        except CheckFailedError:
+            return
+        raise AssertionError("expected the strict build to fail on a broken link")
 
     @check
     @function

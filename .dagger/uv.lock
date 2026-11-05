@@ -13,6 +13,7 @@ members = [
     "dagger-clients-setuptools-package-dir",
     "dagger-clients-twingate",
     "dagger-clients-uv",
+    "dagger-clients-zensical",
     "dagger-clients-zizmor",
     "dagger-io",
     "typesafe-daggerverse",
@@ -238,6 +239,21 @@ requires-dist = [
 name = "dagger-clients-uv"
 version = "0.0.0"
 source = { editable = "clients/uv" }
+dependencies = [
+    { name = "dagger-clients-core" },
+    { name = "dagger-io" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagger-clients-core", editable = "clients/core" },
+    { name = "dagger-io", editable = "sdk" },
+]
+
+[[package]]
+name = "dagger-clients-zensical"
+version = "0.0.0"
+source = { editable = "clients/zensical" }
 dependencies = [
     { name = "dagger-clients-core" },
     { name = "dagger-io" },
@@ -636,6 +652,7 @@ dependencies = [
     { name = "dagger-clients-setuptools-package-dir" },
     { name = "dagger-clients-twingate" },
     { name = "dagger-clients-uv" },
+    { name = "dagger-clients-zensical" },
     { name = "dagger-clients-zizmor" },
     { name = "dagger-io" },
     { name = "pyyaml" },
@@ -653,6 +670,7 @@ requires-dist = [
     { name = "dagger-clients-setuptools-package-dir", editable = "clients/setuptools-package-dir" },
     { name = "dagger-clients-twingate", editable = "clients/twingate" },
     { name = "dagger-clients-uv", editable = "clients/uv" },
+    { name = "dagger-clients-zensical", editable = "clients/zensical" },
     { name = "dagger-clients-zizmor", editable = "clients/zizmor" },
     { name = "dagger-io", editable = "sdk" },
     { name = "pyyaml", specifier = ">=6.0.3" },

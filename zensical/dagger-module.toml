@@ -1,0 +1,5 @@
+name = "zensical"
+
+[entrypoint]
+  kind = "dang"
+  source = "./sdk/entrypoint"
