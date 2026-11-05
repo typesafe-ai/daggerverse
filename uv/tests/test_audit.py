@@ -71,7 +71,7 @@ class TestByPackage:
 
 class TestUpgradeSpec:
     def test_latest(self):
-        assert upgrade_spec("urllib3", "2.8.0", UpgradeStrategy.LATEST) == "urllib3"
+        assert upgrade_spec("urllib3", "2.8.0", UpgradeStrategy.LATEST) == "urllib3>=2.8.0"
 
     def test_minimal(self):
         assert upgrade_spec("urllib3", "2.8.0", UpgradeStrategy.MINIMAL) == "urllib3==2.8.0"

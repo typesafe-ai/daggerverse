@@ -131,8 +131,13 @@ def fixed_by(vulns: list[Vulnerability], version: str) -> list[Vulnerability]:
 
 
 def upgrade_spec(package: str, target: str, strategy: UpgradeStrategy) -> str:
-    """The `uv lock --upgrade-package` value upgrading `package` past `target` (its minimal fix)."""
-    return package if strategy is UpgradeStrategy.LATEST else f"{package}=={target}"
+    """The `uv lock --upgrade-package` value upgrading `package` past `target` (its minimal fix).
+
+    A bare package name only allows an upgrade: uv keeps the other locked versions, so a
+    package that pins this one (e.g. `opentelemetry-sdk` pinning `opentelemetry-api==`)
+    would hold it back. A version bound makes uv upgrade those packages along with it.
+    """
+    return f"{package}>={target}" if strategy is UpgradeStrategy.LATEST else f"{package}=={target}"
 
 
 def upload_cutoff(lock: str, package: str, version: str) -> str:
