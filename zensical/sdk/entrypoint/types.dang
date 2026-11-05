@@ -14,6 +14,7 @@ type ModuleTypes {
         .withFunction(
           function("site", typeDef.withObject("Directory"))
             .withDescription("Build the docs with `zensical build` and return the generated site directory.")
+            .withArg("clean", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Clear zensical's build cache before building (`zensical build --clean`).", defaultValue: ("false" :: Dagger.JSON!))
         ),
       typeDef.withObject("ZensicalProjects", description: "Every Zensical docs site in the workspace, keyed by its path.\n\n`check` runs once per site, so each site is its own check that can be\nselected or skipped on its own.")
         .withCollection
@@ -32,11 +33,11 @@ type ModuleTypes {
         )
         .withConstructor(
           function("", typeDef.withObject("Zensical"))
-            .withDescription("Discover the docs sites: one per `zensical.toml`, less those matching `exclude`.\n\nOnly the `zensical.toml`, `pyproject.toml` and `.gitignore` files are read.")
+            .withDescription("Discover the docs sites: one per `zensical.toml` outside `exclude`.\n\nOnly the `zensical.toml`, `pyproject.toml` and `.gitignore` files are read.")
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("groups", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "uv dependency groups to install for the build. They must provide `zensical`. Defaults to `docs`.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("extras", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Extras of the docs' package to install for the build.", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("exclude", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of paths to leave out of discovery, e.g. **/tests/**.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Glob patterns of workspace paths that are not uploaded to the Dagger engine.", defaultValue: ("[\"**/.git\"]" :: Dagger.JSON!))
             .withArg("strict", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Fail the build on warnings, such as broken links (`zensical build --strict`).", defaultValue: ("true" :: Dagger.JSON!))
             .withArg("base_container", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container the uv workspace's environment is built on, e.g. one carrying private index credentials. Defaults to the uv module's Debian uv image.", defaultValue: ("null" :: Dagger.JSON!))
         ),

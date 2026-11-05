@@ -2,15 +2,9 @@
 
 Build [Zensical](https://zensical.org) docs sites in Dagger.
 
-Every directory with a `zensical.toml` is a docs site. A site builds in the
-environment of the uv workspace (`uv.lock`) that contains it, which the
-[`uv`](https://daggerverse.docs.typesafe.ai/uv/) module sets up. If the docs
-directory is a workspace member, that member's package is installed; otherwise
-the workspace root's package is. Docs plugins that import your code, such as an
-API reference, can then import it.
+Docs sites are discovered by looking for `zensical.toml` in the repository.
 
-The build copies in only the `zensical.toml`, its `docs_dir` (`docs` by
-default) and the theme's `custom_dir`, if set.
+Uses the [`uv`](https://daggerverse.docs.typesafe.ai/uv/) module to set up the environment.
 
 ## Installation
 
@@ -28,19 +22,19 @@ dagger check --zensical
 
 Set the module's settings in `dagger.toml`:
 
-```toml
+```toml title="dagger.toml"
 [modules.zensical.settings]
 # uv dependency groups to install. They must provide `zensical`. Defaults to ["docs"].
 groups = ["docs"]
 # Extras of the docs' package to install.
 extras = ["api"]
-# Paths to leave out of discovery.
-exclude = ["**/tests/**"]
+# Workspace paths never uploaded to the Dagger engine. Defaults to ["**/.git"].
+exclude = ["**/.git", "**/tests/**"]
 # Fail on warnings such as broken links (`zensical build --strict`). Defaults to true.
 strict = true
 ```
 
-`base-container` sets the container the environment is built on, for example
+The `base-container` option sets the container the environment is built on, for example
 one that carries private index credentials.
 
 ## Build a site
@@ -50,3 +44,9 @@ one that carries private index credentials.
 ```sh
 dagger call zensical projects get --key=docs site export --path=./site
 ```
+
+## Caching
+
+zensical's build cache (`.cache` next to the config) lives in a cache volume,
+one per site, so rebuilds reuse it. Pass `--clean` to `site` to clear the cache
+before building.

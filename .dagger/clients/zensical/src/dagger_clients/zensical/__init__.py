@@ -143,12 +143,22 @@ class ZensicalProject(_Type):
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
 
-    def site(self) -> Directory:
+    def site(self, *, clean: bool = False) -> Directory:
         """
         Build the docs with `zensical build` and return the generated site
         directory.
+
+        Parameters
+        ----------
+        clean:
+            Clear zensical's build cache before building (`zensical build
+            --clean`).
         """
-        _args: list[_Arg] = []
+        if not (isinstance(clean, bool)):
+            raise _type_error("ZensicalProject.site", "clean", clean, "bool")
+        _args = [
+            _Arg("clean", clean, False),
+        ]
         _ctx = self._select("site", _args)
         return Directory(_ctx)
 
@@ -265,8 +275,7 @@ class ZensicalProjects(_Type):
 
 def zensical(ws: Workspace, *, groups: list[str] | None = None, extras: list[str] | None = None, exclude: list[str] | None = None, strict: bool = True, base_container: Container | None = None, session: _Session | None = None,) -> Zensical:
     """
-    Discover the docs sites: one per `zensical.toml`, less those matching
-    `exclude`.
+    Discover the docs sites: one per `zensical.toml` outside `exclude`.
 
     Only the `zensical.toml`, `pyproject.toml` and `.gitignore` files are
     read.
@@ -282,8 +291,8 @@ def zensical(ws: Workspace, *, groups: list[str] | None = None, extras: list[str
     extras:
         Extras of the docs' package to install for the build.
     exclude:
-        Glob patterns of paths to leave out of discovery, e.g.
-        **/tests/**.
+        Glob patterns of workspace paths that are not uploaded to the
+        Dagger engine.
     strict:
         Fail the build on warnings, such as broken links (`zensical build
         --strict`).
@@ -299,7 +308,7 @@ def zensical(ws: Workspace, *, groups: list[str] | None = None, extras: list[str
     if not (extras is None or (isinstance(extras, list) and all(isinstance(_v0, str) for _v0 in extras))):
         raise _type_error("zensical", "extras", extras, "list[str] | None")
     if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
-        raise _type_error("zensical", "exclude", exclude, "list[str] | None")
+        raise _type_error("zensical", "exclude", exclude, "list[str]")
     if not (isinstance(strict, bool)):
         raise _type_error("zensical", "strict", strict, "bool")
     if not (base_container is None or isinstance(base_container, Container)):
@@ -308,7 +317,7 @@ def zensical(ws: Workspace, *, groups: list[str] | None = None, extras: list[str
         _Arg("ws", ws),
         _Arg("groups", groups, None),
         _Arg("extras", extras, None),
-        _Arg("exclude", exclude, None),
+        _Arg("exclude", ['**/.git'] if exclude is None else exclude, ['**/.git']),
         _Arg("strict", strict, True),
         _Arg("baseContainer", base_container, None),
     ]

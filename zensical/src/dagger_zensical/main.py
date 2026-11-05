@@ -7,10 +7,14 @@ from typing import Annotated
 
 import dagger
 from dagger import Doc, check, collection, field, function, get, keys, object_type
-from dagger_clients.core import Container, Directory, Workspace
+from dagger_clients.core import CacheSharingMode, Container, Directory, Workspace, core
 from dagger_clients.uv import uv
 
+from dagger_zensical.args import SOURCE_EXCLUDE, Exclude
+
 _CONFIG_FILE = "zensical.toml"
+# Where zensical keeps its build cache, next to the config.
+_CACHE_DIR = ".cache"
 # What discovery reads: the docs configs and the pyproject.toml next to them.
 _DISCOVERY_INCLUDE = [f"**/{_CONFIG_FILE}", "**/pyproject.toml", "**/.gitignore"]
 _DEFAULT_GROUPS = ["docs"]
@@ -33,6 +37,11 @@ def _project_name(pyproject_content: str | None) -> str | None:
         name = tomllib.loads(pyproject_content).get("project", {}).get("name")
     except tomllib.TOMLDecodeError:
         return None
+    return name if isinstance(name, str) else None
+
+
+def _site_name(config_content: str) -> str | None:
+    name = tomllib.loads(config_content).get("project", {}).get("site_name")
     return name if isinstance(name, str) else None
 
 
@@ -81,6 +90,7 @@ class ZensicalProject:
 
     # Not `field()`s: internal state.
     ws: Workspace
+    exclude: list[str]
     packages: list[str]
     groups: list[str]
     extras: list[str]
@@ -88,11 +98,17 @@ class ZensicalProject:
     base_container: Container | None
 
     async def _container(self) -> tuple[Container, str]:
-        """The uv workspace's environment with the docs sources, and where they are."""
+        """The uv workspace's environment with the docs sources, and where they are.
+
+        zensical's build cache is a cache volume, one per site, so a rebuild
+        after a docs change reuses what the previous build cached.
+        """
         if self.workspace is None:
             msg = f"no uv workspace (uv.lock) holds the docs at {self.path!r}"
             raise ValueError(msg)
-        builder = uv(self.ws).workspace(self.workspace).builder(base_container=self.base_container)
+        builder = (
+            uv(self.ws, exclude=self.exclude).workspace(self.workspace).builder(base_container=self.base_container)
+        )
         if self.packages:
             builder = builder.with_packages(self.packages)
         if self.groups:
@@ -102,20 +118,33 @@ class ZensicalProject:
         ctr = builder.with_dependencies().container()
 
         config = self.ws.file(_root_path(self.path, _CONFIG_FILE))
+        config_content = await config.contents()
         docs_path = _root_path(await ctr.workdir(), posixpath.relpath(self.path, self.workspace))
-        ctr = ctr.with_file(posixpath.join(docs_path, _CONFIG_FILE), config)
-        for source in _docs_sources(await config.contents()):
+        ctr = ctr.with_file(posixpath.join(docs_path, _CONFIG_FILE), config).with_mounted_cache(
+            posixpath.join(docs_path, _CACHE_DIR),
+            core().cache_volume(f"zensical-{_site_name(config_content) or self.path}"),
+            sharing=CacheSharingMode.LOCKED,
+        )
+        for source in _docs_sources(config_content):
             ctr = ctr.with_directory(
                 posixpath.join(docs_path, source),
-                self.ws.directory(_root_path(self.path, source), gitignore=True),
+                self.ws.directory(_root_path(self.path, source), exclude=self.exclude, gitignore=True),
             )
         return ctr.with_workdir(docs_path), docs_path
 
     @function
-    async def site(self) -> Directory:
+    async def site(
+        self,
+        clean: Annotated[
+            bool,
+            Doc("Clear zensical's build cache before building (`zensical build --clean`)."),
+        ] = False,
+    ) -> Directory:
         """Build the docs with `zensical build` and return the generated site directory."""
         ctr, docs_path = await self._container()
-        args = ["zensical", "build", "--clean", "--config-file", _CONFIG_FILE]
+        args = ["zensical", "build", "--config-file", _CONFIG_FILE]
+        if clean:
+            args.append("--clean")
         if self.strict:
             args.append("--strict")
         try:
@@ -183,10 +212,7 @@ class Zensical:
             list[str] | None,
             Doc("Extras of the docs' package to install for the build."),
         ] = None,
-        exclude: Annotated[
-            list[str] | None,
-            Doc("Glob patterns of paths to leave out of discovery, e.g. **/tests/**."),
-        ] = None,
+        exclude: Exclude = SOURCE_EXCLUDE,
         strict: Annotated[
             bool,
             Doc("Fail the build on warnings, such as broken links (`zensical build --strict`)."),
@@ -199,11 +225,11 @@ class Zensical:
             ),
         ] = None,
     ) -> Zensical:
-        """Discover the docs sites: one per `zensical.toml`, less those matching `exclude`.
+        """Discover the docs sites: one per `zensical.toml` outside `exclude`.
 
         Only the `zensical.toml`, `pyproject.toml` and `.gitignore` files are read.
         """
-        discovered = ws.directory("/", include=_DISCOVERY_INCLUDE, exclude=exclude or [], gitignore=True)
+        discovered = ws.directory("/", include=_DISCOVERY_INCLUDE, exclude=exclude, gitignore=True)
         configs, workspaces = await asyncio.gather(
             discovered.glob(f"**/{_CONFIG_FILE}"), uv(ws, exclude=exclude).workspaces().keys()
         )
@@ -222,6 +248,7 @@ class Zensical:
                 path=path,
                 workspace=workspace,
                 ws=ws,
+                exclude=exclude,
                 packages=packages,
                 groups=groups,
                 extras=extras or [],
