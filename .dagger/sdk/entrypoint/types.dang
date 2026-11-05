@@ -25,6 +25,11 @@ type ModuleTypes {
             .withCheck
         )
         .withFunction(
+          function("all_zensical", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run all checks for the `zensical` module in parallel.")
+            .withCheck
+        )
+        .withFunction(
           function("deptry_clean_flat_layout", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A flat-layout project whose deps are all declared and used passes.")
         )
@@ -57,23 +62,13 @@ type ModuleTypes {
             .withDescription("A `subset` of the projects checks only those, so a broken-but-unselected tree passes.")
         )
         .withFunction(
-          function("docs", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Build every zensical docs site in parallel.")
-            .withCheck
-        )
-        .withFunction(
           function("docs_build", typeDef.withObject("Directory"))
-            .withDescription("Build the combined docs site for GitHub Pages.\n\nDiscovers every top-level module with a `zensical.toml`, builds each site\nin parallel, and lays them out under their module path (e.g. `uv` -> `/uv`).\nEach site's links/assets are relative, so they resolve under their subpath.\nThe `.docs` project's zensical site is the landing page (served at `/`).")
+            .withDescription("Build the combined docs site for GitHub Pages.\n\nThe `zensical` module builds every docs site; each module's lands under its\npath (e.g. `uv` -> `/uv`), and the `.docs` project's is the landing page at\n`/`. Each site's links and assets are relative, so they resolve under their\nsubpath.")
         )
         .withFunction(
           function("docs_serve", typeDef.withObject("Service"))
             .withDescription("Serve the combined docs site over HTTP as a Dagger service.\n\nUses Python's stdlib `http.server` (already in the uv base image), which\nserves `index.html` for directory URLs, as zensical's relative links\nexpect. Run with `dagger call docs-serve up` and browse the printed URL.")
             .withArg("port", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Port to listen on", defaultValue: ("8080" :: Dagger.JSON!))
-        )
-        .withFunction(
-          function("docs_site", typeDef.withObject("Directory"))
-            .withDescription("Build a module's static docs site and return the generated `site/` dir.\n\nBuilt on the same base as the tests, with the module installed and its\n`docs` uv group (which ships zensical) synced, so docs that introspect\nthe codebase can import it. `build` only copies each package's `src/`, so\nthe docs sources are supplied separately by `_zensical_site`.")
-            .withArg("module", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Module directory whose docs to build (e.g. 'uv')")
         )
         .withFunction(
           function("github_pytest", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -271,6 +266,18 @@ type ModuleTypes {
             .withArg("ref", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Commit SHA to poll")
             .withArg("token", typeDef.withObject("Secret"), description: "GitHub token with read access")
             .withArg("fail_fast", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Raise as soon as any check fails instead of waiting for all.", defaultValue: ("false" :: Dagger.JSON!))
+        )
+        .withFunction(
+          function("zensical_builds_module_docs", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The deptry module's docs build in its uv workspace, with its `docs` group.")
+        )
+        .withFunction(
+          function("zensical_discovers_projects", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`projects` finds one site per zensical.toml, in the innermost uv workspace holding it.\n\nDocs in a workspace member build that member's package; docs outside\nevery uv workspace have none.")
+        )
+        .withFunction(
+          function("zensical_strict_fails_on_broken_link", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("With `strict` (the default), a broken link fails the build.")
         )
         .withConstructor(
           function("", typeDef.withObject("TypesafeDaggerverse"))

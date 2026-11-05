@@ -2,7 +2,6 @@
 
 import posixpath
 import tomllib
-from collections.abc import Awaitable
 from typing import Annotated
 
 import anyio
@@ -17,13 +16,10 @@ from dagger_clients.ruff import ruff
 from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
 from dagger_clients.uv import UvCooldownPolicy, UvUpgradeStrategy, uv
+from dagger_clients.zensical import zensical
 
 _PYTEST_MODULE_REF = "github.com/dagger/pytest@main"
 _PYTEST_MODULE_PIN = "dd183e94449051abdc3c7d745dd148fdc08396d4"
-
-# Top-level modules that ship a docs site are discovered by globbing for a
-# `zensical.toml` (see `TypesafeDaggerverse.docs`).
-_ZENSICAL_GLOB = "*/zensical.toml"
 
 # Self-contained project holding the docs landing page (served at `/`).
 _LANDING_PROJECT = ".docs"
@@ -117,92 +113,21 @@ class TypesafeDaggerverse:
 
     # ---- docs sites ----
 
-    async def _zensical_site(self, ctr: Container, source: Directory) -> Directory:
-        """Render a zensical site inside `ctr` (which must have zensical installed).
-
-        `source` supplies `docs/` + `zensical.toml`; zensical writes the built
-        site next to the config, which we return.
-        """
-        workdir = await ctr.workdir()
-        return (
-            ctr.with_directory(f"{workdir}/docs", source.directory("docs"))
-            .with_file(f"{workdir}/zensical.toml", source.file("zensical.toml"))
-            .with_exec(["zensical", "build", "-f", "zensical.toml", "--clean"])
-            .directory(f"{workdir}/site")
-        )
-
-    @function
-    async def docs_site(
-        self,
-        module: Annotated[str, Doc("Module directory whose docs to build (e.g. 'uv')")],
-    ) -> Directory:
-        """Build a module's static docs site and return the generated `site/` dir.
-
-        Built on the same base as the tests, with the module installed and its
-        `docs` uv group (which ships zensical) synced, so docs that introspect
-        the codebase can import it. `build` only copies each package's `src/`, so
-        the docs sources are supplied separately by `_zensical_site`.
-        """
-        src = _src(module)
-        ctr = (
-            await uv(src.as_workspace())
-            .workspace(".")
-            .builder(base_container=_base())
-            .with_packages([module])
-            .with_groups(["docs"])
-            .with_dependencies()
-            .container()
-        )
-        return await self._zensical_site(ctr, src)
-
-    async def _landing(self) -> Directory:
-        """Build the landing site (served at `/`) from the `.docs` project.
-
-        `.docs` is a self-contained, non-packaged uv project whose `docs` group
-        (zensical, pinned in `.docs/uv.lock`) is synced with no package. The build
-        path is the same as for the modules, with nothing to import.
-        """
-        src = _src(_LANDING_PROJECT)
-        ctr = (
-            await uv(src.as_workspace())
-            .workspace(".")
-            .builder(base_container=_base())
-            .with_groups(["docs"])
-            .with_dependencies()
-            .container()
-        )
-        return await self._zensical_site(ctr, src)
-
     @function
     async def docs_build(self) -> Directory:
         """Build the combined docs site for GitHub Pages.
 
-        Discovers every top-level module with a `zensical.toml`, builds each site
-        in parallel, and lays them out under their module path (e.g. `uv` -> `/uv`).
-        Each site's links/assets are relative, so they resolve under their subpath.
-        The `.docs` project's zensical site is the landing page (served at `/`).
+        The `zensical` module builds every docs site; each module's lands under its
+        path (e.g. `uv` -> `/uv`), and the `.docs` project's is the landing page at
+        `/`. Each site's links and assets are relative, so they resolve under their
+        subpath.
         """
+        sites = zensical(_ws()).projects()
         # Dot-dirs (`.docs`, `.dagger`, ...) are tooling, not published modules.
-        modules = sorted(
-            module
-            for module in (path.rsplit("/", 1)[0] for path in await _ws().glob(_ZENSICAL_GLOB))
-            if not module.startswith(".")
-        )
-
-        # Built sites keyed by mount path; "" is the root landing page.
-        built: dict[str, Directory] = {}
-
-        async def _build(path: str, site: Awaitable[Directory]) -> None:
-            built[path] = await site
-
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(_build, "", self._landing())
-            for module in modules:
-                tg.start_soon(_build, module, self.docs_site(module))
-
-        combined = built.pop("")
-        for module in sorted(built):
-            combined = combined.with_directory(module, built[module])
+        modules = [path for path in await sites.keys() if not path.startswith(".")]
+        combined = sites.get(_LANDING_PROJECT).site()
+        for module in modules:
+            combined = combined.with_directory(module, sites.get(module).site())
         return combined
 
     @function
@@ -224,12 +149,6 @@ class TypesafeDaggerverse:
             .with_exposed_port(port)
             .as_service(args=["python", "-m", "http.server", str(port)])
         )
-
-    @check
-    @function
-    async def docs(self) -> None:
-        """Build every zensical docs site in parallel."""
-        await (await self.docs_build()).sync()
 
     # ---- uv (audit) module checks ----
 
@@ -1397,6 +1316,62 @@ print("LAYER_CACHE_OK")
             projects = projects.subset(subset)
         for project in await projects.list_():
             await _run_check(project.check())
+
+    # ---- zensical module checks ----
+
+    @check
+    @function
+    async def all_zensical(self) -> None:
+        """Run all checks for the `zensical` module in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.zensical_discovers_projects)
+            tg.start_soon(self.zensical_builds_module_docs)
+            tg.start_soon(self.zensical_strict_fails_on_broken_link)
+
+    @function
+    async def zensical_discovers_projects(self) -> None:
+        """`projects` finds one site per zensical.toml, in the innermost uv workspace holding it.
+
+        Docs in a workspace member build that member's package; docs outside
+        every uv workspace have none.
+        """
+        src = (
+            core()
+            .directory()
+            .with_new_file("pyproject.toml", '[project]\nname = "root"\nversion = "0"\n')
+            .with_new_file("uv.lock", "version = 1\n")
+            .with_new_file("zensical.toml", "[project]\n")
+            .with_new_file("member/pyproject.toml", '[project]\nname = "member"\nversion = "0"\n')
+            .with_new_file("member/zensical.toml", "[project]\n")
+            .with_new_file("nested/uv.lock", "version = 1\n")
+            .with_new_file("nested/pyproject.toml", '[project]\nname = "nested"\nversion = "0"\n')
+            .with_new_file("nested/zensical.toml", "[project]\n")
+        )
+        projects = zensical(src.as_workspace()).projects()
+        paths = await projects.keys()
+        if paths != [".", "member", "nested"]:
+            raise AssertionError(f"expected ['.', 'member', 'nested'], got {paths}")
+        workspaces = {path: await projects.get(path).workspace() for path in paths}
+        if workspaces != {".": ".", "member": ".", "nested": "nested"}:
+            raise AssertionError(f"unexpected workspaces: {workspaces}")
+
+    @function
+    async def zensical_builds_module_docs(self) -> None:
+        """The deptry module's docs build in its uv workspace, with its `docs` group."""
+        site = zensical(_src("deptry").as_workspace()).projects().get(".").site()
+        entries = await site.entries()
+        if "index.html" not in entries:
+            raise AssertionError(f"expected index.html in the built site, got {entries}")
+
+    @function
+    async def zensical_strict_fails_on_broken_link(self) -> None:
+        """With `strict` (the default), a broken link fails the build."""
+        src = _src("deptry").with_new_file("docs/index.md", "[broken](missing.md)\n")
+        try:
+            await _run_check(zensical(src.as_workspace()).projects().get(".").check())
+        except CheckFailedError:
+            return
+        raise AssertionError("expected the strict build to fail on a broken link")
 
     @check
     @function

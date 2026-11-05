@@ -14,6 +14,9 @@ source = "uv"
 [modules.zizmor]
 source = "zizmor"
 
+[modules.zensical]
+source = "zensical"
+
 # Test fixtures under uv/tests/_packages are deliberately broken or vulnerable;
 # the .dagger checks exercise them directly.
 [modules.deptry.settings]
@@ -48,8 +51,12 @@ clients = ["./pyproject"]
 [sdks.python.scopes.zizmor]
 is-module = true
 
+[sdks.python.scopes.zensical]
+is-module = true
+clients = ["./uv"]
+
 [sdks.python.scopes.".dagger"]
-clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor", "./pyproject", "./uv/tests/setuptools-package-dir"]
+clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor", "./pyproject", "./uv/tests/setuptools-package-dir", "./zensical"]
 is-module = true
 
 [sdks.python.scopes."uv/tests/setuptools-package-dir"]
