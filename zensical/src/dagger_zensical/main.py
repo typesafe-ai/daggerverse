@@ -101,7 +101,9 @@ class ZensicalProject:
         """The uv workspace's environment with the docs sources, and where they are.
 
         zensical's build cache is a cache volume, one per site, so a rebuild
-        after a docs change reuses what the previous build cached.
+        after a docs change reuses what the previous build cached. It's private:
+        a build that finds it in use gets a fresh copy instead of waiting, and
+        concurrent builds never write the same cache.
         """
         if self.workspace is None:
             msg = f"no uv workspace (uv.lock) holds the docs at {self.path!r}"
@@ -123,7 +125,7 @@ class ZensicalProject:
         ctr = ctr.with_file(posixpath.join(docs_path, _CONFIG_FILE), config).with_mounted_cache(
             posixpath.join(docs_path, _CACHE_DIR),
             core().cache_volume(f"zensical-{_site_name(config_content) or self.path}"),
-            sharing=CacheSharingMode.LOCKED,
+            sharing=CacheSharingMode.PRIVATE,
         )
         for source in _docs_sources(config_content):
             ctr = ctr.with_directory(
