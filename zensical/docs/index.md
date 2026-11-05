@@ -2,12 +2,15 @@
 
 Build [Zensical](https://zensical.org) docs sites in Dagger.
 
-Every directory with a `zensical.toml` is a docs site. Each site builds in the
-environment of the uv workspace (`uv.lock`) that holds it, using the
-[`uv`](../uv/index.md) module. Docs plugins that import your code, such as an
-API reference, therefore find it installed. If the docs directory is a
-workspace member, that member's package is installed; otherwise it's the
-workspace root's.
+Every directory with a `zensical.toml` is a docs site. A site builds in the
+environment of the uv workspace (`uv.lock`) that contains it, which the
+[`uv`](https://daggerverse.docs.typesafe.ai/uv/) module sets up. If the docs
+directory is a workspace member, that member's package is installed; otherwise
+the workspace root's package is. Docs plugins that import your code, such as an
+API reference, can then import it.
+
+The build copies in only the `zensical.toml`, its `docs_dir` (`docs` by
+default) and the theme's `custom_dir`, if set.
 
 ## Installation
 
@@ -47,6 +50,3 @@ one that carries private index credentials.
 ```sh
 dagger call zensical projects get --key=docs site export --path=./site
 ```
-
-A build reads the `zensical.toml`, its `docs_dir` (`docs` by default) and the
-theme's `custom_dir`, if set.
