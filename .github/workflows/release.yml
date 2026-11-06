@@ -5,7 +5,8 @@ on:
     tags: ["*/v[0-9]*"]
 
 # Dagger 1.0 modules are published by their git tag, which triggers this
-# workflow; it only writes the changelog into a GitHub release.
+# workflow; it only publishes the tagged version's section of the module's
+# CHANGELOG.md (written by `just release <module>`) as a GitHub release.
 jobs:
   release:
     name: release
@@ -21,19 +22,19 @@ jobs:
 
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
-          fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
 
-      - name: Generate changelog
-        id: changelog
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+      - name: Extract release notes
         env:
-          OUTPUT: /tmp/changelog.md
-          GITHUB_REPO: ${{ github.repository }}
-        with:
-          config: cliff.toml
-          args: --current --strip header --tag-pattern "${{ steps.meta.outputs.module }}/v.*" --include-path "${{ steps.meta.outputs.module }}/**/*"
+          MODULE: ${{ steps.meta.outputs.module }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          awk -v heading="## ${VERSION#v} " '/^## /{p = index($0, heading) == 1; next} p' \
+            "${MODULE}/CHANGELOG.md" > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then
+            echo "::error::${MODULE}/CHANGELOG.md has no section for ${VERSION#v}; run \`just release ${MODULE}\`"
+            exit 1
+          fi
 
       - name: Create GitHub release
         env:
@@ -41,8 +42,7 @@ jobs:
           TAG: ${{ github.ref_name }}
           MODULE: ${{ steps.meta.outputs.module }}
           VERSION: ${{ steps.meta.outputs.version }}
-          BODY: ${{ steps.changelog.outputs.content }}
         run: |
           gh release create "${TAG}" \
             --title "${MODULE} ${VERSION}" \
-            --notes "${BODY}"
+            --notes-file /tmp/notes.md
