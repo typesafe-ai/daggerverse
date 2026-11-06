@@ -547,9 +547,12 @@ class TypesafeDaggerverse:
         )
 
     @function
-    async def uv_build_backend_handler(self) -> None:
+    async def uv_build_backend_handler(self, nonce: str = "") -> None:
         """Another module's handler (`setuptools-package-dir`) builds a package the built-in backends can't."""
         source = _src("uv/tests/_packages/custom-handler")
+        if nonce:
+            pyproject = await source.file("pyproject.toml").contents()
+            source = source.with_new_file("pyproject.toml", f"# {nonce}\n{pyproject}")
         script = (
             "from importlib.metadata import version\n"
             "import plugged\n"
@@ -568,7 +571,25 @@ class TypesafeDaggerverse:
                 .with_exec(["uv", "run", "--no-sync", "python", "-c", script])
             )
             # The handler's `setup` ran before the build and its `teardown` after it.
-            await ctr.file("/tmp/setuptools-package-dir-setup").sync()
+            try:
+                await ctr.file("/tmp/setuptools-package-dir-setup").sync()
+            except Exception as exc:
+                handler = setuptools_package_dir()
+                pyproject = await source.file("pyproject.toml").contents()
+                builder = (
+                    uv(ws)
+                    .with_build_backend_handlers([setuptools_package_dir()])
+                    .workspace(".")
+                    .builder(no_editable=no_editable)
+                )
+                scaffold = await builder.with_workspace_files().container().directory("/work").glob("**")
+                raise AssertionError(
+                    f"[flake-debug] no_editable={no_editable}"
+                    f" handler.build_backend={await handler.build_backend()!r}"
+                    f" handler.module_paths={await handler.module_paths(pyproject, 'plugged-app')!r}"
+                    f" handler.source_paths={await handler.source_paths(pyproject, 'plugged-app')!r}"
+                    f" scaffold={sorted(scaffold)!r}"
+                ) from exc
             if await ctr.env_variable("SETUPTOOLS_PACKAGE_DIR"):
                 raise AssertionError("expected the handler's teardown to remove SETUPTOOLS_PACKAGE_DIR")
 
