@@ -1,5 +1,5 @@
 ---
-icon: lucide/box
+icon: simple/python
 title: Virtual environments
 description: Package a uv project as a relocatable virtual environment that runs in a fresh container with no Python of its own.
 ---

@@ -7,11 +7,14 @@ repo_url = "https://github.com/typesafe-ai/daggerverse"
 repo_name = "typesafe-ai/daggerverse"
 edit_uri = "edit/main/uv/docs/"
 copyright = "Copyright &copy; 2026 Typesafe AI"
+extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "Overview" = "index.md" },
-  { "Building containers" = "building.md" },
-  { "Virtual environments" = "virtual-environments.md" },
+  { "Building Packages" = [
+    { "Building containers" = "building.md" },
+    { "Building virtual environments" = "virtual-environments.md" },
+  ] },
   { "Auditing Dependencies" = "auditing.md" },
   { "Supported Build Backends" = [
     "build-backends/index.md",
@@ -23,18 +26,26 @@ nav = [
     { "maturin" = "build-backends/maturin.md" },
     { "Adding support for a build backend" = "build-backends/plugging-in.md" },
   ] },
+  { "Changelog" = "changelog.md" },
 ]
 
 [project.theme]
+custom_dir = "overrides"
 features = [
   "content.action.edit",
   "content.code.copy",
   "content.code.annotate",
   "content.tabs.link",
   "navigation.indexes",
+  "navigation.tabs",
   "navigation.footer",
   "navigation.top",
+  "toc.follow",
+  "toc.integrate",
 ]
+
+[project.theme.icon]
+logo = "simple/uv"
 
 # The first palette is the default; slate (dark) leads so the site loads in dark mode.
 [[project.theme.palette]]

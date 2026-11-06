@@ -1,5 +1,5 @@
 ---
-icon: lucide/package
+icon: octicons/container-24
 title: Building containers
 description: Build a minimal container for a package in a uv monorepo, assembling its local workspace dependencies from uv.lock in a cache-friendly order.
 ---
