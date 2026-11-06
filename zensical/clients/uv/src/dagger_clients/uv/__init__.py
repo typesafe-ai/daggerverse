@@ -1767,6 +1767,15 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("editableWritesSource", _args)
         return await _ctx.execute(bool)
 
+    def home_cache(self) -> CacheVolume:
+        """The volume for `CARGO_HOME` (downloaded crates, git dependencies'
+        checkouts), e.g. to mount where other Cargo commands run. Mount it
+        with `SHARED` sharing and point `CARGO_HOME` at it.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("homeCache", _args)
+        return CacheVolume(_ctx)
+
     async def id(self) -> str:
         """A unique identifier for this UvMaturinHandler.
 

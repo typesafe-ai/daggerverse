@@ -131,6 +131,7 @@ type ModuleTypes {
             .withArg("container", typeDef.withObject("Container"), description: "An OCI-compatible container, also known as a Docker container.")
         ),
       typeDef.withObject("MaturinHandler", description: "Handles packages built with maturin.")
+        .withField("home_cache", typeDef.withObject("CacheVolume"), description: "The volume for `CARGO_HOME` (downloaded crates, git dependencies' checkouts), e.g. to mount where other Cargo commands run. Mount it with `SHARED` sharing and point `CARGO_HOME` at it.")
         .withFunction(
           function("build_backend", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("The `[build-system].build-backend` value this handler handles.")
