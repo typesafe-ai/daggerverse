@@ -80,16 +80,16 @@ type ModuleTypes {
             .withDescription("Every pyproject.toml is a project and every uv.lock a workspace, less `exclude`.")
         )
         .withFunction(
+          function("pyproject_go_test", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run the pyproject module's Go unit tests (the discovery logic, engine-free).")
+        )
+        .withFunction(
           function("pyproject_project_files", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A project's files stop at the projects nested in it, needed or not.")
         )
         .withFunction(
           function("pyproject_project_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A project's source holds its own files and its local dependencies', and nothing else.")
-        )
-        .withFunction(
-          function("pyproject_pytest_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Run the pyproject module's own pytest suite (the discovery logic, engine-free).")
         )
         .withFunction(
           function("pyproject_respects_gitignore", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
