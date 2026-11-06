@@ -142,7 +142,7 @@ class Twingate(_Type):
         return Secret(_ctx)
 
 
-def twingate(service_key: Secret, *, version: str = '2026.106', session: _Session | None = None,) -> Twingate:
+def twingate(service_key: Secret, *, version: str = '2026.302.7126', session: _Session | None = None,) -> Twingate:
     """
     Twingate HTTP CONNECT proxy as a Dagger service.
 
@@ -159,7 +159,7 @@ def twingate(service_key: Secret, *, version: str = '2026.106', session: _Sessio
         raise _type_error("twingate", "version", version, "str")
     _args = [
         _Arg("serviceKey", service_key),
-        _Arg("version", version, '2026.106'),
+        _Arg("version", version, '2026.302.7126'),
     ]
     return _client_root(Twingate, _TARGET, "twingate", _args, session=session)
 
