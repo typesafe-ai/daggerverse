@@ -197,6 +197,10 @@ type ModuleTypes {
             .withDescription("A maturin crate builds against a crate outside its uv workspace, staged from the workspace root.\n\nThe Cargo target cache is cleared after every build here, which must leave the\ninstalled extension working.")
         )
         .withFunction(
+          function("uv_maturin_target_cache_tracks_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A maturin build over a kept Cargo target cache compiles the current source, not a cached build.\n\nBuilds two versions of a path crate in turn over one target volume, then the first\nagain: its files are older than the second version's build, so Cargo would reuse it.")
+        )
+        .withFunction(
           function("uv_no_editable_bakes_local_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`no_editable=True` bakes real local-package *source* into site-packages.\n\nRegression test for the editable-only copy-last optimization in\n`with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from\nwhatever source is on disk at sync time, so real source must be copied in\n*before* the sync. Otherwise the empty scaffold stubs get baked into\nsite-packages. We export the venv into a fresh Python-less container (so\nleftover workspace source can't mask the install) and assert each local\npackage's `hello()` returns its real string. Asserting the *return value*,\nnot just importability, is the point: an empty stub still imports fine.")
         )
