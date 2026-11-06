@@ -1901,30 +1901,26 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("teardown", _args)
         return Container(_ctx)
 
-    def with_cache_volumes(self, *, registry: CacheVolume | None = None, git: CacheVolume | None = None, target: CacheVolume | None = None,) -> _Self:
+    def with_cache_volumes(self, *, home: CacheVolume | None = None, target: CacheVolume | None = None,) -> _Self:
         """
         Use these Cargo cache volumes, e.g. ones shared with another module,
         instead of this module's own.
 
         Parameters
         ----------
-        registry:
-            Volume for `CARGO_HOME/registry`: downloaded crates
-        git:
-            Volume for `CARGO_HOME/git`: git dependencies' checkouts
+        home:
+            Volume for `CARGO_HOME`: downloaded crates and git dependencies'
+            checkouts
         target:
             Volume for the Cargo target dir: compiled crates, mounted private
             to each build
         """
-        if not (registry is None or isinstance(registry, CacheVolume)):
-            raise _type_error("UvMaturinHandler.with_cache_volumes", "registry", registry, "CacheVolume | None")
-        if not (git is None or isinstance(git, CacheVolume)):
-            raise _type_error("UvMaturinHandler.with_cache_volumes", "git", git, "CacheVolume | None")
+        if not (home is None or isinstance(home, CacheVolume)):
+            raise _type_error("UvMaturinHandler.with_cache_volumes", "home", home, "CacheVolume | None")
         if not (target is None or isinstance(target, CacheVolume)):
             raise _type_error("UvMaturinHandler.with_cache_volumes", "target", target, "CacheVolume | None")
         _args = [
-            _Arg("registry", registry, None),
-            _Arg("git", git, None),
+            _Arg("home", home, None),
             _Arg("target", target, None),
         ]
         _ctx = self._select("withCacheVolumes", _args)

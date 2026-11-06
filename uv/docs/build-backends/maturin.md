@@ -20,9 +20,12 @@ Applies to packages with `build-backend = "maturin"`. The module reads these
 The crate's `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/`, `.cargo/config.toml` and
 `rust-toolchain` are available while the package builds, and so are the readme and
 license files when `[project].dynamic` takes them from `Cargo.toml`. Downloaded crates
-and git dependencies (`$CARGO_HOME/registry` and `$CARGO_HOME/git`, with `CARGO_HOME`
-defaulting to `~/.cargo`) and compiled crates (the target dir) are kept in cache volumes
-between builds.
+and git dependencies (`CARGO_HOME`) and compiled crates (the target dir) are kept in
+cache volumes between builds.
+
+`CARGO_HOME` points at its volume while the package builds, so settings in the base
+container's `$CARGO_HOME/config.toml` don't apply then; put them in the crate's
+`.cargo/config.toml` instead. The toolchain is still found on `PATH`.
 
 Cargo never prunes the target dir, so it's cleared after a build that leaves it larger
 than 50 GiB. Change the limit with the maturin handler's `with_max_target_size`
@@ -38,14 +41,14 @@ maturin = (
     .build_backend_handlers()
     .maturin()
     .with_cache_volumes(
-        registry=core().cache_volume("cargo-registry"),
-        git=core().cache_volume("cargo-git"),
+        home=core().cache_volume("cargo-home"),
         target=core().cache_volume("cargo-target"),
     )
 )
 ```
 
-The target volume uses `PRIVATE` sharing, since maturin can't share a target dir
+The `CARGO_HOME` volume is shared between concurrent builds, which wait on Cargo's
+own lock. The target volume uses `PRIVATE` sharing, since maturin can't share a target dir
 between concurrent builds. A build that finds it in use gets another copy, which
 starts empty the first time builds overlap.
 
