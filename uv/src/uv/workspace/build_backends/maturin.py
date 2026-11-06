@@ -8,7 +8,7 @@ import posixpath
 from dataclasses import dataclass
 from typing import Annotated, ClassVar, Self
 
-from dagger import Doc, function, object_type
+from dagger import Doc, field, function, object_type
 from dagger_clients.core import CacheSharingMode, CacheVolume, Container, core
 
 from uv.utils import normalize_package_name
@@ -112,9 +112,9 @@ class MaturinSettings:
         if self._package is None:
             # A pure Rust module ships its type stubs from next to `pyproject.toml`.
             inputs += [f"{self.module}.pyi", "py.typed"]
-        for field in self.cargo_metadata:
+        for metadata in self.cargo_metadata:
             inputs += [
-                posixpath.normpath(posixpath.join(self.crate_dir, path)) for path in _CARGO_METADATA_FILES[field]
+                posixpath.normpath(posixpath.join(self.crate_dir, path)) for path in _CARGO_METADATA_FILES[metadata]
             ]
         inputs += [path for include in self.includes for path in tree(include)]
         return inputs
@@ -167,8 +167,14 @@ class MaturinHandler(BuiltinHandler):
     package_inputs: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     # GiB past which the target cache is cleared after a build.
     max_target_size: int = 50
-    # Volumes for `CARGO_HOME` and the target dir; this module's own when unset.
-    home_cache: CacheVolume | None = None
+    home_cache: Annotated[
+        CacheVolume,
+        Doc(
+            "The volume for `CARGO_HOME` (downloaded crates, git dependencies' checkouts), e.g. to mount where "
+            "other Cargo commands run. Mount it with `SHARED` sharing and point `CARGO_HOME` at it."
+        ),
+    ] = field(default=lambda: core().cache_volume("cargo-home"))
+    # The volume for the target dir; this module's own when unset.
     target_cache: CacheVolume | None = None
 
     @function
@@ -208,10 +214,9 @@ class MaturinHandler(BuiltinHandler):
     async def setup(self, container: Container) -> Container:
         if base_home := await container.env_variable("CARGO_HOME"):
             container = container.with_env_variable(_BASE_CARGO_HOME, base_home)
-        home = self.home_cache or core().cache_volume("cargo-home")
         target = self.target_cache or core().cache_volume("cargo-target")
         return (
-            container.with_mounted_cache(_CARGO_HOME, home)
+            container.with_mounted_cache(_CARGO_HOME, self.home_cache)
             .with_env_variable("CARGO_HOME", _CARGO_HOME)
             .with_mounted_cache(_CARGO_TARGET_DIR, target, sharing=CacheSharingMode.PRIVATE)
             .with_env_variable("CARGO_TARGET_DIR", _CARGO_TARGET_DIR)
