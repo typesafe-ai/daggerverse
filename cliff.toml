@@ -1,5 +1,10 @@
 [changelog]
+header = """
+# Changelog
+
+"""
 body = """
+## {{ version | split(pat="/v") | last }} - {{ timestamp | date(format="%Y-%m-%d") }}
 {% if message %}
 {{ message }}
 {% endif %}\
@@ -35,3 +40,7 @@ commit_parsers = [
 [remote.github]
 owner = "typesafe-ai"
 repo = "daggerverse"
+
+[bump]
+features_always_bump_minor = false
+breaking_always_bump_major = false

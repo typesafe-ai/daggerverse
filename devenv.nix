@@ -39,6 +39,7 @@ in {
     pkgs.zizmor
     pkgs.prek
     pkgs.git-cliff
+    pkgs.just
     pkgs-unstable.uv
     # gofmt for the prek hook on the Go modules.
     pkgs.go
