@@ -27,6 +27,14 @@ _DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 # normalize mtimes to 1, which backends that stamp files from their mtime (flit)
 # reject unless SOURCE_DATE_EPOCH is set.
 _SOURCE_DATE_EPOCH = "315532800"
+# 2100-01-01, the mtime of the sources that builds with backend hooks read. Those
+# hooks keep caches between builds (e.g. maturin's Cargo target), and incremental
+# tools rebuild what's older than its sources; a kept cache can hold a build of
+# another revision whose sources had the same mtime, as every revision does in a
+# Dagger git tree. Sources from the future are always newer, so local code always
+# rebuilds. `touch -h` rather than `Directory.with_timestamps`, which follows
+# symlinks and fails on dangling ones.
+_STAMP_SOURCES = ["find", ".", "-exec", "touch", "-h", "-t", "210001010000", "{}", "+"]
 # Where `dist` has `uv build` write the distributions.
 _DIST_DIR = "/tmp/uv-dist"
 
@@ -355,6 +363,20 @@ class UvWorkspaceBuilder:
                 hooks.setdefault(backend, builtin())
         return hooks
 
+    def _stamped(self, sources: Directory) -> Directory:
+        """`sources` with every mtime set to 2100, when the build's hooks keep caches (see `_STAMP_SOURCES`)."""
+        if not self._hooks():
+            return sources
+        return (
+            core()
+            .container()
+            .from_(_BUSYBOX)
+            .with_directory("/sources", sources)
+            .with_workdir("/sources")
+            .with_exec(_STAMP_SOURCES)
+            .directory("/sources")
+        )
+
     async def _scaffold(
         self,
         packages: list[LocalPackage],
@@ -373,7 +395,7 @@ class UvWorkspaceBuilder:
             span.set_attribute("packages.names", [pkg.name for pkg in packages])
             for pkg in packages:
                 overlay = self._scaffold_package(overlay, workdir, pkg)
-            ctr = self.container.with_directory("/", overlay)
+            ctr = self.container.with_directory("/", self._stamped(overlay))
             return await ctr.sync()
 
     @function
@@ -439,7 +461,7 @@ class UvWorkspaceBuilder:
             if orphans := await self._orphan_stubs(packages, workdir):
                 ctr = ctr.without_files(orphans)
             overlay = await self._with_link_targets(overlay, workdir)
-            return await ctr.with_directory("/", overlay).sync()
+            return await ctr.with_directory("/", self._stamped(overlay)).sync()
 
     async def _orphan_stubs(self, packages: list[LocalPackage], workdir: str) -> list[str]:
         """Container paths of the module stubs that `packages`' real source doesn't replace."""
@@ -493,18 +515,19 @@ class UvWorkspaceBuilder:
                         overlay = overlay.without_file(link).with_file(link, source.file(source_path))
 
     def _rebuild_args(self) -> list[str]:
-        """`--reinstall-package` for editable packages whose backend writes into the source tree.
+        """`--reinstall-package` for every local package, so uv builds it rather than installing a cached build.
 
-        uv caches only the editable wheel, so installing a cached one into a
-        fresh container would leave out what the build wrote into the source
-        (e.g. a compiled extension); rebuilding them puts it back.
+        uv keys a local package's cached build on file mtimes (`pyproject.toml` and
+        the like), which are the same for every revision in a Dagger git tree, so a
+        cached build of other source would install. Dagger reruns this sync only when its
+        inputs change, so the rebuild costs nothing otherwise. It also puts back what
+        an editable build writes into the source tree (e.g. a compiled extension),
+        which uv's cached editable wheel leaves out.
         """
-        if self.plan.no_editable:
-            return []
         return [
             f"--reinstall-package={pkg.name}"
             for pkg in self.plan.needed_local
-            if pkg.name not in self.plan.flat_packages and pkg.build_backend.editable_writes_source
+            if pkg.name not in self.plan.flat_packages
         ]
 
     async def _exec_with_hooks(self, ctr: Container, commands: list[list[str]]) -> Container:
@@ -557,9 +580,9 @@ class UvWorkspaceBuilder:
 
         workdir = await self.container.workdir()
         root = self._root_path(workdir)
-        ctr = self.container.with_directory(root, self.plan.source_dir)
+        ctr = self.container.with_directory(root, self._stamped(self.plan.source_dir))
         if self.plan.root_inputs_dir is not None:
-            ctr = ctr.with_directory(root, self.plan.root_inputs_dir)
+            ctr = ctr.with_directory(root, self._stamped(self.plan.root_inputs_dir))
         if self.plan.all_packages:
             targets = [["--all-packages"]]
         else:
