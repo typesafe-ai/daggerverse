@@ -4,8 +4,11 @@ See https://flit.pypa.io/en/stable/pyproject_toml.html.
 """
 
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
+from dagger import object_type
+
+from uv.workspace.build_backends.handler import BuiltinHandler
 from uv.workspace.build_backends.paths import tree
 
 # `[project].dynamic` fields flit reads from the module itself.
@@ -60,3 +63,11 @@ class FlitSettings:
         if self.external_data:
             inputs += tree(self.external_data)
         return inputs
+
+
+@object_type
+class FlitCoreHandler(BuiltinHandler):
+    """Handles packages built with flit_core."""
+
+    backend: ClassVar[str] = "flit_core.buildapi"
+    parse = FlitSettings.from_pyproject

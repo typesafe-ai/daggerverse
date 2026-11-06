@@ -6,7 +6,7 @@ description: Audit the locked dependencies of every uv workspace in a source tre
 
 # Auditing Dependencies
 
-The module `uv` module provides an `audit` check that runs `uv audit` under the hood to find vulnerabilities in your Python dependencies. It's also a Dagger [generator](https://docs.dagger.io/using/generating/), so it also has the ability to automatically suggest upgrades for vulnerable dependencies, according to the configured [upgrade policy](#configuration-options).
+The `uv` module provides an `audit` check that runs `uv audit` to find vulnerabilities in your Python dependencies. It's also a Dagger [generator](https://docs.dagger.io/using/generating/) which makes it able to automatically suggest upgrades for vulnerable dependencies, with respect to configured [upgrade strategy](#configuration-options).
 
 ## Running the `audit` generator
 
@@ -96,12 +96,6 @@ Set them in `dagger.toml`:
 exclude = ["**/tests/_packages/**"]
 upgradeStrategy = '"MINIMAL"'
 auditCooldown = '"EXEMPT"'
-```
-
-From your own module, pass the same options to the constructor:
-
-```python
-changes = uv(ws, upgrade_strategy=UvUpgradeStrategy.SKIP, audit_exclude=["examples/**"]).workspace(".").audit()
 ```
 
 !!! warning "Setting values are JSON"

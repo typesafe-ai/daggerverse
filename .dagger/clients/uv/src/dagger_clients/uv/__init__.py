@@ -28,6 +28,7 @@ from ._target import CORE_DIGEST, NAME, PIN, REF
 _check_core(NAME, CORE_DIGEST, _installed_core)
 
 from dagger_clients.core import (  # noqa: E402
+    CacheVolume,
     Changeset,
     Container,
     Directory,
@@ -1899,6 +1900,35 @@ class UvMaturinHandler(_Type):
         ]
         _ctx = self._select("teardown", _args)
         return Container(_ctx)
+
+    def with_cache_volumes(self, *, registry: CacheVolume | None = None, git: CacheVolume | None = None, target: CacheVolume | None = None,) -> _Self:
+        """
+        Use these Cargo cache volumes, e.g. ones shared with another module,
+        instead of this module's own.
+
+        Parameters
+        ----------
+        registry:
+            Volume for `CARGO_HOME/registry`: downloaded crates
+        git:
+            Volume for `CARGO_HOME/git`: git dependencies' checkouts
+        target:
+            Volume for the Cargo target dir: compiled crates, mounted private
+            to each build
+        """
+        if not (registry is None or isinstance(registry, CacheVolume)):
+            raise _type_error("UvMaturinHandler.with_cache_volumes", "registry", registry, "CacheVolume | None")
+        if not (git is None or isinstance(git, CacheVolume)):
+            raise _type_error("UvMaturinHandler.with_cache_volumes", "git", git, "CacheVolume | None")
+        if not (target is None or isinstance(target, CacheVolume)):
+            raise _type_error("UvMaturinHandler.with_cache_volumes", "target", target, "CacheVolume | None")
+        _args = [
+            _Arg("registry", registry, None),
+            _Arg("git", git, None),
+            _Arg("target", target, None),
+        ]
+        _ctx = self._select("withCacheVolumes", _args)
+        return UvMaturinHandler(_ctx)
 
     def with_max_target_size(self, max_target_size: int) -> _Self:
         """
@@ -3983,7 +4013,7 @@ class UvWorkspaces(_Type):
 
 
 
-def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvUpgradeStrategy = UvUpgradeStrategy.LATEST, audit_cooldown: UvCooldownPolicy = UvCooldownPolicy.RESPECT, audit_exclude: list[str] | None = None, audit_base_container: Container | None = None, session: _Session | None = None,) -> Uv:
+def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvUpgradeStrategy = UvUpgradeStrategy.LATEST, audit_cooldown: UvCooldownPolicy = UvCooldownPolicy.RESPECT, audit_exclude: list[str] | None = None, audit_base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Uv:
     """
     Entrypoint for the `uv` module.
 
@@ -4022,6 +4052,9 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvU
         Container with uv on PATH that `audit` audits and relocks in, e.g.
         one carrying private index credentials. Defaults to the Debian uv
         image at each workspace's uv version.
+    uv_cache:
+        Cache volume for uv's cache, e.g. one shared with another module.
+        Defaults to this module's `uv-cache`.
     """
     if not (isinstance(ws, Workspace)):
         raise _type_error("uv", "ws", ws, "Workspace")
@@ -4035,6 +4068,8 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvU
         raise _type_error("uv", "audit_exclude", audit_exclude, "list[str] | None")
     if not (audit_base_container is None or isinstance(audit_base_container, Container)):
         raise _type_error("uv", "audit_base_container", audit_base_container, "Container | None")
+    if not (uv_cache is None or isinstance(uv_cache, CacheVolume)):
+        raise _type_error("uv", "uv_cache", uv_cache, "CacheVolume | None")
     _args = [
         _Arg("ws", ws),
         _Arg("exclude", exclude, None),
@@ -4042,6 +4077,7 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvU
         _Arg("auditCooldown", audit_cooldown, UvCooldownPolicy.RESPECT),
         _Arg("auditExclude", audit_exclude, None),
         _Arg("auditBaseContainer", audit_base_container, None),
+        _Arg("uvCache", uv_cache, None),
     ]
     return _client_root(Uv, _TARGET, "uv", _args, session=session)
 

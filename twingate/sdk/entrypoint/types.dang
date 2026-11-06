@@ -22,7 +22,7 @@ type ModuleTypes {
         .withConstructor(
           function("", typeDef.withObject("Twingate"))
             .withArg("service_key", typeDef.withObject("Secret"), description: "Twingate service key JSON for headless authentication.")
-            .withArg("version", typeDef.withKind(TypeDefKind.STRING_KIND), description: "twingate/client image tag.", defaultValue: ("\"2026.106\"" :: Dagger.JSON!))
+            .withArg("version", typeDef.withKind(TypeDefKind.STRING_KIND), description: "twingate/client image tag.", defaultValue: ("\"2026.302.7126\"" :: Dagger.JSON!))
         ),
     ]
   }

@@ -11,7 +11,9 @@ from dagger_clients.core import Container, Directory, ExistsType, core
 
 from uv.args import Extra, Group, LockTimeout, MaxCacheSize, Package, PruneCache
 from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
-from uv.workspace.build_backends import BACKENDS, BackendHooks
+from uv.workspace.build_backends import BACKENDS
+from uv.workspace.build_backends.base import BackendHooks
+from uv.workspace.build_backends.handler import HandlerHooks
 from uv.workspace.build_backends.paths import is_file
 from uv.workspace.plan import LocalPackage, UvSyncPlan, UvSyncPlanner
 from uv.workspace.venv import UvVenv
@@ -348,9 +350,9 @@ class UvWorkspaceBuilder:
             if pkg.name in self.plan.flat_packages or backend is None:
                 continue
             if pkg.handler is not None:
-                hooks.setdefault(f"{backend} handler #{pkg.handler}", self.plan.handlers[pkg.handler])
-            elif (builtin := BACKENDS.get(backend)) and builtin.hooks:
-                hooks.setdefault(backend, builtin.hooks)
+                hooks.setdefault(f"{backend} handler #{pkg.handler}", HandlerHooks(self.plan.handlers[pkg.handler]))
+            elif (builtin := BACKENDS.get(backend)) and builtin.has_hooks:
+                hooks.setdefault(backend, builtin())
         return hooks
 
     async def _scaffold(
@@ -509,7 +511,7 @@ class UvWorkspaceBuilder:
         """Run the local packages' builds (`commands`), with their backends' hooks around them."""
         hooks = self._hooks()
         for hook in hooks.values():
-            ctr = hook.setup(ctr)
+            ctr = await hook.setup(ctr)
         # Set SOURCE_DATE_EPOCH for these builds only, keeping a value the base sets.
         set_epoch = not await ctr.env_variable("SOURCE_DATE_EPOCH")
         if set_epoch:
@@ -519,7 +521,7 @@ class UvWorkspaceBuilder:
         if set_epoch:
             ctr = ctr.without_env_variable("SOURCE_DATE_EPOCH")
         for hook in reversed(hooks.values()):
-            ctr = hook.teardown(ctr)
+            ctr = await hook.teardown(ctr)
         # `with_exec` is lazy; sync() inside the span so it captures the actual
         # builds rather than just the query-graph construction.
         return await ctr.sync()

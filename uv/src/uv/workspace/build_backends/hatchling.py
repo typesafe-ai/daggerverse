@@ -6,8 +6,11 @@ https://hatch.pypa.io/latest/plugins/builder/wheel/.
 
 import posixpath
 from dataclasses import dataclass, field
-from typing import Self
+from typing import ClassVar, Self
 
+from dagger import object_type
+
+from uv.workspace.build_backends.handler import BuiltinHandler
 from uv.workspace.build_backends.paths import is_file, is_module, tree, within_package
 
 # Hatch's default script for `custom` build and metadata hooks.
@@ -112,3 +115,11 @@ class HatchlingSettings:
         # Non-module files picked by `only-include` (e.g. a top-level data file).
         inputs += [path for path in self._selection or [] if is_file(path) and not is_module(path)]
         return inputs
+
+
+@object_type
+class HatchlingHandler(BuiltinHandler):
+    """Handles packages built with Hatchling."""
+
+    backend: ClassVar[str] = "hatchling.build"
+    parse = HatchlingSettings.from_pyproject

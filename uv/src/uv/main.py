@@ -4,13 +4,14 @@ import posixpath
 from typing import Annotated, Self
 
 from dagger import Doc, collection, function, get, keys, object_type
-from dagger_clients.core import Container, Workspace
+from dagger_clients.core import CacheVolume, Container, Workspace
 from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
 from uv.audit import AuditCooldown, AuditUpgradeStrategy, CooldownPolicy, UpgradeStrategy
 from uv.workspace import UvWorkspaceSource
-from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendHandlers
+from uv.workspace.build_backends import BuildBackendHandlers
+from uv.workspace.build_backends.handler import BuildBackendHandler
 from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
 
 # A uv workspace is a directory holding a uv.lock.
@@ -104,6 +105,12 @@ class Uv:
                 "index credentials. Defaults to the Debian uv image at each workspace's uv version."
             ),
         ] = None,
+        uv_cache: Annotated[
+            CacheVolume | None,
+            Doc(
+                "Cache volume for uv's cache, e.g. one shared with another module. Defaults to this module's `uv-cache`."
+            ),
+        ] = None,
     ) -> Self:
         # A workspace made from a directory and passed to a module is keyed by its
         # contents, so discovery stays cached until one of the files it reads changes.
@@ -141,6 +148,7 @@ class Uv:
                 audit_cooldown=audit_cooldown,
                 audit_exclude=audit_exclude or [],
                 audit_base_container=audit_base_container,
+                uv_cache=uv_cache,
             )
 
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.

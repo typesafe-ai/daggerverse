@@ -10,7 +10,7 @@ from typing import Annotated
 import dagger
 from dagger import Doc, field, function, generate, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Changeset, Container, Directory, File, ReturnType, core
+from dagger_clients.core import CacheVolume, Changeset, Container, Directory, File, ReturnType, core
 
 from uv.args import (
     ActivateVenv,
@@ -114,6 +114,11 @@ class UvWorkspaceSource:
     # From the `Uv` settings: the workspaces `audit` skips, and the container it runs in.
     audit_exclude: list[str] = dataclasses.field(default_factory=list)
     audit_base_container: Container | None = None
+    # From the `Uv` settings: the volume holding uv's cache, if not this module's own.
+    uv_cache: CacheVolume | None = None
+
+    def _uv_cache(self) -> CacheVolume:
+        return self.uv_cache or core().cache_volume("uv-cache")
 
     def _ws_dir(self) -> Directory:
         return self.manifests if self.path == "." else self.manifests.directory(self.path)
@@ -285,7 +290,7 @@ class UvWorkspaceSource:
                 or core().container().from_(debian_image_ref(uv_version or await self.uv_version()))
             )
             .with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR)
-            .with_mounted_cache(_UV_CACHE_DIR, core().cache_volume("uv-cache"))
+            .with_mounted_cache(_UV_CACHE_DIR, self._uv_cache())
             .with_workdir(ws_dir)
         )
         audited = base.with_directory("/work", self.manifests)
@@ -565,12 +570,10 @@ class UvWorkspaceSource:
                 # `uv sync` would materialize the cache into a real image layer
                 # (non-reproducible, ~2x size) instead of writing to the volume.
                 if not await self._has_cache(ctr, cache_dir):
-                    ctr = ctr.with_mounted_cache(cache_dir, core().cache_volume("uv-cache"))
+                    ctr = ctr.with_mounted_cache(cache_dir, self._uv_cache())
             else:
                 cache_dir = _UV_CACHE_DIR
-                ctr = ctr.with_env_variable("UV_CACHE_DIR", cache_dir).with_mounted_cache(
-                    cache_dir, core().cache_volume("uv-cache")
-                )
+                ctr = ctr.with_env_variable("UV_CACHE_DIR", cache_dir).with_mounted_cache(cache_dir, self._uv_cache())
             workdir = await ctr.workdir()
 
             # Place workspace files at their real path within the source tree

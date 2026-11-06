@@ -122,6 +122,9 @@ the network.
 
 If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a directory there, the module mounts the cache volume at that path instead of the default.
 
+Dagger scopes cache volumes to the module that creates them. To share uv's cache with
+another module, pass a volume as the `uv_cache` setting: `uv(ws, uv_cache=core().cache_volume("uv-cache"))`.
+
 The module automatically runs `uv cache prune --ci` when the cache size exceeds a certain threshold (100 GiB by default).
 
 A workspace's cache key depends on where it comes from: the current workspace

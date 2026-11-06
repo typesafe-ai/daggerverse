@@ -3,12 +3,17 @@
 See https://www.maturin.rs/project_layout and https://www.maturin.rs/config.
 """
 
+import asyncio
+import dataclasses
 import posixpath
 from dataclasses import dataclass
-from typing import Self
+from typing import Annotated, ClassVar, Self
 
-from dagger_clients.core import CacheSharingMode, Container, core
+from dagger import Doc, function, object_type
+from dagger_clients.core import CacheSharingMode, CacheVolume, Container, core
 
+from uv.utils import normalize_package_name
+from uv.workspace.build_backends.handler import BuiltinHandler
 from uv.workspace.build_backends.paths import tree
 
 # The package's own crate, relative to its `Cargo.toml`. Crates elsewhere in a
@@ -31,6 +36,16 @@ _CARGO_METADATA_FILES = {"readme": ["README*"], "license": ["LICENSE*", "COPYING
 # Concurrent builds get their own copy: maturin moves the built library out of the
 # target directory after cargo releases its lock, so sharing one races.
 _CARGO_TARGET_DIR = "/mnt/cache/cargo-target"
+
+# Downloaded crates and git checkouts under `CARGO_HOME`, shared between builds:
+# cargo locks them itself. Not the whole `CARGO_HOME`, which may hold the toolchain.
+_CARGO_HOME_CACHES = ("registry", "git")
+
+
+async def cargo_home(container: Container) -> str:
+    """Where cargo keeps downloaded crates: `CARGO_HOME`, else `~/.cargo`."""
+    home, user_home = await asyncio.gather(container.env_variable("CARGO_HOME"), container.env_variable("HOME"))
+    return home or posixpath.join(user_home or "/root", ".cargo")
 
 
 @dataclass(frozen=True)
@@ -129,22 +144,92 @@ def target_prune_script(max_target_size: int) -> str:
     )
 
 
-@dataclass(frozen=True)
-class MaturinHooks:
-    """Keeps compiled crates in a cache volume while maturin builds, clearing it once it grows too large."""
+ExtraBuildInputs = Annotated[
+    list[str],
+    Doc(
+        "Files (or globs) the package's build reads on top of the defaults: package-relative, or "
+        "workspace-root-relative with `/`."
+    ),
+]
 
+MaxTargetSize = Annotated[
+    int,
+    Doc("Clear the Cargo target cache after a build once it grows past this many GiB; 0 clears it every time."),
+]
+
+
+@object_type
+class MaturinHandler(BuiltinHandler):
+    """Handles packages built with maturin."""
+
+    backend: ClassVar[str] = "maturin"
+    parse = MaturinSettings.from_pyproject
+    # Caches downloaded and compiled crates while maturin builds, clearing compiled ones once they grow too large.
+    has_hooks: ClassVar[bool] = True
+
+    # Extra build inputs per normalized distribution name.
+    package_inputs: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     # GiB past which the target cache is cleared after a build.
     max_target_size: int = 50
+    # Volumes for `CARGO_HOME`'s registry and git dirs and the target dir; this module's own when unset.
+    registry_cache: CacheVolume | None = None
+    git_cache: CacheVolume | None = None
+    target_cache: CacheVolume | None = None
 
-    def setup(self, container: Container) -> Container:
+    @function
+    def with_package_config(self, name: str, extra_build_inputs: ExtraBuildInputs) -> "MaturinHandler":
+        """Configure how the package `name` builds, e.g. with the crates its Cargo workspace keeps above it."""
+        inputs = {**self.package_inputs, normalize_package_name(name): extra_build_inputs}
+        return dataclasses.replace(self, package_inputs=inputs)
+
+    @function
+    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
+        extra = self.package_inputs.get(normalize_package_name(name), [])
+        return [*self._settings(pyproject, name).build_inputs, *extra]
+
+    @function
+    def with_max_target_size(self, max_target_size: MaxTargetSize) -> "MaturinHandler":
+        """Bound the Cargo target cache that keeps compiled crates between builds."""
+        return dataclasses.replace(self, max_target_size=max_target_size)
+
+    @function
+    def with_cache_volumes(
+        self,
+        registry: Annotated[CacheVolume | None, Doc("Volume for `CARGO_HOME/registry`: downloaded crates")] = None,
+        git: Annotated[CacheVolume | None, Doc("Volume for `CARGO_HOME/git`: git dependencies' checkouts")] = None,
+        target: Annotated[
+            CacheVolume | None, Doc("Volume for the Cargo target dir: compiled crates, mounted private to each build")
+        ] = None,
+    ) -> "MaturinHandler":
+        """Use these Cargo cache volumes, e.g. ones shared with another module, instead of this module's own."""
+        return dataclasses.replace(
+            self,
+            registry_cache=registry or self.registry_cache,
+            git_cache=git or self.git_cache,
+            target_cache=target or self.target_cache,
+        )
+
+    @function
+    async def setup(self, container: Container) -> Container:
+        home = await cargo_home(container)
+        caches = {"registry": self.registry_cache, "git": self.git_cache}
+        for cache in _CARGO_HOME_CACHES:
+            volume = caches[cache] or core().cache_volume(f"cargo-{cache}")
+            container = container.with_mounted_cache(posixpath.join(home, cache), volume)
+        target = self.target_cache or core().cache_volume("cargo-target")
         return container.with_mounted_cache(
-            _CARGO_TARGET_DIR, core().cache_volume("cargo-target"), sharing=CacheSharingMode.PRIVATE
+            _CARGO_TARGET_DIR, target, sharing=CacheSharingMode.PRIVATE
         ).with_env_variable("CARGO_TARGET_DIR", _CARGO_TARGET_DIR)
 
-    def teardown(self, container: Container) -> Container:
+    @function
+    async def teardown(self, container: Container) -> Container:
+        home = await cargo_home(container)
         # The volume is private to this build, so nothing else is using what gets cleared.
-        return (
+        container = (
             container.with_exec(["sh", "-c", target_prune_script(self.max_target_size)])
             .without_env_variable("CARGO_TARGET_DIR")
             .without_mount(_CARGO_TARGET_DIR)
         )
+        for cache in _CARGO_HOME_CACHES:
+            container = container.without_mount(posixpath.join(home, cache))
+        return container
