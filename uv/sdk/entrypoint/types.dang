@@ -171,8 +171,7 @@ type ModuleTypes {
         .withFunction(
           function("with_cache_volumes", typeDef.withObject("MaturinHandler"))
             .withDescription("Use these Cargo cache volumes, e.g. ones shared with another module, instead of this module's own.")
-            .withArg("registry", typeDef.withOptional(true).withObject("CacheVolume").withOptional(true), description: "Volume for `CARGO_HOME/registry`: downloaded crates", defaultValue: ("null" :: Dagger.JSON!))
-            .withArg("git", typeDef.withOptional(true).withObject("CacheVolume").withOptional(true), description: "Volume for `CARGO_HOME/git`: git dependencies' checkouts", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("home", typeDef.withOptional(true).withObject("CacheVolume").withOptional(true), description: "Volume for `CARGO_HOME`: downloaded crates and git dependencies' checkouts", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("target", typeDef.withOptional(true).withObject("CacheVolume").withOptional(true), description: "Volume for the Cargo target dir: compiled crates, mounted private to each build", defaultValue: ("null" :: Dagger.JSON!))
         )
         .withFunction(

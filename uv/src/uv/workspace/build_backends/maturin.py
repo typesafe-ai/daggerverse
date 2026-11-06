@@ -3,7 +3,6 @@
 See https://www.maturin.rs/project_layout and https://www.maturin.rs/config.
 """
 
-import asyncio
 import dataclasses
 import posixpath
 from dataclasses import dataclass
@@ -37,15 +36,12 @@ _CARGO_METADATA_FILES = {"readme": ["README*"], "license": ["LICENSE*", "COPYING
 # target directory after cargo releases its lock, so sharing one races.
 _CARGO_TARGET_DIR = "/mnt/cache/cargo-target"
 
-# Downloaded crates and git checkouts under `CARGO_HOME`, shared between builds:
-# cargo locks them itself. Not the whole `CARGO_HOME`, which may hold the toolchain.
-_CARGO_HOME_CACHES = ("registry", "git")
-
-
-async def cargo_home(container: Container) -> str:
-    """Where cargo keeps downloaded crates: `CARGO_HOME`, else `~/.cargo`."""
-    home, user_home = await asyncio.gather(container.env_variable("CARGO_HOME"), container.env_variable("HOME"))
-    return home or posixpath.join(user_home or "/root", ".cargo")
+# Downloaded crates and git checkouts, shared between builds. `CARGO_HOME` moves
+# onto the volume, since cargo locks them with a file at its root; the base's own
+# `CARGO_HOME` may hold the toolchain, which stays on `PATH`.
+_CARGO_HOME = "/mnt/cache/cargo-home"
+# Holds the base's `CARGO_HOME` while maturin builds, for `teardown` to restore.
+_BASE_CARGO_HOME = "UV_BASE_CARGO_HOME"
 
 
 @dataclass(frozen=True)
@@ -171,9 +167,8 @@ class MaturinHandler(BuiltinHandler):
     package_inputs: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     # GiB past which the target cache is cleared after a build.
     max_target_size: int = 50
-    # Volumes for `CARGO_HOME`'s registry and git dirs and the target dir; this module's own when unset.
-    registry_cache: CacheVolume | None = None
-    git_cache: CacheVolume | None = None
+    # Volumes for `CARGO_HOME` and the target dir; this module's own when unset.
+    home_cache: CacheVolume | None = None
     target_cache: CacheVolume | None = None
 
     @function
@@ -195,8 +190,9 @@ class MaturinHandler(BuiltinHandler):
     @function
     def with_cache_volumes(
         self,
-        registry: Annotated[CacheVolume | None, Doc("Volume for `CARGO_HOME/registry`: downloaded crates")] = None,
-        git: Annotated[CacheVolume | None, Doc("Volume for `CARGO_HOME/git`: git dependencies' checkouts")] = None,
+        home: Annotated[
+            CacheVolume | None, Doc("Volume for `CARGO_HOME`: downloaded crates and git dependencies' checkouts")
+        ] = None,
         target: Annotated[
             CacheVolume | None, Doc("Volume for the Cargo target dir: compiled crates, mounted private to each build")
         ] = None,
@@ -204,32 +200,34 @@ class MaturinHandler(BuiltinHandler):
         """Use these Cargo cache volumes, e.g. ones shared with another module, instead of this module's own."""
         return dataclasses.replace(
             self,
-            registry_cache=registry or self.registry_cache,
-            git_cache=git or self.git_cache,
+            home_cache=home or self.home_cache,
             target_cache=target or self.target_cache,
         )
 
     @function
     async def setup(self, container: Container) -> Container:
-        home = await cargo_home(container)
-        caches = {"registry": self.registry_cache, "git": self.git_cache}
-        for cache in _CARGO_HOME_CACHES:
-            volume = caches[cache] or core().cache_volume(f"cargo-{cache}")
-            container = container.with_mounted_cache(posixpath.join(home, cache), volume)
+        if base_home := await container.env_variable("CARGO_HOME"):
+            container = container.with_env_variable(_BASE_CARGO_HOME, base_home)
+        home = self.home_cache or core().cache_volume("cargo-home")
         target = self.target_cache or core().cache_volume("cargo-target")
-        return container.with_mounted_cache(
-            _CARGO_TARGET_DIR, target, sharing=CacheSharingMode.PRIVATE
-        ).with_env_variable("CARGO_TARGET_DIR", _CARGO_TARGET_DIR)
+        return (
+            container.with_mounted_cache(_CARGO_HOME, home)
+            .with_env_variable("CARGO_HOME", _CARGO_HOME)
+            .with_mounted_cache(_CARGO_TARGET_DIR, target, sharing=CacheSharingMode.PRIVATE)
+            .with_env_variable("CARGO_TARGET_DIR", _CARGO_TARGET_DIR)
+        )
 
     @function
     async def teardown(self, container: Container) -> Container:
-        home = await cargo_home(container)
+        base_home = await container.env_variable(_BASE_CARGO_HOME)
         # The volume is private to this build, so nothing else is using what gets cleared.
         container = (
             container.with_exec(["sh", "-c", target_prune_script(self.max_target_size)])
             .without_env_variable("CARGO_TARGET_DIR")
             .without_mount(_CARGO_TARGET_DIR)
+            .without_env_variable("CARGO_HOME")
+            .without_mount(_CARGO_HOME)
         )
-        for cache in _CARGO_HOME_CACHES:
-            container = container.without_mount(posixpath.join(home, cache))
+        if base_home:
+            container = container.with_env_variable("CARGO_HOME", base_home).without_env_variable(_BASE_CARGO_HOME)
         return container
