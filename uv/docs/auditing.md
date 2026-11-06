@@ -32,13 +32,10 @@ $ dagger generate --uv
 ## What `audit` does
 
 For each workspace, `audit` runs [`uv audit --frozen`](https://docs.astral.sh/uv/reference/cli/#uv-audit) against the committed `uv.lock`,
-with vulnerability data from the public OSV service. A clean workspace ends there,
-with no changes.
+with vulnerability data from the public OSV service.
 
-For every vulnerable package that has a fixed release, `audit` relocks with
-[`uv lock --upgrade-package`](https://docs.astral.sh/uv/concepts/projects/sync/#upgrading-locked-package-versions). It keeps a relock only when the package lands on a
-version that fixes at least one of its advisories; the rest of the lock stays as it is.
-That gives each workspace one of three outcomes:
+For every vulnerable package that has a fixed release, `audit` attempts to re-lock it with
+[`uv lock --upgrade-package`](https://docs.astral.sh/uv/concepts/projects/sync/#upgrading-locked-package-versions). This may result in one of the following outcomes:
 
 - **Fixed:** `audit` changes `uv.lock`, so `dagger check --generated` reports the
   workspace as stale until `dagger generate` applies the upgrade.
@@ -63,20 +60,7 @@ exclude-newer = "7 days"
 urllib3 = "2026-09-15T19:29:37Z" # UvAudit[dagger]: security fix exempt from cooldown
 ```
 
-The entry is pinned to the fixing version's upload time. The trailing
-`UvAudit[dagger]:` comment marks it as written by `audit`: entries without it are
-yours, and `audit` never changes or removes them. It also won't exempt a package you've
-set your own `exclude-newer-package` entry for.
-
-Once the cooldown catches up with an exemption, the global cutoff admits that version
-anyway, and the entry only holds the package back. The next `audit` that upgrades
-something removes it in the same change. An expired exemption on its own never makes
-`audit` return changes, so a clean workspace stays clean as the cooldown moves.
-
-!!! tip "Keeping an exemption"
-
-    Delete the `UvAudit[dagger]:` comment to make an entry yours. `audit` then leaves it
-    in place for good.
+The check will automatically cleanup expired `exclude-newer-package` entries at first convenience.
 
 ## Configuration options
 

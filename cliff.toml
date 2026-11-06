@@ -1,5 +1,9 @@
 [changelog]
 header = """
+---
+icon: lucide/history
+---
+
 # Changelog
 
 """
@@ -11,10 +15,10 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
-- {{ commit.message | split(pat="\n") | first | trim }}\
-{% if commit.remote.username %} by @{{ commit.remote.username }}{% endif %}
+- {{ commit.message | split(pat="\n") | first | trim }}
 {%- endfor %}
 {% endfor %}
+
 """
 trim = true
 
@@ -36,10 +40,6 @@ commit_parsers = [
   { message = "^ci", group = "CI" },
   { message = "^style", skip = true },
 ]
-
-[remote.github]
-owner = "typesafe-ai"
-repo = "daggerverse"
 
 [bump]
 features_always_bump_minor = false

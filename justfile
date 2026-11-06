@@ -3,8 +3,6 @@
 release project bump="auto":
     #!/usr/bin/env bash
     set -euo pipefail
-    # Authenticates git-cliff's GitHub username lookups.
-    export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token)}"
     export GIT_CLIFF__BUMP__INITIAL_TAG="{{ project }}/v0.1.0"
     cliff=(git-cliff --tag-pattern "{{ project }}/v.*" --include-path "{{ project }}/**/*" --bump "{{ bump }}")
     tag=$("${cliff[@]}" --bumped-version)

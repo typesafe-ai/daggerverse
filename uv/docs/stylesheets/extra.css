@@ -1,0 +1,6 @@
+/* zensical fills tab icons, which blots out lucide's outline icons; draw them
+   as outlines, as the sidebar does. */
+.md-tabs__link svg.lucide {
+  fill: transparent;
+  stroke: currentcolor;
+}

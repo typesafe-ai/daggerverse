@@ -1,6 +1,6 @@
 [project]
 name = "uv"
-version = "0.1.0"
+version = "0.3.0"
 requires-python = ">=3.13"
 dependencies = ["dagger-io", "packaging", "tomlkit", "dagger-clients-core", "dagger-clients-pyproject"]
 
@@ -27,7 +27,7 @@ dev = [
 ]
 docs = [
     "pymdown-extensions>=11.0.1",
-    "zensical>=0.0.44",
+    "zensical>=0.1.0",
 ]
 
 [tool.pytest.ini_options]
