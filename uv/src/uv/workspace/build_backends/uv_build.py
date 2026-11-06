@@ -5,9 +5,12 @@ See https://docs.astral.sh/uv/concepts/build-backend/.
 
 import posixpath
 from dataclasses import dataclass, field
-from typing import Self
+from typing import ClassVar, Self
+
+from dagger import object_type
 
 from uv.utils import import_name
+from uv.workspace.build_backends.handler import BuiltinHandler
 from uv.workspace.build_backends.paths import tree
 
 
@@ -56,3 +59,11 @@ class UvBuildSettings:
     @property
     def build_inputs(self) -> list[str]:
         return [path for data_dir in self.data_dirs for path in tree(data_dir)]
+
+
+@object_type
+class UvBuildHandler(BuiltinHandler):
+    """Handles packages built with `uv_build`."""
+
+    backend: ClassVar[str] = "uv_build"
+    parse = UvBuildSettings.from_pyproject

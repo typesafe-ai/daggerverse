@@ -6,9 +6,12 @@ https://backend.pdm-project.org/metadata/.
 
 import posixpath
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
+
+from dagger import object_type
 
 from uv.utils import import_name
+from uv.workspace.build_backends.handler import BuiltinHandler
 from uv.workspace.build_backends.paths import is_file, is_module
 
 # pdm-backend runs this script as a build hook whenever it exists.
@@ -84,3 +87,11 @@ class PdmSettings:
             inputs.append(self.version_path)
         inputs += [path for path in self.includes or [] if is_file(path) and not is_module(path)]
         return inputs
+
+
+@object_type
+class PdmBackendHandler(BuiltinHandler):
+    """Handles packages built with pdm-backend."""
+
+    backend: ClassVar[str] = "pdm.backend"
+    parse = PdmSettings.from_pyproject

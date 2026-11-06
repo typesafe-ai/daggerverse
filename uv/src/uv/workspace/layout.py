@@ -2,7 +2,7 @@ import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from dagger_clients.core import Container, Directory, Workspace
+from dagger_clients.core import CacheVolume, Container, Directory, Workspace
 
 from uv.audit import CooldownPolicy, UpgradeStrategy
 from uv.workspace.build_backends.handler import BuildBackendHandler
@@ -37,6 +37,7 @@ class UvWorkspaceLayout:
     audit_cooldown: CooldownPolicy = CooldownPolicy.RESPECT
     audit_exclude: list[str] = dataclasses.field(default_factory=list)
     audit_base_container: Container | None = None
+    uv_cache: CacheVolume | None = None
 
     def _projects(self, load: _Loader) -> list[ProjectSource]:
         return [
@@ -88,4 +89,5 @@ class UvWorkspaceLayout:
             audit_cooldown=self.audit_cooldown,
             audit_exclude=self.audit_exclude,
             audit_base_container=self.audit_base_container,
+            uv_cache=self.uv_cache,
         )

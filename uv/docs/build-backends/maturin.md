@@ -19,12 +19,35 @@ Applies to packages with `build-backend = "maturin"`. The module reads these
 
 The crate's `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/`, `.cargo/config.toml` and
 `rust-toolchain` are available while the package builds, and so are the readme and
-license files when `[project].dynamic` takes them from `Cargo.toml`. Compiled crates
-are kept in a cache volume between builds.
+license files when `[project].dynamic` takes them from `Cargo.toml`. Downloaded crates
+and git dependencies (`$CARGO_HOME/registry` and `$CARGO_HOME/git`, with `CARGO_HOME`
+defaulting to `~/.cargo`) and compiled crates (the target dir) are kept in cache volumes
+between builds.
 
-Cargo never prunes that cache, so it's cleared after a build that leaves it larger
+Cargo never prunes the target dir, so it's cleared after a build that leaves it larger
 than 50 GiB. Change the limit with the maturin handler's `with_max_target_size`
 (`0` clears it after every build).
+
+Dagger scopes cache volumes to the module that creates them. To share Cargo's caches
+with another module, e.g. one building the same crates, pass its volumes to the
+maturin handler's `with_cache_volumes`:
+
+```python
+maturin = (
+    uv(ws)
+    .build_backend_handlers()
+    .maturin()
+    .with_cache_volumes(
+        registry=core().cache_volume("cargo-registry"),
+        git=core().cache_volume("cargo-git"),
+        target=core().cache_volume("cargo-target"),
+    )
+)
+```
+
+The target volume uses `PRIVATE` sharing, since maturin can't share a target dir
+between concurrent builds. A build that finds it in use gets another copy, which
+starts empty the first time builds overlap.
 
 Editable installs of a mixed project rebuild it every time they run: maturin
 writes the extension into the project's Python package rather than into the wheel

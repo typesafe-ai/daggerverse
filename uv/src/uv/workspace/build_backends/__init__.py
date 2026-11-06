@@ -4,100 +4,72 @@ The module scaffolds local packages as stubs before their real source arrives,
 so it must know where each backend expects the import directories and which
 extra files (readme, license files, version source, hook scripts) the build reads.
 
-Each supported backend lives in its own module and is registered in
-`BACKENDS` under its `[build-system].build-backend` value. Its settings are plain
-Python types derived from a package's `pyproject.toml` on demand. Handlers
-(see `handler`) configure a built-in backend for some packages, or support a
-backend this module doesn't know, through the `BuildBackendHandler` interface.
+Each supported backend lives in its own module, with its handler type, and is
+registered in `BACKENDS` under its `[build-system].build-backend` value. Its
+settings are plain Python types derived from a package's `pyproject.toml` on
+demand. Handlers (see `handler`) configure a built-in backend for some packages,
+or support a backend this module doesn't know, through the `BuildBackendHandler`
+interface.
 """
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol, Self
+from typing import Self
 
-from dagger_clients.core import Container
+from dagger import function, object_type
 
-from uv.workspace.build_backends.flit import FlitSettings
-from uv.workspace.build_backends.hatchling import HatchlingSettings
-from uv.workspace.build_backends.maturin import MaturinHooks, MaturinSettings
-from uv.workspace.build_backends.pdm import PdmSettings
-from uv.workspace.build_backends.poetry import PoetrySettings
-from uv.workspace.build_backends.uv_build import UvBuildSettings
+from uv.workspace.build_backends.base import BackendSettings
+from uv.workspace.build_backends.flit import FlitCoreHandler
+from uv.workspace.build_backends.handler import BuiltinHandler
+from uv.workspace.build_backends.hatchling import HatchlingHandler
+from uv.workspace.build_backends.maturin import MaturinHandler
+from uv.workspace.build_backends.pdm import PdmBackendHandler
+from uv.workspace.build_backends.poetry import PoetryCoreHandler
+from uv.workspace.build_backends.uv_build import UvBuildHandler
+
+BACKENDS: dict[str, type[BuiltinHandler]] = {
+    handler.backend: handler
+    for handler in (
+        UvBuildHandler,
+        HatchlingHandler,
+        PdmBackendHandler,
+        FlitCoreHandler,
+        PoetryCoreHandler,
+        MaturinHandler,
+    )
+}
 
 
-class BackendSettings(Protocol):
-    """A backend's settings that shape a package's staging.
+@object_type
+class BuildBackendHandlers:
+    """Handlers for the module's built-in backends, to pass to `Uv.with_build_backend_handlers`.
 
-    None from `module_name`, `module_paths`, or `source_paths` falls back to the
-    generic layout: the module named after the distribution, under `src/` or at
-    the package root.
+    Use them to configure a backend for some packages, e.g. maturin with the
+    crates a package's Cargo workspace keeps above it.
     """
 
-    @property
-    def module_name(self) -> str | None:
-        """The import name for the generic layout, if the backend declares one."""
-        ...
+    @function
+    def uv_build(self) -> UvBuildHandler:
+        return UvBuildHandler()
 
-    @property
-    def module_paths(self) -> list[str] | None:
-        """Declared import directories (or `.py` modules)."""
-        ...
+    @function
+    def hatchling(self) -> HatchlingHandler:
+        return HatchlingHandler()
 
-    @property
-    def source_paths(self) -> list[str] | None:
-        """Declared directories (or files) to copy."""
-        ...
+    @function
+    def pdm_backend(self) -> PdmBackendHandler:
+        return PdmBackendHandler()
 
-    @property
-    def editable_writes_source(self) -> bool:
-        """Whether an editable build writes into the source tree (e.g. a compiled extension).
+    @function
+    def flit_core(self) -> FlitCoreHandler:
+        return FlitCoreHandler()
 
-        uv caches only the editable wheel, so such packages are rebuilt rather
-        than installed from a cached build.
-        """
-        ...
+    @function
+    def poetry_core(self) -> PoetryCoreHandler:
+        return PoetryCoreHandler()
 
-    @property
-    def build_inputs(self) -> list[str]:
-        """Files (or globs) the backend reads while building.
-
-        Relative to the package, or to the workspace root with a leading `/`.
-        """
-        ...
-
-
-class BackendHooks(Protocol):
-    """What runs around the local packages' build: a handler, or a built-in backend that needs it."""
-
-    def setup(self, container: Container) -> Container:
-        """Prepare the container before the local packages build, e.g. mount caches or set variables."""
-        ...
-
-    def teardown(self, container: Container) -> Container:
-        """Undo what `setup` shouldn't leave in the final container, e.g. variables or secrets."""
-        ...
-
-
-@dataclass(frozen=True)
-class Builtin:
-    """A backend this module supports."""
-
-    # Its function in `build_backend_handlers()`, e.g. `pdm_backend`.
-    handler: str
-    # Its settings, parsed from a package's metadata and distribution name.
-    parse: Callable[[dict, str], BackendSettings]
-    # What runs around the build, if anything.
-    hooks: BackendHooks | None = None
-
-
-BACKENDS: dict[str, Builtin] = {
-    "uv_build": Builtin("uv_build", UvBuildSettings.from_pyproject),
-    "hatchling.build": Builtin("hatchling", HatchlingSettings.from_pyproject),
-    "pdm.backend": Builtin("pdm_backend", PdmSettings.from_pyproject),
-    "flit_core.buildapi": Builtin("flit_core", FlitSettings.from_pyproject),
-    "poetry.core.masonry.api": Builtin("poetry_core", PoetrySettings.from_pyproject),
-    "maturin": Builtin("maturin", MaturinSettings.from_pyproject, MaturinHooks()),
-}
+    @function
+    def maturin(self) -> MaturinHandler:
+        return MaturinHandler()
 
 
 @dataclass(frozen=True)

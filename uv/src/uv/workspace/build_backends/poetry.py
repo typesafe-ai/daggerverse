@@ -5,8 +5,11 @@ See https://python-poetry.org/docs/pyproject/.
 
 import posixpath
 from dataclasses import dataclass, field
-from typing import Self
+from typing import ClassVar, Self
 
+from dagger import object_type
+
+from uv.workspace.build_backends.handler import BuiltinHandler
 from uv.workspace.build_backends.paths import is_file, is_module, tree
 
 _GLOB_CHARS = "*?["
@@ -100,3 +103,11 @@ class PoetrySettings:
             inputs.append(self.build_script)
         inputs += [path for path in self.packages or [] if is_file(path) and not is_module(path)]
         return inputs
+
+
+@object_type
+class PoetryCoreHandler(BuiltinHandler):
+    """Handles packages built with poetry-core."""
+
+    backend: ClassVar[str] = "poetry.core.masonry.api"
+    parse = PoetrySettings.from_pyproject

@@ -6,9 +6,9 @@ import subprocess
 import pytest
 from uv.workspace.build_backends import PackageBackend, maturin
 from uv.workspace.build_backends.flit import FlitSettings
-from uv.workspace.build_backends.handler import BuildBackendLayout, MaturinHandler
+from uv.workspace.build_backends.handler import BuildBackendLayout
 from uv.workspace.build_backends.hatchling import HatchlingSettings
-from uv.workspace.build_backends.maturin import MaturinSettings, target_prune_script
+from uv.workspace.build_backends.maturin import MaturinHandler, MaturinSettings, cargo_home, target_prune_script
 from uv.workspace.build_backends.pdm import PdmSettings
 from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
@@ -480,6 +480,26 @@ def test_maturin_target_prune_clears_only_past_the_limit(tmp_path, monkeypatch, 
 def test_editable_writes_source(backend, tool, writes_source):
     metadata = {"build-system": {"build-backend": backend}, "tool": tool} if backend else {}
     assert PackageBackend.from_pyproject(metadata, "example-dist").editable_writes_source is writes_source
+
+
+class _EnvContainer:
+    def __init__(self, **env: str):
+        self.env = env
+
+    async def env_variable(self, name: str) -> str | None:
+        return self.env.get(name)
+
+
+@pytest.mark.parametrize(
+    ("env", "home"),
+    [
+        ({"CARGO_HOME": "/usr/local/cargo", "HOME": "/home/app"}, "/usr/local/cargo"),
+        ({"HOME": "/home/app"}, "/home/app/.cargo"),
+        ({}, "/root/.cargo"),
+    ],
+)
+def test_maturin_cargo_home(env, home):
+    assert asyncio.run(cargo_home(_EnvContainer(**env))) == home  # type: ignore[arg-type]
 
 
 def test_maturin_crate_inputs_follow_the_manifest_path():

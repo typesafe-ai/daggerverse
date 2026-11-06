@@ -1,27 +1,25 @@
 """Build backend handlers: Dagger objects that tell the module how a backend builds a package.
 
 A handler answers, from a package's `pyproject.toml`, the same questions as a
-built-in backend's settings, and can wrap the build in `setup`/`teardown`. The
-module provides a handler type for each of its built-in backends
-(`BuildBackendHandlers`), to configure how some packages build; other modules
-implement the `BuildBackendHandler` interface to support any other backend. A handler's
-answers are resolved once per package while the sync plan is created and stored
-as a `BuildBackendLayout`, so the rest of the pipeline reads them like built-in
-settings.
+built-in backend's settings, and can wrap the build in `setup`/`teardown`. Each
+built-in backend's module defines a handler type (a `BuiltinHandler`), listed by
+`BuildBackendHandlers`, to configure how some packages build; other modules
+implement the `BuildBackendHandler` interface to support any other backend. A
+handler's answers are resolved once per package while the sync plan is created
+and stored as a `BuildBackendLayout`, so the rest of the pipeline reads them
+like built-in settings.
 """
 
 import asyncio
-import dataclasses
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, ClassVar, Protocol, Self
 
 from dagger import Doc, field, function, interface, object_type
 from dagger_clients.core import Container
 
-from uv.utils import normalize_package_name
-from uv.workspace.build_backends import BACKENDS, BackendSettings
-from uv.workspace.build_backends.maturin import MaturinHooks
+from uv.workspace.build_backends.base import BackendSettings
 
 
 @interface
@@ -119,32 +117,37 @@ class BuildBackendLayout:
         )
 
 
-ExtraBuildInputs = Annotated[
-    list[str],
-    Doc(
-        "Files (or globs) the package's build reads on top of the defaults: package-relative, or "
-        "workspace-root-relative with `/`."
-    ),
-]
+@dataclass(frozen=True)
+class HandlerHooks:
+    """A handler's `setup`/`teardown` as `BackendHooks`: its calls are lazy, so nothing is awaited."""
 
-MaxTargetSize = Annotated[
-    int,
-    Doc("Clear the Cargo target cache after a build once it grows past this many GiB; 0 clears it every time."),
-]
+    handler: BuildBackendHandler
+
+    async def setup(self, container: Container) -> Container:
+        return self.handler.setup(container)
+
+    async def teardown(self, container: Container) -> Container:
+        return self.handler.teardown(container)
 
 
 @dataclass
-class _Builtin:
+class BuiltinHandler:
     """The handler interface for a built-in backend, answering like the module's own support for it.
 
-    A backend with options adds them to its own handler type, e.g. `MaturinHandler`'s
-    `with_package_config`.
+    Each built-in backend's module subclasses it, setting its `backend` and `parse`;
+    a backend with options adds them to its handler type, e.g. `MaturinHandler`'s
+    `with_package_config`, and one that wraps the build overrides `setup`/`teardown`.
     """
 
+    # The `[build-system].build-backend` value it handles.
     backend: ClassVar[str]
+    # Its settings, parsed from a package's metadata and distribution name.
+    parse: ClassVar[Callable[[dict, str], BackendSettings]]
+    # Whether `setup`/`teardown` do anything, so a build without a handler runs them.
+    has_hooks: ClassVar[bool] = False
 
     def _settings(self, pyproject: str, name: str) -> BackendSettings:
-        return BACKENDS[self.backend].parse(tomllib.loads(pyproject), name)
+        return self.parse(tomllib.loads(pyproject), name)
 
     @function
     async def build_backend(self) -> str:
@@ -172,113 +175,9 @@ class _Builtin:
         return self._settings(pyproject, name).editable_writes_source
 
     @function
-    def setup(self, container: Container) -> Container:
-        hooks = BACKENDS[self.backend].hooks
-        return hooks.setup(container) if hooks else container
+    async def setup(self, container: Container) -> Container:
+        return container
 
     @function
-    def teardown(self, container: Container) -> Container:
-        hooks = BACKENDS[self.backend].hooks
-        return hooks.teardown(container) if hooks else container
-
-
-@object_type
-class UvBuildHandler(_Builtin):
-    """Handles packages built with `uv_build`."""
-
-    backend: ClassVar[str] = "uv_build"
-
-
-@object_type
-class HatchlingHandler(_Builtin):
-    """Handles packages built with Hatchling."""
-
-    backend: ClassVar[str] = "hatchling.build"
-
-
-@object_type
-class PdmBackendHandler(_Builtin):
-    """Handles packages built with pdm-backend."""
-
-    backend: ClassVar[str] = "pdm.backend"
-
-
-@object_type
-class FlitCoreHandler(_Builtin):
-    """Handles packages built with flit_core."""
-
-    backend: ClassVar[str] = "flit_core.buildapi"
-
-
-@object_type
-class PoetryCoreHandler(_Builtin):
-    """Handles packages built with poetry-core."""
-
-    backend: ClassVar[str] = "poetry.core.masonry.api"
-
-
-@object_type
-class MaturinHandler(_Builtin):
-    """Handles packages built with maturin."""
-
-    backend: ClassVar[str] = "maturin"
-    # Extra build inputs per normalized distribution name.
-    package_inputs: dict[str, list[str]] = dataclasses.field(default_factory=dict)
-    max_target_size: int = MaturinHooks.max_target_size
-
-    @function
-    def with_package_config(self, name: str, extra_build_inputs: ExtraBuildInputs) -> "MaturinHandler":
-        """Configure how the package `name` builds, e.g. with the crates its Cargo workspace keeps above it."""
-        inputs = {**self.package_inputs, normalize_package_name(name): extra_build_inputs}
-        return dataclasses.replace(self, package_inputs=inputs)
-
-    @function
-    async def build_inputs(self, pyproject: str, name: str) -> list[str]:
-        extra = self.package_inputs.get(normalize_package_name(name), [])
-        return [*self._settings(pyproject, name).build_inputs, *extra]
-
-    @function
-    def with_max_target_size(self, max_target_size: MaxTargetSize) -> "MaturinHandler":
-        """Bound the Cargo target cache that keeps compiled crates between builds."""
-        return dataclasses.replace(self, max_target_size=max_target_size)
-
-    @function
-    def setup(self, container: Container) -> Container:
-        return MaturinHooks(self.max_target_size).setup(container)
-
-    @function
-    def teardown(self, container: Container) -> Container:
-        return MaturinHooks(self.max_target_size).teardown(container)
-
-
-@object_type
-class BuildBackendHandlers:
-    """Handlers for the module's built-in backends, to pass to `Uv.with_build_backend_handlers`.
-
-    Use them to configure a backend for some packages, e.g. maturin with the
-    crates a package's Cargo workspace keeps above it.
-    """
-
-    @function
-    def uv_build(self) -> UvBuildHandler:
-        return UvBuildHandler()
-
-    @function
-    def hatchling(self) -> HatchlingHandler:
-        return HatchlingHandler()
-
-    @function
-    def pdm_backend(self) -> PdmBackendHandler:
-        return PdmBackendHandler()
-
-    @function
-    def flit_core(self) -> FlitCoreHandler:
-        return FlitCoreHandler()
-
-    @function
-    def poetry_core(self) -> PoetryCoreHandler:
-        return PoetryCoreHandler()
-
-    @function
-    def maturin(self) -> MaturinHandler:
-        return MaturinHandler()
+    async def teardown(self, container: Container) -> Container:
+        return container
