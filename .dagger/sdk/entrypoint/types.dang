@@ -163,6 +163,7 @@ type ModuleTypes {
         .withFunction(
           function("uv_build_backend_handler", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Another module's handler (`setuptools-package-dir`) builds a package the built-in backends can't.")
+            .withArg("nonce", typeDef.withKind(TypeDefKind.STRING_KIND), defaultValue: ("\"\"" :: Dagger.JSON!))
         )
         .withFunction(
           function("uv_build_layouts", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
