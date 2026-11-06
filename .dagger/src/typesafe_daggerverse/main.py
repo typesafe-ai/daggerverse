@@ -235,6 +235,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
             tg.start_soon(_run, "uv_maturin_outside_workspace", self.uv_maturin_outside_workspace)
             tg.start_soon(_run, "uv_maturin_editable_cached_build", self.uv_maturin_editable_cached_build)
+            tg.start_soon(_run, "uv_maturin_target_cache_tracks_source", self.uv_maturin_target_cache_tracks_source)
             tg.start_soon(_run, "uv_maturin_dist", self.uv_maturin_dist)
             tg.start_soon(_run, "uv_workspace_inputs", self.uv_workspace_inputs)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
@@ -599,6 +600,52 @@ class TypesafeDaggerverse:
                 # Isolated (`-I`), so the installed package is imported rather than the source.
                 .with_exec(
                     ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
+                )
+                .sync()
+            )
+
+    @function
+    async def uv_maturin_target_cache_tracks_source(self) -> None:
+        """A maturin build over a kept Cargo target cache compiles the current source, not a cached build.
+
+        Builds two versions of a path crate in turn over one target volume, then the first
+        again: its files are older than the second version's build, so Cargo would reuse it.
+        """
+        source = _src("uv/tests/_packages/maturin-outside-workspace")
+        versions = {
+            5: source,
+            6: source.with_new_file(
+                "crates/core/src/lib.rs", "pub fn add(a: i64, b: i64) -> i64 {\n    a + b + 1\n}\n"
+            ),
+        }
+        target = core().cache_volume("uv-check-maturin-target-cache-tracks-source")
+        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
+        for expected in (5, 6, 5):
+            uv_ = uv(versions[expected].as_workspace())
+            maturin = (
+                uv_.build_backend_handlers()
+                .maturin()
+                .with_package_config(
+                    name="outside-app", extra_build_inputs=["/crates/core/Cargo.toml", "/crates/core/src/**"]
+                )
+                .with_cache_volumes(target=target)
+            )
+            await (
+                uv_.with_build_backend_handlers([maturin])
+                .workspace("py")
+                .builder(base_container=base, no_editable=True)
+                .with_dependencies()
+                .container()
+                .with_exec(
+                    [
+                        "uv",
+                        "run",
+                        "--no-sync",
+                        "python",
+                        "-I",
+                        "-c",
+                        f"import outside; assert outside.add(2, 3) == {expected}, outside.add(2, 3)",
+                    ]
                 )
                 .sync()
             )
