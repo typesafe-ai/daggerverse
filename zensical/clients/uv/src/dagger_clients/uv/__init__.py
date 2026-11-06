@@ -440,6 +440,15 @@ class Uv(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
+    def uv_cache(self) -> CacheVolume:
+        """The volume holding uv's cache: the `uv_cache` setting, else this
+        module's own. Mount it at `UV_CACHE_DIR` with `SHARED` sharing to
+        share uv's cache with this module.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("uvCache", _args)
+        return CacheVolume(_ctx)
+
     def with_build_backend_handlers(self, handlers: list[UvBuildBackendHandler],) -> _Self:
         """
         These workspaces with `handlers` added to their build backend
@@ -1767,6 +1776,14 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("editableWritesSource", _args)
         return await _ctx.execute(bool)
 
+    def git_cache(self) -> CacheVolume:
+        """The volume for `$CARGO_HOME/git` (git dependencies' checkouts). Mount
+        it there with `SHARED` sharing.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("gitCache", _args)
+        return CacheVolume(_ctx)
+
     async def id(self) -> str:
         """A unique identifier for this UvMaturinHandler.
 
@@ -1847,6 +1864,14 @@ class UvMaturinHandler(_Type):
         _ctx = self._select("modulePaths", _args)
         return await _ctx.execute(list[str] | None)
 
+    def registry_cache(self) -> CacheVolume:
+        """The volume for `$CARGO_HOME/registry` (downloaded crates). Mount it
+        there with `SHARED` sharing.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("registryCache", _args)
+        return CacheVolume(_ctx)
+
     def setup(self, container: Container) -> Container:
         """Parameters
         ----------
@@ -1886,6 +1911,15 @@ class UvMaturinHandler(_Type):
         ]
         _ctx = self._select("sourcePaths", _args)
         return await _ctx.execute(list[str] | None)
+
+    def target_cache(self) -> CacheVolume:
+        """The volume for the Cargo target dir (compiled crates). Mount it with
+        `PRIVATE` sharing, and only for builds with the same profile and
+        flags.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("targetCache", _args)
+        return CacheVolume(_ctx)
 
     def teardown(self, container: Container) -> Container:
         """Parameters

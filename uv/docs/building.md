@@ -124,6 +124,8 @@ If your `base_container` already sets `UV_CACHE_DIR` and doesn't have a director
 
 Dagger scopes cache volumes to the module that creates them. To share uv's cache with
 another module, pass a volume as the `uv_cache` setting: `uv(ws, uv_cache=core().cache_volume("uv-cache"))`.
+Or read back the one `uv` uses, its own by default, and mount it at your `UV_CACHE_DIR`:
+`ctr.with_mounted_cache("/root/.cache/uv", uv(ws).uv_cache())`.
 
 The module automatically runs `uv cache prune --ci` when the cache size exceeds a certain threshold (100 GiB by default).
 

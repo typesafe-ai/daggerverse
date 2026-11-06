@@ -9,7 +9,7 @@ import posixpath
 from dataclasses import dataclass
 from typing import Annotated, ClassVar, Self
 
-from dagger import Doc, function, object_type
+from dagger import Doc, field, function, object_type
 from dagger_clients.core import CacheSharingMode, CacheVolume, Container, core
 
 from uv.utils import normalize_package_name
@@ -116,9 +116,9 @@ class MaturinSettings:
         if self._package is None:
             # A pure Rust module ships its type stubs from next to `pyproject.toml`.
             inputs += [f"{self.module}.pyi", "py.typed"]
-        for field in self.cargo_metadata:
+        for metadata in self.cargo_metadata:
             inputs += [
-                posixpath.normpath(posixpath.join(self.crate_dir, path)) for path in _CARGO_METADATA_FILES[field]
+                posixpath.normpath(posixpath.join(self.crate_dir, path)) for path in _CARGO_METADATA_FILES[metadata]
             ]
         inputs += [path for include in self.includes for path in tree(include)]
         return inputs
@@ -171,10 +171,21 @@ class MaturinHandler(BuiltinHandler):
     package_inputs: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     # GiB past which the target cache is cleared after a build.
     max_target_size: int = 50
-    # Volumes for `CARGO_HOME`'s registry and git dirs and the target dir; this module's own when unset.
-    registry_cache: CacheVolume | None = None
-    git_cache: CacheVolume | None = None
-    target_cache: CacheVolume | None = None
+    registry_cache: Annotated[
+        CacheVolume,
+        Doc("The volume for `$CARGO_HOME/registry` (downloaded crates). Mount it there with `SHARED` sharing."),
+    ] = field(default=lambda: core().cache_volume("cargo-registry"))
+    git_cache: Annotated[
+        CacheVolume,
+        Doc("The volume for `$CARGO_HOME/git` (git dependencies' checkouts). Mount it there with `SHARED` sharing."),
+    ] = field(default=lambda: core().cache_volume("cargo-git"))
+    target_cache: Annotated[
+        CacheVolume,
+        Doc(
+            "The volume for the Cargo target dir (compiled crates). Mount it with `PRIVATE` sharing, and only "
+            "for builds with the same profile and flags."
+        ),
+    ] = field(default=lambda: core().cache_volume("cargo-target"))
 
     @function
     def with_package_config(self, name: str, extra_build_inputs: ExtraBuildInputs) -> "MaturinHandler":
@@ -214,11 +225,9 @@ class MaturinHandler(BuiltinHandler):
         home = await cargo_home(container)
         caches = {"registry": self.registry_cache, "git": self.git_cache}
         for cache in _CARGO_HOME_CACHES:
-            volume = caches[cache] or core().cache_volume(f"cargo-{cache}")
-            container = container.with_mounted_cache(posixpath.join(home, cache), volume)
-        target = self.target_cache or core().cache_volume("cargo-target")
+            container = container.with_mounted_cache(posixpath.join(home, cache), caches[cache])
         return container.with_mounted_cache(
-            _CARGO_TARGET_DIR, target, sharing=CacheSharingMode.PRIVATE
+            _CARGO_TARGET_DIR, self.target_cache, sharing=CacheSharingMode.PRIVATE
         ).with_env_variable("CARGO_TARGET_DIR", _CARGO_TARGET_DIR)
 
     @function

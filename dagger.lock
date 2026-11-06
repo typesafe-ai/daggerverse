@@ -38,3 +38,4 @@
 ["","oci-sha",["ghcr.io/astral-sh/uv:python3.14-alpine"],"sha256:4ce2a2ef69130ffb97688c8446ae771415035406355fbcb7932c59a535f82888"]
 ["","oci-sha",["ghcr.io/astral-sh/uv:python3.14-bookworm"],"sha256:73868e084ba4de5da1f7fb3c0cfa29edf93e1d965f9a1afe9a496fd6f97db574"]
 ["","oci-sha",["ghcr.io/zizmorcore/zizmor:1.25.2"],"sha256:14ea7f5cc7c67933394a35b5a38a277397818d232602635edb2010b313afb110"]
+["","oci-sha",["ghcr.io/zizmorcore/zizmor:1.32.0"],"sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d"]

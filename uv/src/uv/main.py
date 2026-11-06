@@ -3,7 +3,7 @@ import dataclasses
 import posixpath
 from typing import Annotated, Self
 
-from dagger import Doc, collection, function, get, keys, object_type
+from dagger import Doc, collection, field, function, get, keys, object_type
 from dagger_clients.core import CacheVolume, Container, Workspace
 from dagger_clients.pyproject import pyproject
 
@@ -13,6 +13,7 @@ from uv.workspace import UvWorkspaceSource
 from uv.workspace.build_backends import BuildBackendHandlers
 from uv.workspace.build_backends.handler import BuildBackendHandler
 from uv.workspace.layout import UvProjectLayout, UvWorkspaceLayout
+from uv.workspace.workspace import default_uv_cache
 
 # A uv workspace is a directory holding a uv.lock.
 _WORKSPACE_MARKERS = ["uv.lock"]
@@ -79,6 +80,14 @@ class Uv:
 
     Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/)."""
 
+    uv_cache: Annotated[
+        CacheVolume,
+        Doc(
+            "The volume holding uv's cache: the `uv_cache` setting, else this module's own. Mount it at "
+            "`UV_CACHE_DIR` with `SHARED` sharing to share uv's cache with this module."
+        ),
+    ] = field(default=default_uv_cache)
+
     # Not `field()`s: Dagger can't expose a `Workspace` as one, and the rest is internal.
     ws: Workspace | None = None
     layouts: list[UvWorkspaceLayout] = dataclasses.field(default_factory=list)
@@ -112,6 +121,7 @@ class Uv:
             ),
         ] = None,
     ) -> Self:
+        uv_cache = uv_cache or default_uv_cache()
         # A workspace made from a directory and passed to a module is keyed by its
         # contents, so discovery stays cached until one of the files it reads changes.
         discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
@@ -154,7 +164,7 @@ class Uv:
         # One glob for every workspace: each `Workspace.glob` walks the whole tree.
         src_paths = [posixpath.normpath(path) for path in await ws.glob("**/src/*")]
         layouts = {layout.path: layout for layout in await asyncio.gather(*(project_layout(p) for p in projects))}
-        return cls(ws=ws, layouts=list(await asyncio.gather(*(workspace_layout(w) for w in found))))
+        return cls(ws=ws, layouts=list(await asyncio.gather(*(workspace_layout(w) for w in found))), uv_cache=uv_cache)
 
     @function
     def build_backend_handlers(self) -> BuildBackendHandlers:

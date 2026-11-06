@@ -49,6 +49,15 @@ The target volume uses `PRIVATE` sharing, since maturin can't share a target dir
 between concurrent builds. A build that finds it in use gets another copy, which
 starts empty the first time builds overlap.
 
+The handler's `registry_cache`, `git_cache` and `target_cache` return the volumes it
+uses, its own by default, so another container can mount the same ones, e.g. to
+run `cargo test` with the crates the build downloaded:
+
+```python
+maturin = uv(ws).build_backend_handlers().maturin()
+tests = rust.with_mounted_cache("/usr/local/cargo/registry", maturin.registry_cache())
+```
+
 Editable installs of a mixed project rebuild it every time they run: maturin
 writes the extension into the project's Python package rather than into the wheel
 uv caches, so a cached build would install without it. The compiled crates are

@@ -33,11 +33,11 @@ class UvWorkspaceLayout:
     manifest_exclude: list[str]
     projects: list[UvProjectLayout]
     src_paths: list[str]
+    uv_cache: CacheVolume
     upgrade_strategy: UpgradeStrategy = UpgradeStrategy.LATEST
     audit_cooldown: CooldownPolicy = CooldownPolicy.RESPECT
     audit_exclude: list[str] = dataclasses.field(default_factory=list)
     audit_base_container: Container | None = None
-    uv_cache: CacheVolume | None = None
 
     def _projects(self, load: _Loader) -> list[ProjectSource]:
         return [
