@@ -83,19 +83,7 @@ def by_package(vulns: list[Vulnerability]) -> dict[str, list[Vulnerability]]:
     grouped: dict[str, list[Vulnerability]] = {}
     for v in vulns:
         grouped.setdefault(v.package, []).append(v)
-    for package, group in grouped.items():
-        _single_version(package, {v.version for v in group})
     return grouped
-
-
-def _single_version(package: str, versions: set[str]) -> None:
-    """Raise when uv.lock forks `package` across several versions: `audit` can't tell which to upgrade."""
-    if len(versions) > 1:
-        msg = (
-            f"uv.lock holds {package} at several versions ({', '.join(sorted(versions))}), "
-            f"so `audit` can't upgrade it: upgrade it by hand"
-        )
-        raise ValueError(msg)
 
 
 def _versions(values: list[str]) -> list[Version]:
@@ -109,15 +97,15 @@ def _versions(values: list[str]) -> list[Version]:
 
 
 def minimal_fix(vulns: list[Vulnerability]) -> str | None:
-    """The lowest version above the installed one that fixes every advisory in `vulns` (one package).
+    """The lowest version above the installed ones that fixes every advisory in `vulns` (one package).
 
-    Each advisory is fixed by its lowest fix version above the installed one; the package
-    needs the highest of those. `None` when some advisory has no such fix.
+    Each advisory is fixed by its lowest fix version above the version it was found in
+    (uv.lock may fork the package across several); the package needs the highest of those.
+    `None` when some advisory has no such fix.
     """
-    current = Version(vulns[0].version)
     needed = []
     for v in vulns:
-        above = [f for f in _versions(v.fix_versions) if f > current]
+        above = [f for f in _versions(v.fix_versions) if f > Version(v.version)]
         if not above:
             return None
         needed.append(above[0])
@@ -126,8 +114,8 @@ def minimal_fix(vulns: list[Vulnerability]) -> str | None:
 
 def fixed_by(vulns: list[Vulnerability], version: str) -> list[Vulnerability]:
     """The advisories in `vulns` (one package) that upgrading it to `version` fixes."""
-    current, new = Version(vulns[0].version), Version(version)
-    return [v for v in vulns if any(current < f <= new for f in _versions(v.fix_versions))]
+    new = Version(version)
+    return [v for v in vulns if any(Version(v.version) < f <= new for f in _versions(v.fix_versions))]
 
 
 def upgrade_spec(package: str, target: str, strategy: UpgradeStrategy) -> str:
@@ -156,13 +144,16 @@ def upload_cutoff(lock: str, package: str, version: str) -> str:
 
 
 def locked_version(lock: str, package: str) -> str | None:
-    versions = {
-        pkg["version"]
-        for pkg in tomllib.loads(lock).get("package", [])
-        if normalize_package_name(pkg["name"]) == package and "version" in pkg
-    }
-    _single_version(package, versions)
-    return versions.pop() if versions else None
+    """The lowest version of `package` in `uv.lock`: when it forks the package across
+    several, an advisory is fixed only once every fork is."""
+    versions = _versions(
+        [
+            pkg["version"]
+            for pkg in tomllib.loads(lock).get("package", [])
+            if normalize_package_name(pkg["name"]) == package and "version" in pkg
+        ]
+    )
+    return str(versions[0]) if versions else None
 
 
 def _parse_time(value: str) -> datetime:

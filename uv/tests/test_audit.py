@@ -63,10 +63,18 @@ class TestFixedBy:
         assert fixed_by([_vuln("a", ["2.7.0"])], "2.6.3") == []
 
 
-class TestByPackage:
-    def test_forked_package(self):
-        with pytest.raises(ValueError, match="urllib3 at several versions"):
-            by_package([_vuln("a", ["2.7.0"]), _vuln("b", ["2.7.0"], version="1.26.0")])
+_FORKED = [_vuln("a", ["2.7.0"]), _vuln("a", ["1.26.20", "2.7.0"], version="1.26.0")]
+
+
+class TestForkedPackage:
+    def test_grouped(self):
+        assert by_package(_FORKED) == {"urllib3": _FORKED}
+
+    def test_minimal_fix_covers_every_fork(self):
+        assert minimal_fix(_FORKED) == "2.7.0"
+
+    def test_fixed_by_per_fork(self):
+        assert fixed_by(_FORKED, "1.26.20") == _FORKED[1:]
 
 
 class TestUpgradeSpec:
@@ -104,10 +112,9 @@ class TestLock:
         assert locked_version(_LOCK, "urllib3") == "2.8.0"
         assert locked_version(_LOCK, "requests") is None
 
-    def test_locked_version_forked(self):
+    def test_locked_version_forked_is_lowest(self):
         lock = _LOCK + '\n[[package]]\nname = "urllib3"\nversion = "1.26.20"\n'
-        with pytest.raises(ValueError, match="urllib3 at several versions"):
-            locked_version(lock, "urllib3")
+        assert locked_version(lock, "urllib3") == "1.26.20"
 
     def test_cooldown_cutoff_span(self):
         now = datetime(2026, 10, 29, tzinfo=UTC)
