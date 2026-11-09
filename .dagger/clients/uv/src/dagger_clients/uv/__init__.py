@@ -4018,7 +4018,7 @@ class UvWorkspaces(_Type):
 
 
 
-def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvUpgradeStrategy = UvUpgradeStrategy.LATEST, audit_cooldown: UvCooldownPolicy = UvCooldownPolicy.RESPECT, audit_exclude: list[str] | None = None, audit_base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Uv:
+def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvUpgradeStrategy = UvUpgradeStrategy.LATEST, audit_cooldown: UvCooldownPolicy = UvCooldownPolicy.RESPECT, audit_concurrency: int = 10, audit_exclude: list[str] | None = None, audit_base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Uv:
     """
     Entrypoint for the `uv` module.
 
@@ -4050,6 +4050,9 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvU
     audit_cooldown:
         What `audit` does when the cooldown (`exclude-newer`) holds back a
         fix.
+    audit_concurrency:
+        How many `uv lock` runs `audit` has in flight at once in each
+        workspace.
     audit_exclude:
         Glob patterns of workspace paths `audit` leaves unaudited, e.g.
         examples/**. They stay buildable.
@@ -4069,6 +4072,8 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvU
         raise _type_error("uv", "upgrade_strategy", upgrade_strategy, "UvUpgradeStrategy")
     if not (isinstance(audit_cooldown, UvCooldownPolicy)):
         raise _type_error("uv", "audit_cooldown", audit_cooldown, "UvCooldownPolicy")
+    if not (isinstance(audit_concurrency, int)):
+        raise _type_error("uv", "audit_concurrency", audit_concurrency, "int")
     if not (audit_exclude is None or (isinstance(audit_exclude, list) and all(isinstance(_v0, str) for _v0 in audit_exclude))):
         raise _type_error("uv", "audit_exclude", audit_exclude, "list[str] | None")
     if not (audit_base_container is None or isinstance(audit_base_container, Container)):
@@ -4080,6 +4085,7 @@ def uv(ws: Workspace, *, exclude: list[str] | None = None, upgrade_strategy: UvU
         _Arg("exclude", exclude, None),
         _Arg("upgradeStrategy", upgrade_strategy, UvUpgradeStrategy.LATEST),
         _Arg("auditCooldown", audit_cooldown, UvCooldownPolicy.RESPECT),
+        _Arg("auditConcurrency", audit_concurrency, 10),
         _Arg("auditExclude", audit_exclude, None),
         _Arg("auditBaseContainer", audit_base_container, None),
         _Arg("uvCache", uv_cache, None),
