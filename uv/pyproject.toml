@@ -1,6 +1,6 @@
 [project]
 name = "uv"
-version = "0.3.0"
+version = "0.3.1"
 requires-python = ">=3.13"
 dependencies = ["dagger-io", "packaging", "tomlkit", "dagger-clients-core", "dagger-clients-pyproject"]
 

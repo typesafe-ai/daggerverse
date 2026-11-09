@@ -4,6 +4,12 @@ icon: lucide/history
 
 # Changelog
 
+## 0.3.1 - 2026-11-09
+
+### Bug fixes
+
+- don't fail the whole audit generator when one package can't be upgraded ([#185](https://github.com/typesafe-ai/daggerverse/pull/185))
+
 ## 0.3.0 - 2026-11-06
 
 The module has been upgraded to Dagger 1.0. It's builder API has been [redesigned](https://daggerverse.docs.typesafe.ai/uv/building/) accordingly. This naturally comes with a lot of performance improvements.
