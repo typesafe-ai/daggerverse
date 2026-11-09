@@ -94,6 +94,10 @@ class Uv:
         ] = None,
         upgrade_strategy: AuditUpgradeStrategy = UpgradeStrategy.LATEST,
         audit_cooldown: AuditCooldown = CooldownPolicy.RESPECT,
+        audit_concurrency: Annotated[
+            int,
+            Doc("How many `uv lock` runs `audit` has in flight at once in each workspace."),
+        ] = 10,
         audit_exclude: Annotated[
             list[str] | None,
             Doc("Glob patterns of workspace paths `audit` leaves unaudited, e.g. examples/**. They stay buildable."),
@@ -146,6 +150,7 @@ class Uv:
                 src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
                 upgrade_strategy=upgrade_strategy,
                 audit_cooldown=audit_cooldown,
+                audit_concurrency=audit_concurrency,
                 audit_exclude=audit_exclude or [],
                 audit_base_container=audit_base_container,
                 uv_cache=uv_cache,

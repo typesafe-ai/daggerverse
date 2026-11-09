@@ -69,6 +69,7 @@ The check will automatically cleanup expired `exclude-newer-package` entries at 
 | `exclude` | module setting | none | Glob patterns of workspace paths to leave out of discovery: no `audit`, and `workspace` can't load them. |
 | `upgradeStrategy` | module setting | `LATEST` | How far a vulnerable package moves: `LATEST` (as far as constraints and cooldown allow), `MINIMAL` (the lowest version fixing every advisory), or `SKIP` (no upgrade, report only). |
 | `auditCooldown` | module setting | `RESPECT` | When the cooldown holds back a fix: `RESPECT` it, or `EXEMPT` the fixing version. |
+| `auditConcurrency` | module setting | `10` | How many `uv lock` runs `audit` has in flight at once in each workspace. |
 | `auditExclude` | module setting | none | Glob patterns of workspace paths to leave unaudited. They stay buildable. |
 | `auditBaseContainer` | module setting | Debian uv image | Container with uv on `PATH` to audit and relock in, e.g. one carrying private index [credentials](https://docs.astral.sh/uv/concepts/indexes/#authentication). |
 | `uv_version` | `audit` argument | the workspace's | uv version of the default image. |

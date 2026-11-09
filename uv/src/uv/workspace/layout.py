@@ -35,6 +35,7 @@ class UvWorkspaceLayout:
     src_paths: list[str]
     upgrade_strategy: UpgradeStrategy = UpgradeStrategy.LATEST
     audit_cooldown: CooldownPolicy = CooldownPolicy.RESPECT
+    audit_concurrency: int = 10
     audit_exclude: list[str] = dataclasses.field(default_factory=list)
     audit_base_container: Container | None = None
     uv_cache: CacheVolume | None = None
@@ -87,6 +88,7 @@ class UvWorkspaceLayout:
             inputs_dir=inputs,
             upgrade_strategy=self.upgrade_strategy,
             audit_cooldown=self.audit_cooldown,
+            audit_concurrency=self.audit_concurrency,
             audit_exclude=self.audit_exclude,
             audit_base_container=self.audit_base_container,
             uv_cache=self.uv_cache,
