@@ -315,38 +315,12 @@ class UvWorkspaceSource:
         report = by_package(await self._audit_report(audited))
         fixed: list[Vulnerability] = []
         for package, vulns in sorted(report.items()):
-            target = minimal_fix(vulns)
-            if target is None:
+            # One package failing to upgrade leaves it unfixed, not the rest of the workspace.
+            try:
+                ctr, fixes = await self._fix_package(ctr, package, vulns, config, uv_toml=uv_toml)
+            except Exception:
+                logger.exception("uv audit: failed to upgrade %s in %s", package, self.path)
                 continue
-            # Keep a partial upgrade (e.g. one the cooldown stops short of the fix) as long
-            # as it fixes some advisories; one that doesn't would only churn uv.lock.
-            upgraded = await self._relock(
-                ctr, ["--upgrade-package", upgrade_spec(package, target, self.upgrade_strategy)]
-            )
-            if upgraded is None and self.upgrade_strategy is UpgradeStrategy.LATEST:
-                # The fix is out of reach (e.g. behind the cooldown): upgrade as far as allowed.
-                upgraded = await self._relock(ctr, ["--upgrade-package", package])
-            fixes = await self._fixes(upgraded, vulns)
-            if fixes:
-                ctr = upgraded
-            if (
-                len(fixes) == len(vulns)
-                or self.audit_cooldown is not CooldownPolicy.EXEMPT
-                or has_user_exemption(await ctr.file(config).contents(), package, uv_toml=uv_toml)
-            ):
-                fixed += fixes
-                continue
-            exempted = await self._relock(
-                ctr, ["--upgrade-package", f"{package}=={target}", "--exclude-newer-package", f"{package}=false"]
-            )
-            if exempted is not None:
-                # Persist the narrowest exemption that admits the fix, so the lock's
-                # options match the settings and a later `uv lock --locked` passes.
-                cutoff = upload_cutoff(await exempted.file("uv.lock").contents(), package, target)
-                config_text = add_exemptions(await exempted.file(config).contents(), {package: cutoff}, uv_toml=uv_toml)
-                exempted = await self._relock(exempted.with_new_file(config, config_text), [])
-            if exempted_fixes := await self._fixes(exempted, vulns):
-                ctr, fixes = exempted, exempted_fixes
             fixed += fixes
 
         unfixed = [v for vulns in report.values() for v in vulns if v not in fixed]
@@ -365,6 +339,41 @@ class UvWorkspaceSource:
             posixpath.join(self.path, config), relocked(config)
         )
         return after.changes(self.manifests)
+
+    async def _fix_package(
+        self, ctr: Container, package: str, vulns: list[Vulnerability], config: str, *, uv_toml: bool
+    ) -> tuple[Container, list[Vulnerability]]:
+        """`ctr` relocked to fix what it can of `vulns` (one package), and the advisories that fixes."""
+        target = minimal_fix(vulns)
+        if target is None:
+            return ctr, []
+        # Keep a partial upgrade (e.g. one the cooldown stops short of the fix) as long
+        # as it fixes some advisories; one that doesn't would only churn uv.lock.
+        upgraded = await self._relock(ctr, ["--upgrade-package", upgrade_spec(package, target, self.upgrade_strategy)])
+        if upgraded is None and self.upgrade_strategy is UpgradeStrategy.LATEST:
+            # The fix is out of reach (e.g. behind the cooldown): upgrade as far as allowed.
+            upgraded = await self._relock(ctr, ["--upgrade-package", package])
+        fixes = await self._fixes(upgraded, vulns)
+        if fixes:
+            ctr = upgraded
+        if (
+            len(fixes) == len(vulns)
+            or self.audit_cooldown is not CooldownPolicy.EXEMPT
+            or has_user_exemption(await ctr.file(config).contents(), package, uv_toml=uv_toml)
+        ):
+            return ctr, fixes
+        exempted = await self._relock(
+            ctr, ["--upgrade-package", f"{package}=={target}", "--exclude-newer-package", f"{package}=false"]
+        )
+        if exempted is not None:
+            # Persist the narrowest exemption that admits the fix, so the lock's
+            # options match the settings and a later `uv lock --locked` passes.
+            cutoff = upload_cutoff(await exempted.file("uv.lock").contents(), package, target)
+            config_text = add_exemptions(await exempted.file(config).contents(), {package: cutoff}, uv_toml=uv_toml)
+            exempted = await self._relock(exempted.with_new_file(config, config_text), [])
+        if exempted_fixes := await self._fixes(exempted, vulns):
+            return exempted, exempted_fixes
+        return ctr, fixes
 
     async def _audit_report(self, ctr: Container) -> list[Vulnerability]:
         """The vulnerabilities `uv audit` reports for the lock in `ctr`."""
