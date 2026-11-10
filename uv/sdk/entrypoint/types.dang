@@ -370,6 +370,7 @@ type ModuleTypes {
         .withField("all_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
         .withField("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
         .withField("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+        .withField("no_install_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
         .withField("plan", typeDef.withOptional(true).withObject("UvSyncPlan"))
         .withFunction(
           function("build", typeDef.withObject("Directory"))
@@ -434,6 +435,11 @@ type ModuleTypes {
         .withFunction(
           function("with_local_dependencies", typeDef.withObject("UvWorkspaceBuilder"))
             .withDescription("Install the scaffolded local packages, copying their real source at the right time.\n\nFor **editable** installs (the default), run `uv sync` against the package\nstubs from `with_workspace_files`, then copy real source over the stubs last.\nEditable installs are path links, so the source goes live without a re-sync\nand source-only changes don't invalidate the cached install layer.\n\nFor **non-editable** installs (`no_editable=True`), `uv sync` builds a wheel\nfrom whatever source is present and bakes it into `site-packages`, so the real\nsource must be copied in *before* the sync: there are no path links for a\ncopy-last to make live, and syncing against the stubs would bake empty modules.")
+        )
+        .withFunction(
+          function("with_no_install_packages", typeDef.withObject("UvWorkspaceBuilder"))
+            .withDescription("This builder leaving `packages` uninstalled (`uv sync --no-install-package`), though they stay locked.\n\nE.g. to install a different build of a package after the sync, such as\nCPU-only torch in place of the locked CUDA one.")
+            .withArg("packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Packages to leave uninstalled; passed to `uv sync` as repeated `--no-install-package`")
         )
         .withFunction(
           function("with_packages", typeDef.withObject("UvWorkspaceBuilder"))

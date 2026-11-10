@@ -251,6 +251,10 @@ type ModuleTypes {
             .withDescription("Keep workspace metadata/dependencies stable when only package source changes.")
         )
         .withFunction(
+          function("uv_workspace_no_install_packages", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`with_no_install_packages` leaves a locked dependency uninstalled and installs the rest.")
+        )
+        .withFunction(
           function("uv_workspace_pytest_self", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run the uv module's own pytest suite inside a freshly built container.\n\n`install()` only copies `src/` for each package (to keep layer\ngranularity tight). `tests/` has to be mounted explicitly so\npytest can find them. Without it, `pytest -q` collects nothing\nand exits with code 5 (NO_TESTS_COLLECTED).")
         )

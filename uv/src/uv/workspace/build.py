@@ -9,7 +9,7 @@ from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
 from dagger_clients.core import Container, Directory, ExistsType, core
 
-from uv.args import Extra, Group, LockTimeout, MaxCacheSize, Package, PruneCache
+from uv.args import Extra, Group, LockTimeout, MaxCacheSize, NoInstallPackage, Package, PruneCache
 from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
 from uv.workspace.build_backends import BACKENDS
 from uv.workspace.build_backends.base import BackendHooks
@@ -83,6 +83,7 @@ class UvWorkspaceBuilder:
     all_groups: Annotated[bool, Doc("Every dependency group is selected")] = field(default=False)
     no_default_groups: Annotated[bool, Doc("The default dependency groups are left out")] = field(default=False)
     no_editable: Annotated[bool, Doc("Local packages install non-editable")] = field(default=False)
+    no_install_packages: Annotated[list[str], Doc("Packages left uninstalled")] = field(default=list)
 
     plan: Annotated[
         UvSyncPlan | None,
@@ -140,6 +141,20 @@ class UvWorkspaceBuilder:
         """This builder without the default dependency groups (`uv sync --no-default-groups`)."""
         return dataclasses.replace(self, no_default_groups=True, plan=None)
 
+    @function
+    def with_no_install_packages(self, packages: NoInstallPackage) -> UvWorkspaceBuilder:
+        """This builder leaving `packages` uninstalled (`uv sync --no-install-package`), though they stay locked.
+
+        E.g. to install a different build of a package after the sync, such as
+        CPU-only torch in place of the locked CUDA one.
+        """
+        return dataclasses.replace(self, no_install_packages=[*self.no_install_packages, *packages])
+
+    def _sync_args(self) -> list[str]:
+        """The plan's `uv sync` arguments, with the packages left uninstalled."""
+        assert self.plan is not None
+        return [*self.plan.uv_sync_args, *(f"--no-install-package={p}" for p in self.no_install_packages)]
+
     async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> UvWorkspaceBuilder:
         """Run `argv` in the build container under a span, returning a new build with the result.
 
@@ -194,7 +209,7 @@ class UvWorkspaceBuilder:
         if self.plan is None:
             return await (await self._planned()).with_remote_dependencies(prune_cache, max_cache_size, lock_timeout)
 
-        args = [*self.plan.uv_sync_args, "--no-install-local"]
+        args = [*self._sync_args(), "--no-install-local"]
         build = await self._exec_step("install remote dependencies", args, {"uv.sync_args": args})
         if prune_cache:
             build = await build.with_cache_prune(max_cache_size=max_cache_size, lock_timeout=lock_timeout)
@@ -552,7 +567,7 @@ class UvWorkspaceBuilder:
     async def _sync_local(self, ctr: Container) -> Container:
         """Build and install the local packages, with the backends' hooks around the `uv sync`."""
         with get_tracer().start_as_current_span("install local dependencies") as span:
-            args = [*self.plan.uv_sync_args, *self._rebuild_args()]
+            args = [*self._sync_args(), *self._rebuild_args()]
             span.set_attribute("uv.sync_args", args)
             span.set_attribute("build.backend_hooks", list(self._hooks()))
             return await self._exec_with_hooks(ctr, [args])

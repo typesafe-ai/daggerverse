@@ -3186,6 +3186,25 @@ class UvWorkspaceBuilder(_Type):
         _ctx = self._select("noEditable", _args)
         return await _ctx.execute(bool)
 
+    async def no_install_packages(self) -> list[str]:
+        """Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("noInstallPackages", _args)
+        return await _ctx.execute(list[str])
+
     async def packages(self) -> list[str]:
         """Returns
         -------
@@ -3421,6 +3440,28 @@ class UvWorkspaceBuilder(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("withLocalDependencies", _args)
+        return UvWorkspaceBuilder(_ctx)
+
+    def with_no_install_packages(self, packages: list[str]) -> _Self:
+        """
+        This builder leaving `packages` uninstalled (`uv sync --no-install-
+        package`), though they stay locked.
+
+        E.g. to install a different build of a package after the sync, such as
+        CPU-only torch in place of the locked CUDA one.
+
+        Parameters
+        ----------
+        packages:
+            Packages to leave uninstalled; passed to `uv sync` as repeated
+            `--no-install-package`
+        """
+        if not (isinstance(packages, list) and all(isinstance(_v0, str) for _v0 in packages)):
+            raise _type_error("UvWorkspaceBuilder.with_no_install_packages", "packages", packages, "list[str]")
+        _args = [
+            _Arg("packages", packages),
+        ]
+        _ctx = self._select("withNoInstallPackages", _args)
         return UvWorkspaceBuilder(_ctx)
 
     def with_packages(self, packages: list[str]) -> _Self:

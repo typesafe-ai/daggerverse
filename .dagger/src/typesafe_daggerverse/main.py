@@ -240,6 +240,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_workspace_inputs", self.uv_workspace_inputs)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_selective_group", self.uv_workspace_standalone_selective_group)
+            tg.start_soon(_run, "no_install_packages", self.uv_workspace_no_install_packages)
             tg.start_soon(
                 _run, "full_workspace_all_extras_all_groups", self.uv_workspace_full_workspace_all_extras_all_groups
             )
@@ -998,6 +999,22 @@ print("LAYER_CACHE_OK")
             present=["six"],
             absent=["packaging", "tabulate", "idna"],
         )
+        await ctr.with_exec(["python", "-c", script]).stdout()
+
+    @function
+    async def uv_workspace_no_install_packages(self) -> None:
+        """`with_no_install_packages` leaves a locked dependency uninstalled and installs the rest."""
+        ctr = (
+            await uv(_fixture("uv/tests/_packages/standalone-app"))
+            .workspace(".")
+            .builder(base_container=_base())
+            .with_packages(["standalone-app"])
+            .with_extras(["viz"])
+            .with_no_install_packages(["tabulate"])
+            .with_dependencies()
+            .container()
+        )
+        script = _assert_modules_script(present=["standalone_app"], absent=["tabulate"])
         await ctr.with_exec(["python", "-c", script]).stdout()
 
     @function
