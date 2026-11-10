@@ -26,6 +26,11 @@ Group: TypeAlias = Annotated[
     Doc("Dependency groups to install; passed to `uv sync` as repeated `--group`"),
 ]
 
+NoInstallPackage: TypeAlias = Annotated[
+    list[str],
+    Doc("Packages to leave uninstalled; passed to `uv sync` as repeated `--no-install-package`"),
+]
+
 AllExtras: TypeAlias = Annotated[
     bool,
     Doc("Install every extra; maps to `uv sync --all-extras`"),
