@@ -1601,6 +1601,7 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.pyrefly_discovers_workspaces)
             tg.start_soon(self.pyrefly_removes_unused_ignore)
             tg.start_soon(self.pyrefly_clean)
+            tg.start_soon(self.pyrefly_base_container_at_root)
             tg.start_soon(self.pyrefly_fails_on_type_error)
             tg.start_soon(self.pyrefly_suppresses_errors)
 
@@ -1638,6 +1639,14 @@ print("LAYER_CACHE_OK")
     async def pyrefly_clean(self) -> None:
         """The `check` generator changes nothing in a workspace with nothing to fix."""
         workspace = pyrefly(self._pyrefly_clean_source().as_workspace()).workspaces().get(".")
+        if not await workspace.check().is_empty():
+            raise AssertionError("expected pyrefly check to change nothing in a clean workspace")
+
+    @function
+    async def pyrefly_base_container_at_root(self) -> None:
+        """A base container whose working directory is `/` still checks only the workspace."""
+        base = _base().with_workdir("/")
+        workspace = pyrefly(self._pyrefly_clean_source().as_workspace(), base_container=base).workspaces().get(".")
         if not await workspace.check().is_empty():
             raise AssertionError("expected pyrefly check to change nothing in a clean workspace")
 

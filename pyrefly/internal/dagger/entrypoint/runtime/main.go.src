@@ -52,7 +52,13 @@ type PyreflyWorkspace struct {
 // is the uv module's cache volume.
 func (m *PyreflyWorkspace) container(ctx context.Context) (*dagger.Container, string, error) {
 	workspace := uv.New(m.Inputs.AsWorkspace(), uv.UvOpts{UvCache: m.UvCache}).Workspace(m.Path)
-	builder := workspace.Builder(uv.UvWorkspaceSourceBuilderOpts{BaseContainer: m.BaseContainer}).WithAllPackages()
+	base := m.BaseContainer
+	if base != nil {
+		// Keep the workspace out of the base's own working directory, which may be `/`:
+		// pyrefly would then check the whole filesystem.
+		base = base.WithWorkdir("/work")
+	}
+	builder := workspace.Builder(uv.UvWorkspaceSourceBuilderOpts{BaseContainer: base}).WithAllPackages()
 	if len(m.Groups) > 0 {
 		builder = builder.WithGroups(m.Groups)
 	}

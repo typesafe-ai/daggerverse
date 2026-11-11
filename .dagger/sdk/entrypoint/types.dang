@@ -109,6 +109,10 @@ type ModuleTypes {
             .withDescription("A workspace's source leaves out unrelated nested projects; its manifests hold only resolver inputs.")
         )
         .withFunction(
+          function("pyrefly_base_container_at_root", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A base container whose working directory is `/` still checks only the workspace.")
+        )
+        .withFunction(
           function("pyrefly_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("The `check` generator changes nothing in a workspace with nothing to fix.")
         )
