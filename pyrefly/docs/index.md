@@ -9,11 +9,12 @@ description: A Dagger module that type checks Python with Pyrefly, one generator
 A [Dagger](https://dagger.io) module that type checks Python with
 [Pyrefly](https://pyrefly.org).
 
-Every uv workspace (`uv.lock`) that locks `pyrefly` is type checked in its own
-environment, with the pyrefly version the workspace locks. The
+The module checks each uv workspace (a directory with a `uv.lock`) that locks
+`pyrefly`, and skips the ones that don't. Each workspace is checked in its own
+environment, using the pyrefly version it locks. The
 [`uv`](https://daggerverse.docs.typesafe.ai/uv/) module builds that environment
-with every workspace member installed, so pyrefly resolves their imports and
-those of their dependencies. A workspace that doesn't lock `pyrefly` is left alone.
+and installs every workspace member into it, so pyrefly can resolve imports of
+the members and of their dependencies.
 
 ## Installation
 
@@ -21,7 +22,8 @@ those of their dependencies. A workspace that doesn't lock `pyrefly` is left alo
 $ dagger install github.com/typesafe-ai/daggerverse/pyrefly
 ```
 
-Add `pyrefly` to a dependency group the environment installs, `dev` by default:
+Then add `pyrefly` to each workspace you want checked. It has to be in a
+dependency group the environment installs, and `dev` is installed by default:
 
 ```console
 $ uv add --dev pyrefly
@@ -29,19 +31,21 @@ $ uv add --dev pyrefly
 
 ## Usage
 
-Each workspace is its own [generator](https://docs.dagger.io/reference/sdks/python/#generators),
-and they run in parallel:
+Every workspace gets its own [generator](https://docs.dagger.io/reference/sdks/python/#generators),
+called `check`. The generators run in parallel:
 
 ```console
 $ dagger generate --pyrefly              # apply pyrefly's fixes
 $ dagger check --generated --pyrefly     # fail on pending fixes and on type errors
 ```
 
-`check` runs `pyrefly check` at the workspace root, so pyrefly reads the
-workspace's own configuration (`pyrefly.toml` or `[tool.pyrefly]`). It fails
-when type errors remain after the fixes.
+`check` runs `pyrefly check` from the workspace root, so pyrefly picks up the
+workspace's own configuration (`pyrefly.toml` or `[tool.pyrefly]`). If type
+errors are left once the fixes are applied, it fails.
 
 ## Fixes
+
+`check` can apply three fixes, each controlled by a setting:
 
 | Setting | Default | Fix |
 |---------|---------|-----|
@@ -51,26 +55,28 @@ when type errors remain after the fixes.
 
 ## Adopting pyrefly in an existing codebase
 
-A [baseline](https://pyrefly.org/en/docs/error-suppressions/#baseline-files-experimental)
-records the errors a codebase already has, so `check` fails only on new ones.
-Set the file in the workspace's pyrefly configuration:
+To turn the check on before fixing the errors a codebase already has, use a
+[baseline](https://pyrefly.org/en/docs/error-suppressions/#baseline-files-experimental).
+It records those errors, and `check` then fails only on new ones. Name the
+baseline file in the workspace's pyrefly configuration:
 
 ```toml title="pyproject.toml"
 [tool.pyrefly]
 baseline = "pyrefly-baseline.json"
 ```
 
-Then record the errors, in the same environment `check` runs in:
+Then record the current errors. This command runs pyrefly in the same
+environment `check` uses and writes the baseline file into your working tree:
 
 ```console
 $ dagger -c 'pyrefly | workspaces | get . | update-baseline | export --path .'
 ```
 
-`check` keeps the baseline pruned as the errors get fixed.
+As you fix errors, `check` removes their entries from the baseline.
 
 ## Configuration
 
-Set the module's settings in `dagger.toml`:
+The module's settings go in `dagger.toml`:
 
 ```toml title="dagger.toml"
 [modules.pyrefly.settings]
@@ -91,13 +97,15 @@ pruneBaseline = true
 args = ["--min-severity", "warn"]
 ```
 
-The `baseContainer` setting is the container the environment is built on, for
-example one that carries private index credentials.
+`baseContainer` sets the container the environment is built on. Use it when the
+build needs something the default image lacks, such as credentials for a
+private index.
 
 ### Per-workspace settings
 
-A workspace overrides the module's settings in its own `pyproject.toml`, with
-kebab-case keys. A key it leaves out keeps the module's setting:
+A workspace can override these settings in its own `pyproject.toml`. The keys
+are the same ones in kebab-case, and any key you leave out keeps the module's
+value:
 
 ```toml title="pyproject.toml"
 [tool.typesafe_daggerverse.pyrefly]
@@ -108,12 +116,13 @@ no-install-packages = ["my-gpu-kernels"]
 ```
 
 Every setting can be overridden this way except `exclude`, `baseContainer` and
-`uvCache`, which apply to the whole repository.
+`uvCache`. Those three apply to the whole repository.
 
 ## Caching
 
-Pyrefly keeps no cache on disk: every run checks the workspace from scratch.
-What is cached is the environment. The `uv` module installs it from its
-`uv-cache` volume, and its layers are reused until a dependency manifest
-changes, so a source edit only reruns `pyrefly check`. Set `uvCache` to share
-another cache volume.
+Pyrefly has no on-disk cache, so every run checks the workspace from scratch.
+The environment is cached, though. The `uv` module installs packages from its
+`uv-cache` volume, and Dagger reuses the environment's layers until a
+dependency manifest changes. Editing source code therefore only reruns
+`pyrefly check`. To use a different cache volume, for example one shared with
+another module, set `uvCache`.
