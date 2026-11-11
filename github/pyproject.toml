@@ -20,7 +20,10 @@ dagger-io = "dagger"
 dagger-clients-core = "dagger_clients"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "deptry==0.25.1",
+    "pytest>=8",
+]
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core"]

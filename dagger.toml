@@ -20,7 +20,10 @@ source = "zensical"
 # Test fixtures under uv/tests/_packages are deliberately broken or vulnerable;
 # the .dagger checks exercise them directly.
 [modules.deptry.settings]
-exclude = ["**/tests/_packages/**"]
+# The deptry module's own project is named deptry, so its uv.lock can't lock the deptry
+# tool to run on it; its prek hook checks it instead. setuptools-package-dir is a test
+# fixture module of uv's.
+exclude = ["**/tests/_packages/**", "uv/tests/setuptools-package-dir", "deptry"]
 
 [modules.uv.settings]
 exclude = ["**/tests/_packages/**"]

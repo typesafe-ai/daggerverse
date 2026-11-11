@@ -53,16 +53,21 @@ exclude = ["**/tests/_packages/**"]
 ```
 
 By default, the module picks up `deptry` version per `uv` workspace, as pinned in `uv.lock`.
+It reads it from the `dev` group of the workspace's root project (`uv add --dev deptry`),
+or from the group the `group` setting names. A project whose lock has no deptry in that
+group fails its check.
 
 ### Configuring deptry
 
 `dagger check` runs checks with their default arguments, so deptry's options are
-constructor settings too: `version` overrides the deptry release, and `args` adds
-arguments before the project root. String settings are JSON, so they need inner quotes:
+constructor settings too: `group` picks the dependency group deptry's version comes
+from, `args` adds arguments before the project root, and `base_container` is the
+container deptry is installed into, which only needs `uv`. String settings are JSON,
+so they need inner quotes:
 
 ```toml title="dagger.toml"
 [modules.deptry.settings]
-version = '"0.25.1"'
+group = '"lint"'
 args = ["--no-ansi"]
 ```
 

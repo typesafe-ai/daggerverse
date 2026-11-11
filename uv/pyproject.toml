@@ -23,6 +23,7 @@ dagger-clients-pyproject = "dagger_clients"
 
 [dependency-groups]
 dev = [
+    "deptry==0.25.1",
     "pytest>=9.0.3",
 ]
 docs = [
