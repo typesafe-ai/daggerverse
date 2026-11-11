@@ -12,7 +12,7 @@ from dagger_clients.core import Changeset, Check, Container, Directory, ReturnTy
 from dagger_clients.deptry import deptry
 from dagger_clients.github import github
 from dagger_clients.pyproject import pyproject
-from dagger_clients.pyrefly import pyrefly
+from dagger_clients.pyrefly import PyreflyWorkspace, pyrefly
 from dagger_clients.ruff import ruff
 from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
@@ -1604,6 +1604,7 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.pyrefly_base_container_at_root)
             tg.start_soon(self.pyrefly_fails_on_type_error)
             tg.start_soon(self.pyrefly_suppresses_errors)
+            tg.start_soon(self.pyrefly_baseline)
 
     def _pyrefly_clean_source(self) -> Directory:
         return _src(self._PYREFLY_FIXTURE).with_new_file(
@@ -1664,3 +1665,24 @@ print("LAYER_CACHE_OK")
         """With `suppress_errors`, the `check` generator adds an ignore comment instead of failing."""
         workspace = pyrefly(self._pyrefly_broken_source().as_workspace(), suppress_errors=True).workspaces().get(".")
         return await self._assert_changeset_only_modifies(workspace.check(), {"src/typed/broken.py"})
+
+    @function
+    async def pyrefly_baseline(self) -> None:
+        """`update_baseline` records the type errors, `check` then passes, and prunes the entries once fixed."""
+        fixture = _src(self._PYREFLY_FIXTURE)
+        # `[tool.pyrefly]` is the fixture's last table.
+        config = await fixture.file("pyproject.toml").contents() + 'baseline = "pyrefly-baseline.json"\n'
+        broken = self._pyrefly_broken_source().with_new_file("pyproject.toml", config)
+
+        def workspace(source: Directory) -> PyreflyWorkspace:
+            return pyrefly(source.as_workspace()).workspaces().get(".")
+
+        recorded = workspace(broken).update_baseline()
+        if await recorded.added_paths() != ["pyrefly-baseline.json"]:
+            raise AssertionError(f"expected only the baseline to be added, got {await recorded.added_paths()}")
+        baselined = broken.with_changes(recorded)
+        if not await workspace(baselined).check().is_empty():
+            raise AssertionError("expected pyrefly check to pass and change nothing with the errors in the baseline")
+        pruned = workspace(baselined.without_file("src/typed/broken.py")).check()
+        if await pruned.modified_paths() != ["pyrefly-baseline.json"]:
+            raise AssertionError(f"expected the stale baseline entry to be pruned, got {await pruned.modified_paths()}")

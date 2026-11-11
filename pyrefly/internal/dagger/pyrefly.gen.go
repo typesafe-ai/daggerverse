@@ -122,8 +122,8 @@ func (r *PyreflyWorkspace) WithGraphQLQuery(q *querybuilder.Selection) *PyreflyW
 
 // Type check this workspace with `pyrefly check`, fixing what pyrefly can.
 //
-// The fixes are the module's `removeUnusedIgnores` and `suppressErrors`
-// settings: `dagger generate` applies them, and `dagger check --generated`
+// The fixes are the module's `removeUnusedIgnores`, `suppressErrors` and
+// `pruneBaseline` settings: `dagger generate` applies them, and `dagger check --generated`
 // fails while they would change a file. Fails when type errors remain.
 func (r *PyreflyWorkspace) Check() *Changeset {
 	q := r.query.Select("check")
@@ -197,6 +197,18 @@ func (r *PyreflyWorkspace) Path(ctx context.Context) (string, error) {
 
 	q = q.Bind(&response)
 	return response, q.Execute(ctx)
+}
+
+// Record every type error pyrefly finds in the workspace's baseline file (`pyrefly check --update-baseline`).
+//
+// `check` then fails only on the errors that aren't in the baseline, which
+// lets a codebase adopt pyrefly before its existing errors are fixed. The
+// errors are those of the environment `check` runs in. Needs the `baseline`
+// option set in the workspace's pyrefly configuration.
+func (r *PyreflyWorkspace) UpdateBaseline() *Changeset {
+	q := r.query.Select("updateBaseline")
+
+	return new(Changeset).WithGraphQLQuery(q)
 }
 
 // The uv workspaces pyrefly checks, keyed by root.
@@ -365,6 +377,10 @@ type PyreflyOpts struct {
 	RemoveUnusedIgnores bool
 	// Add ignore comments for the type errors found (`pyrefly check --suppress-errors`) instead of failing on them.
 	SuppressErrors bool
+	// Drop the baseline entries that match no error anymore (`pyrefly check --prune-baseline`), in workspaces whose pyrefly configuration sets a `baseline`.
+	//
+	// Default: true
+	PruneBaseline bool
 	// Additional arguments to pass to `pyrefly check`.
 	Args []string
 	// Container the uv workspace's environment is built on, e.g. one carrying private index credentials. Defaults to the uv module's Debian uv image.
@@ -400,6 +416,10 @@ func (r *Query) Pyrefly(ws *Workspace, opts ...PyreflyOpts) *Pyrefly { // pyrefl
 		// `suppressErrors` optional argument
 		if !querybuilder.IsZeroValue(opts[i].SuppressErrors) {
 			q = q.Arg("suppressErrors", opts[i].SuppressErrors)
+		}
+		// `pruneBaseline` optional argument
+		if !querybuilder.IsZeroValue(opts[i].PruneBaseline) {
+			q = q.Arg("pruneBaseline", opts[i].PruneBaseline)
 		}
 		// `args` optional argument
 		if !querybuilder.IsZeroValue(opts[i].Args) {

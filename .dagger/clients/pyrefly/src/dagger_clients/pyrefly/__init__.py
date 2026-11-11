@@ -91,9 +91,9 @@ class PyreflyWorkspace(_Type):
         Type check this workspace with `pyrefly check`, fixing what pyrefly
         can.
 
-        The fixes are the module's `removeUnusedIgnores` and `suppressErrors`
-        settings: `dagger generate` applies them, and `dagger check
-        --generated`
+        The fixes are the module's `removeUnusedIgnores`, `suppressErrors` and
+        `pruneBaseline` settings: `dagger generate` applies them, and `dagger
+        check --generated`
         fails while they would change a file. Fails when type errors remain.
         """
         _args: list[_Arg] = []
@@ -149,6 +149,23 @@ class PyreflyWorkspace(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
+
+    def update_baseline(self) -> Changeset:
+        """
+        Record every type error pyrefly finds in the workspace's baseline file
+        (`pyrefly check --update-baseline`).
+
+        `check` then fails only on the errors that aren't in the baseline,
+        which
+        lets a codebase adopt pyrefly before its existing errors are fixed.
+        The
+        errors are those of the environment `check` runs in. Needs the
+        `baseline`
+        option set in the workspace's pyrefly configuration.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("updateBaseline", _args)
+        return Changeset(_ctx)
 
 
 class PyreflyWorkspaces(_Type):
@@ -242,7 +259,7 @@ class PyreflyWorkspaces(_Type):
 
 
 
-def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, remove_unused_ignores: bool = True, suppress_errors: bool = False, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
+def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, remove_unused_ignores: bool = True, suppress_errors: bool = False, prune_baseline: bool = True, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
     """
     Discovers the uv workspaces that lock `pyrefly`.
 
@@ -268,6 +285,10 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
     suppress_errors:
         Add ignore comments for the type errors found (`pyrefly check
         --suppress-errors`) instead of failing on them.
+    prune_baseline:
+        Drop the baseline entries that match no error anymore (`pyrefly
+        check --prune-baseline`), in workspaces whose pyrefly
+        configuration sets a `baseline`.
     args:
         Additional arguments to pass to `pyrefly check`.
     base_container:
@@ -292,6 +313,8 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         raise _type_error("pyrefly", "remove_unused_ignores", remove_unused_ignores, "bool")
     if not (isinstance(suppress_errors, bool)):
         raise _type_error("pyrefly", "suppress_errors", suppress_errors, "bool")
+    if not (isinstance(prune_baseline, bool)):
+        raise _type_error("pyrefly", "prune_baseline", prune_baseline, "bool")
     if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
         raise _type_error("pyrefly", "args", args, "list[str] | None")
     if not (base_container is None or isinstance(base_container, Container)):
@@ -306,6 +329,7 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         _Arg("allExtras", all_extras, True),
         _Arg("removeUnusedIgnores", remove_unused_ignores, True),
         _Arg("suppressErrors", suppress_errors, False),
+        _Arg("pruneBaseline", prune_baseline, True),
         _Arg("args", args, None),
         _Arg("baseContainer", base_container, None),
         _Arg("uvCache", uv_cache, None),

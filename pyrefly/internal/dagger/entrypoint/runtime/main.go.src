@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -39,6 +40,8 @@ type PyreflyWorkspace struct {
 	RemoveUnusedIgnores bool
 	// +private
 	SuppressErrors bool
+	// +private
+	PruneBaseline bool
 	// +private
 	Args []string
 	// +private
@@ -98,8 +101,8 @@ func (m *PyreflyWorkspace) failure(err error) error {
 
 // Type check this workspace with `pyrefly check`, fixing what pyrefly can.
 //
-// The fixes are the module's `removeUnusedIgnores` and `suppressErrors`
-// settings: `dagger generate` applies them, and `dagger check --generated`
+// The fixes are the module's `removeUnusedIgnores`, `suppressErrors` and
+// `pruneBaseline` settings: `dagger generate` applies them, and `dagger check --generated`
 // fails while they would change a file. Fails when type errors remain.
 //
 // +generate
@@ -116,20 +119,79 @@ func (m *PyreflyWorkspace) Check(ctx context.Context) (*dagger.Changeset, error)
 	if m.SuppressErrors {
 		fixes = append(fixes, "--suppress-errors")
 	}
+	// pyrefly exits non-zero on the errors it found, even those it has just suppressed.
+	tolerant := dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny}
 	fixed := ctr
 	if len(fixes) > 0 {
-		// pyrefly exits non-zero on the errors it found, even those it has just suppressed.
-		fixed = ctr.WithExec(append(slices.Clone(check), fixes...), dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny})
+		fixed = fixed.WithExec(append(slices.Clone(check), fixes...), tolerant)
+	}
+	if m.PruneBaseline {
+		baseline, err := m.hasBaseline(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if baseline {
+			// On its own: it fails without touching a file when no baseline is configured after all.
+			fixed = fixed.WithExec(append(slices.Clone(check), "--prune-baseline"), tolerant)
+		}
 	}
 	fixed, err = fixed.WithExec(check).Sync(ctx)
 	if err != nil {
 		return nil, m.failure(err)
 	}
-	// Only pyrefly's edits differ: both sides come from the same container.
+	return m.changes(ctr, fixed, workdir), nil
+}
+
+// Record every type error pyrefly finds in the workspace's baseline file (`pyrefly check --update-baseline`).
+//
+// `check` then fails only on the errors that aren't in the baseline, which
+// lets a codebase adopt pyrefly before its existing errors are fixed. The
+// errors are those of the environment `check` runs in. Needs the `baseline`
+// option set in the workspace's pyrefly configuration.
+func (m *PyreflyWorkspace) UpdateBaseline(ctx context.Context) (*dagger.Changeset, error) {
+	ctr, workdir, err := m.container(ctx)
+	if err != nil {
+		return nil, err
+	}
+	check := append([]string{"pyrefly", "check"}, m.Args...)
+	// pyrefly exits non-zero on the errors it has just recorded. The plain check
+	// after it fails if they weren't, e.g. with no baseline configured.
+	updated, err := ctr.
+		WithExec(append(slices.Clone(check), "--update-baseline"), dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny}).
+		WithExec(check).
+		Sync(ctx)
+	if err != nil {
+		return nil, m.failure(err)
+	}
+	return m.changes(ctr, updated, workdir), nil
+}
+
+// changes returns pyrefly's edits to the workspace: both sides come from the same container, so nothing else differs.
+func (m *PyreflyWorkspace) changes(before, after *dagger.Container, workdir string) *dagger.Changeset {
 	at := func(c *dagger.Container) *dagger.Directory {
 		return core.NewDirectory().WithDirectory(m.Path, c.Directory(workdir), dagger.DirectoryWithDirectoryOpts{Exclude: []string{".venv"}})
 	}
-	return at(fixed).Changes(at(ctr)), nil
+	return at(after).Changes(at(before))
+}
+
+// The `baseline` option of a pyrefly configuration.
+var baselineOption = regexp.MustCompile(`(?m)^\s*baseline\s*=`)
+
+// hasBaseline reports whether the configuration at the workspace root sets a baseline file.
+func (m *PyreflyWorkspace) hasBaseline(ctx context.Context) (bool, error) {
+	root := m.Inputs.Directory(m.Path)
+	entries, err := root.Entries(ctx)
+	if err != nil {
+		return false, err
+	}
+	// pyrefly.toml takes precedence over pyproject.toml.
+	for _, name := range []string{"pyrefly.toml", "pyproject.toml"} {
+		if slices.Contains(entries, name) {
+			config, err := root.File(name).Contents(ctx)
+			return baselineOption.MatchString(config), err
+		}
+	}
+	return false, nil
 }
 
 // The uv workspaces pyrefly checks, keyed by root.
@@ -196,6 +258,9 @@ func New(
 	// Add ignore comments for the type errors found (`pyrefly check --suppress-errors`) instead of failing on them.
 	// +default=false
 	suppressErrors bool,
+	// Drop the baseline entries that match no error anymore (`pyrefly check --prune-baseline`), in workspaces whose pyrefly configuration sets a `baseline`.
+	// +default=true
+	pruneBaseline bool,
 	// Additional arguments to pass to `pyrefly check`.
 	// +optional
 	args []string,
@@ -229,6 +294,7 @@ func New(
 				AllExtras:           allExtras,
 				RemoveUnusedIgnores: removeUnusedIgnores,
 				SuppressErrors:      suppressErrors,
+				PruneBaseline:       pruneBaseline,
 				Args:                args,
 				BaseContainer:       baseContainer,
 			}

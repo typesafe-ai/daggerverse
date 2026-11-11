@@ -113,6 +113,10 @@ type ModuleTypes {
             .withDescription("A base container whose working directory is `/` still checks only the workspace.")
         )
         .withFunction(
+          function("pyrefly_baseline", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`update_baseline` records the type errors, `check` then passes, and prunes the entries once fixed.")
+        )
+        .withFunction(
           function("pyrefly_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("The `check` generator changes nothing in a workspace with nothing to fix.")
         )

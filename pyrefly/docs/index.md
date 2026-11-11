@@ -46,7 +46,27 @@ when type errors remain after the fixes.
 | Setting | Default | Fix |
 |---------|---------|-----|
 | `removeUnusedIgnores` | `true` | Remove the ignore comments that suppress nothing (`--remove-unused-ignores`). |
-| `suppressErrors` | `false` | Add an ignore comment for each type error (`--suppress-errors`) instead of failing on it. Useful to adopt pyrefly in an existing codebase. |
+| `suppressErrors` | `false` | Add an ignore comment for each type error (`--suppress-errors`) instead of failing on it. |
+| `pruneBaseline` | `true` | Drop the baseline entries that match no error anymore (`--prune-baseline`), in workspaces that set a `baseline`. |
+
+## Adopting pyrefly in an existing codebase
+
+A [baseline](https://pyrefly.org/en/docs/error-suppressions/#baseline-files-experimental)
+records the errors a codebase already has, so `check` fails only on new ones.
+Set the file in the workspace's pyrefly configuration:
+
+```toml title="pyproject.toml"
+[tool.pyrefly]
+baseline = "pyrefly-baseline.json"
+```
+
+Then record the errors, in the same environment `check` runs in:
+
+```console
+$ dagger -c 'pyrefly | workspaces | get . | update-baseline'
+```
+
+`check` keeps the baseline pruned as the errors get fixed.
 
 ## Configuration
 
@@ -64,6 +84,7 @@ extras = ["api"]
 # The fixes `check` applies.
 removeUnusedIgnores = true
 suppressErrors = false
+pruneBaseline = true
 # Additional arguments to pass to `pyrefly check`.
 args = ["--min-severity", "warn"]
 ```

@@ -41,12 +41,13 @@ type functionSpec struct {
 }
 
 var functions = []functionSpec{
-	{Name: "pyrefly", Receiver: "Pyrefly", FnName: "", Args: map[string]argumentSpec{"ws": {Required: false, Default: "", Encoding: "string"}, "exclude": {Required: false, Default: "", Encoding: "json"}, "groups": {Required: false, Default: "", Encoding: "json"}, "extras": {Required: false, Default: "", Encoding: "json"}, "allExtras": {Required: false, Default: "true", Encoding: "json"}, "removeUnusedIgnores": {Required: false, Default: "true", Encoding: "json"}, "suppressErrors": {Required: false, Default: "false", Encoding: "json"}, "args": {Required: false, Default: "", Encoding: "json"}, "baseContainer": {Required: false, Default: "", Encoding: "string"}, "uvCache": {Required: false, Default: "", Encoding: "string"}}},
+	{Name: "pyrefly", Receiver: "Pyrefly", FnName: "", Args: map[string]argumentSpec{"ws": {Required: false, Default: "", Encoding: "string"}, "exclude": {Required: false, Default: "", Encoding: "json"}, "groups": {Required: false, Default: "", Encoding: "json"}, "extras": {Required: false, Default: "", Encoding: "json"}, "allExtras": {Required: false, Default: "true", Encoding: "json"}, "removeUnusedIgnores": {Required: false, Default: "true", Encoding: "json"}, "suppressErrors": {Required: false, Default: "false", Encoding: "json"}, "pruneBaseline": {Required: false, Default: "true", Encoding: "json"}, "args": {Required: false, Default: "", Encoding: "json"}, "baseContainer": {Required: false, Default: "", Encoding: "string"}, "uvCache": {Required: false, Default: "", Encoding: "string"}}},
 	{Name: "workspaces", Receiver: "Pyrefly", FnName: "Workspaces", Args: map[string]argumentSpec{}},
 	{Name: "pyreflyWorkspaces", Receiver: "PyreflyWorkspaces", FnName: "", Args: map[string]argumentSpec{}},
 	{Name: "workspace", Receiver: "PyreflyWorkspaces", FnName: "Workspace", Args: map[string]argumentSpec{"path": {Required: true, Default: "", Encoding: "string"}}},
 	{Name: "pyreflyWorkspace", Receiver: "PyreflyWorkspace", FnName: "", Args: map[string]argumentSpec{}},
 	{Name: "check", Receiver: "PyreflyWorkspace", FnName: "Check", Args: map[string]argumentSpec{}},
+	{Name: "updateBaseline", Receiver: "PyreflyWorkspace", FnName: "UpdateBaseline", Args: map[string]argumentSpec{}},
 }
 
 func main() {
