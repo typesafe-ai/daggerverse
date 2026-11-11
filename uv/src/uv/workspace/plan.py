@@ -21,6 +21,7 @@ from uv.utils import (
 )
 from uv.workspace.build_backends import PackageBackend
 from uv.workspace.build_backends.handler import BuildBackendHandler, BuildBackendLayout
+from uv.workspace.build_backends.paths import rooted
 
 
 def _match_reachable(
@@ -144,6 +145,7 @@ class LocalPackage:
         int | None,
         Doc("Index of the plan's `handlers` entry for this package's backend; null for built-in support"),
     ] = field(default=None)
+    root: Annotated[str, Doc("Path relative to the Dagger workspace root")] = field(default=".")
 
     @property
     def build_backend(self) -> PackageBackend:
@@ -169,8 +171,11 @@ class LocalPackage:
 
     @property
     def build_inputs(self) -> list[str]:
-        """Package-relative files (or globs) staged into the scaffold for the backend."""
-        return self.build_backend.build_inputs
+        """Files (or globs) staged into the scaffold for the backend.
+
+        Package-relative, or `/`-prefixed and workspace-root-relative for those outside the package.
+        """
+        return [rooted(self.root, path) for path in self.build_backend.build_inputs]
 
 
 @object_type
@@ -319,6 +324,7 @@ class UvSyncPlan:
                     flat=posixpath.normpath(posixpath.join(resolved, "src", top)) not in src_entries,
                     pyproject_contents=contents,
                     source=project_sources.get(resolved, source_dir),
+                    root=resolved,
                     layout=layout,
                     handler=handler,
                 )
