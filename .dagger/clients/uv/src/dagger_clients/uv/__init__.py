@@ -3107,6 +3107,23 @@ class UvWorkspaceBuilder(_Type):
         _ctx = self._select("copyVenv", _args)
         return Container(_ctx)
 
+    async def exact(self) -> bool:
+        """Returns
+        -------
+        bool
+            The `Boolean` scalar type represents `true` or `false`.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("exact", _args)
+        return await _ctx.execute(bool)
+
     async def extras(self) -> list[str] | None:
         """Returns
         -------
@@ -3402,6 +3419,19 @@ class UvWorkspaceBuilder(_Type):
         _ctx = self._select("withDependencies", _args)
         return UvWorkspaceBuilder(_ctx)
 
+    def with_exact(self) -> _Self:
+        """
+        This builder syncing exactly: `uv sync` removes packages the selection
+        doesn't install.
+
+        By default the sync is inexact (`uv sync --inexact`), so packages
+        already in the
+        environment, such as ones installed on the base container, stay.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("withExact", _args)
+        return UvWorkspaceBuilder(_ctx)
+
     def with_extras(self, extras: list[str]) -> _Self:
         """
         This builder with `extras` added to the selection (`uv sync --extra`).
@@ -3468,8 +3498,11 @@ class UvWorkspaceBuilder(_Type):
         This builder leaving `packages` uninstalled (`uv sync --no-install-
         package`), though they stay locked.
 
-        E.g. to install a different build of a package after the sync, such as
-        CPU-only torch in place of the locked CUDA one.
+        E.g. to use a different build of a package, such as CPU-only torch in
+        place
+        of the locked CUDA one. The sync is inexact unless `with_exact`, so a
+        build
+        installed on the base container before the sync stays.
 
         Parameters
         ----------

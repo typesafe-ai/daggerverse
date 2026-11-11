@@ -371,6 +371,7 @@ type ModuleTypes {
         .withField("all_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
         .withField("no_default_groups", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
         .withField("no_editable", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
+        .withField("exact", typeDef.withKind(TypeDefKind.BOOLEAN_KIND))
         .withField("no_install_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
         .withField("plan", typeDef.withOptional(true).withObject("UvSyncPlan"))
         .withFunction(
@@ -424,6 +425,10 @@ type ModuleTypes {
             .withArg("lock_timeout", typeDef.withKind(TypeDefKind.INTEGER_KIND), description: "Seconds uv waits to acquire the cache file lock (`UV_LOCK_TIMEOUT`) while pruning the cache.", defaultValue: ("600" :: Dagger.JSON!))
         )
         .withFunction(
+          function("with_exact", typeDef.withObject("UvWorkspaceBuilder"))
+            .withDescription("This builder syncing exactly: `uv sync` removes packages the selection doesn't install.\n\nBy default the sync is inexact (`uv sync --inexact`), so packages already in the\nenvironment, such as ones installed on the base container, stay.")
+        )
+        .withFunction(
           function("with_extras", typeDef.withObject("UvWorkspaceBuilder"))
             .withDescription("This builder with `extras` added to the selection (`uv sync --extra`).")
             .withArg("extras", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Extras to install; passed to `uv sync` as repeated `--extra`")
@@ -439,7 +444,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("with_no_install_packages", typeDef.withObject("UvWorkspaceBuilder"))
-            .withDescription("This builder leaving `packages` uninstalled (`uv sync --no-install-package`), though they stay locked.\n\nE.g. to install a different build of a package after the sync, such as\nCPU-only torch in place of the locked CUDA one.")
+            .withDescription("This builder leaving `packages` uninstalled (`uv sync --no-install-package`), though they stay locked.\n\nE.g. to use a different build of a package, such as CPU-only torch in place\nof the locked CUDA one. The sync is inexact unless `with_exact`, so a build\ninstalled on the base container before the sync stays.")
             .withArg("packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Packages to leave uninstalled; passed to `uv sync` as repeated `--no-install-package`")
         )
         .withFunction(

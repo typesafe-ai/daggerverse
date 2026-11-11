@@ -263,6 +263,7 @@ class UvSyncPlan:
         all_packages: bool = False,
         no_editable: bool = False,
         no_default_groups: bool = False,
+        exact: bool = False,
         handlers: list[BuildBackendHandler] | None = None,
     ) -> Self:
         """Parse uv.lock and resolve all build configuration up front.
@@ -352,6 +353,7 @@ class UvSyncPlan:
             all_packages=all_packages,
             no_editable=no_editable,
             no_default_groups=no_default_groups,
+            exact=exact,
         )
 
         return cls(
@@ -404,6 +406,7 @@ class UvSyncPlanner:
         all_packages: bool = False,
         no_default_groups: bool = False,
         no_editable: bool = False,
+        exact: bool = False,
     ) -> UvSyncPlan:
         """The sync plan for a package selection, with the handlers' root inputs loaded."""
         with get_tracer().start_as_current_span("resolve sync plan") as span:
@@ -424,6 +427,7 @@ class UvSyncPlanner:
                 all_packages=all_packages,
                 no_editable=no_editable,
                 no_default_groups=no_default_groups,
+                exact=exact,
                 handlers=self.handlers,
             )
             span.set_attribute("uv.sync_args", plan.uv_sync_args)

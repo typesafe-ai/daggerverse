@@ -114,6 +114,28 @@ platform and libc of the resulting environment.
 !!! tip
     If your custom base doesn't ship `uv`, the module installs it from the official image (`auto_install_uv=True` by default). You can also call `with_uv` yourself in the pipeline.
 
+### Packages on the base container
+
+`uv sync` runs with `--inexact`, so packages already installed on the base container
+stay. Install a different build of a locked package on the base, such as CPU-only
+`torch` in place of the CUDA one, and leave it out of the sync with
+`with_no_install_packages`. Its layer then sits below the dependency install and
+survives lock and source changes:
+
+```python
+base = base.with_exec(["uv", "pip", "install", "--no-deps", "torch==2.9.1+cpu", ...])
+ctr = (
+    uv(ws)
+    .workspace(".")
+    .builder(base_container=base)
+    .with_no_install_packages(["torch"])
+    .with_dependencies()
+    .container()
+)
+```
+
+Call `with_exact` to have `uv sync` remove packages the selection doesn't install.
+
 ### Caching
 
 By default, the module mounts a Dagger cache volume at `/mnt/cache/uv` and sets

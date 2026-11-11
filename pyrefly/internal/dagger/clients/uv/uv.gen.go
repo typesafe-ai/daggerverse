@@ -2939,6 +2939,7 @@ type UvWorkspaceBuilder struct { // uv (../../:0:0)
 	allExtras       *bool
 	allGroups       *bool
 	allPackages     *bool
+	exact           *bool
 	id              *ID
 	noDefaultGroups *bool
 	noEditable      *bool
@@ -3066,6 +3067,18 @@ func (r *UvWorkspaceBuilder) CopyVenv(container *Container, opts ...UvWorkspaceB
 	q = q.Arg("container", container)
 
 	return new(Container).WithGraphQLQuery(q)
+}
+
+func (r *UvWorkspaceBuilder) Exact(ctx context.Context) (bool, error) { // uv (../../:0:0)
+	if r.exact != nil {
+		return *r.exact, nil
+	}
+	q := r.query.Select("exact")
+
+	var response bool
+
+	q = q.Bind(&response)
+	return response, q.Execute(ctx)
 }
 
 func (r *UvWorkspaceBuilder) Extras(ctx context.Context) ([]string, error) { // uv (../../:0:0)
@@ -3373,6 +3386,19 @@ func (r *UvWorkspaceBuilder) WithDependencies(opts ...UvWorkspaceBuilderWithDepe
 	}
 }
 
+// This builder syncing exactly: `uv sync` removes packages the selection doesn't install.
+//
+// By default the sync is inexact (`uv sync --inexact`), so packages already in the
+// environment, such as ones installed on the base container, stay.
+func (r *UvWorkspaceBuilder) WithExact() *UvWorkspaceBuilder { // uv (../../:0:0)
+	q := r.query.Select("withExact")
+
+	return &UvWorkspaceBuilder{
+		query:     q,
+		refetchID: r.refetchID,
+	}
+}
+
 // This builder with `extras` added to the selection (`uv sync --extra`).
 func (r *UvWorkspaceBuilder) WithExtras(extras []string) *UvWorkspaceBuilder { // uv (../../:0:0)
 	q := r.query.Select("withExtras")
@@ -3417,8 +3443,9 @@ func (r *UvWorkspaceBuilder) WithLocalDependencies() *UvWorkspaceBuilder { // uv
 
 // This builder leaving `packages` uninstalled (`uv sync --no-install-package`), though they stay locked.
 //
-// E.g. to install a different build of a package after the sync, such as
-// CPU-only torch in place of the locked CUDA one.
+// E.g. to use a different build of a package, such as CPU-only torch in place
+// of the locked CUDA one. The sync is inexact unless `with_exact`, so a build
+// installed on the base container before the sync stays.
 func (r *UvWorkspaceBuilder) WithNoInstallPackages(packages []string) *UvWorkspaceBuilder { // uv (../../:0:0)
 	q := r.query.Select("withNoInstallPackages")
 	q = q.Arg("packages", packages)
