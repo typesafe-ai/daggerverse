@@ -71,6 +71,14 @@ group = '"lint"'
 args = ["--no-ansi"]
 ```
 
+A project overrides `args` in its own `pyproject.toml`. Without the table, it
+keeps the module's setting:
+
+```toml title="pyproject.toml"
+[tool.typesafe_daggerverse.deptry]
+args = ["--per-rule-ignores", "DEP002=pytest"]
+```
+
 ## Where to go next
 
 - [SDK reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/deptry)

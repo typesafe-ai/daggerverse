@@ -37,6 +37,15 @@ strict = true
 The `base-container` option sets the container the environment is built on, for example
 one that carries private index credentials.
 
+A site overrides `groups`, `extras` and `strict` in the `pyproject.toml` next to its
+`zensical.toml`. A key it leaves out keeps the module's setting:
+
+```toml title="pyproject.toml"
+[tool.typesafe_daggerverse.zensical]
+groups = ["docs", "api-docs"]
+strict = false
+```
+
 ## Build a site
 
 `site` returns the generated site directory, for example to deploy it:

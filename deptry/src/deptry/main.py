@@ -5,7 +5,7 @@ import posixpath
 import re
 import tomllib
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import dagger
 from dagger import Doc, check, collection, field, function, get, keys, object_type
@@ -97,6 +97,27 @@ def _project_info(pyproject_content: str) -> tuple[bool, str | None, bool]:
     module = _to_module_name(name) if isinstance(name, str) else None
     configured = "deptry" in data.get("tool", {})
     return True, module, configured
+
+
+# The settings a project overrides in its own `pyproject.toml`.
+_OWN_SETTINGS = {"args"}
+
+
+def _own_settings(pyproject_content: str | None) -> dict[str, Any]:
+    """The module settings a `pyproject.toml` overrides in its `[tool.typesafe_daggerverse.deptry]` table.
+
+    A key that is no setting is an error, so a typo doesn't pass for a setting left at its default.
+    """
+    if pyproject_content is None:
+        return {}
+    try:
+        table = tomllib.loads(pyproject_content).get("tool", {}).get("typesafe_daggerverse", {}).get("deptry", {})
+    except tomllib.TOMLDecodeError:
+        return {}
+    if unknown := sorted(set(table) - _OWN_SETTINGS):
+        msg = f"[tool.typesafe_daggerverse.deptry] has no setting {', '.join(unknown)}; it takes {', '.join(sorted(_OWN_SETTINGS))}"
+        raise ValueError(msg)
+    return table
 
 
 async def _has_package_layout(workspace: Workspace, path: str, module: str | None) -> bool:
@@ -298,6 +319,9 @@ class Deptry:
         members in subdirectories) is left out, unless its `[tool.deptry]`
         section opts it in explicitly. Paths matching `exclude` are left out too.
 
+        A project overrides `args` in the `[tool.typesafe_daggerverse.deptry]`
+        table of its `pyproject.toml`.
+
         The workspace is walked on the host, and only the pyproject.toml files
         are loaded.
         """
@@ -323,7 +347,8 @@ class Deptry:
             path, files_include, files_exclude, workspace = await asyncio.gather(
                 project.path(), project.files_include(), project.files_exclude(), project.workspace()
             )
-            checkable, module, configured = _project_info(await project.pyproject().contents())
+            contents = await project.pyproject().contents()
+            checkable, module, configured = _project_info(contents)
             if checkable and (configured or await _has_package_layout(ws, path, module)):
                 files = ws.directory("/", include=files_include, exclude=files_exclude, gitignore=True)
                 if workspace is not None and workspace not in locks:
@@ -336,7 +361,7 @@ class Deptry:
                     files=files,
                     lock=await locks[workspace] if workspace is not None else None,
                     base=base,
-                    args=args or [],
+                    args=_own_settings(contents).get("args", args or []),
                 )
             return None
 

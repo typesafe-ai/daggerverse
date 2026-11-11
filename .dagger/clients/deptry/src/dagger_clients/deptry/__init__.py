@@ -312,6 +312,9 @@ def deptry(ws: Workspace, *, exclude: list[str] | None = None, group: str = 'dev
     section opts it in explicitly. Paths matching `exclude` are left out
     too.
 
+    A project overrides `args` in the `[tool.typesafe_daggerverse.deptry]`
+    table of its `pyproject.toml`.
+
     The workspace is walked on the host, and only the pyproject.toml files
     are loaded.
 

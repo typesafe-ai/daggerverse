@@ -1465,6 +1465,7 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.zensical_discovers_projects)
             tg.start_soon(self.zensical_builds_module_docs)
             tg.start_soon(self.zensical_strict_fails_on_broken_link)
+            tg.start_soon(self.zensical_site_settings)
 
     @function
     async def zensical_discovers_projects(self) -> None:
@@ -1520,6 +1521,7 @@ print("LAYER_CACHE_OK")
             self.deptry_clean_flat_layout,
             self.deptry_clean_src_layout,
             self.deptry_detects_issue,
+            self.deptry_project_settings,
             self.deptry_subset,
             self.deptry_projects_exclude,
             self.deptry_config_opts_in_nonstandard_layout,
@@ -1622,6 +1624,28 @@ print("LAYER_CACHE_OK")
         await self._deptry_check_all(src)
 
     @function
+    async def deptry_project_settings(self) -> None:
+        """A project's `[tool.typesafe_daggerverse.deptry]` table overrides the module's `args`."""
+        pyproject = '[project]\nname = "badpkg"\nversion = "0"\ndependencies = ["requests"]\n'
+        sources = {"src/badpkg/__init__.py": "x = 1\n"}
+        # The unused dependency fails the check (see `deptry_detects_issue`) unless the project ignores the rule.
+        table = '\n[tool.typesafe_daggerverse.deptry]\nargs = ["--ignore", "DEP002"]\n'
+        await self._deptry_check_all(self._deptry_project(pyproject + table, sources))
+        try:
+            await (
+                deptry(
+                    self._deptry_project(
+                        pyproject + "\n[tool.typesafe_daggerverse.deptry]\nversion = 1\n", sources
+                    ).as_workspace()
+                )
+                .projects()
+                .keys()
+            )
+        except QueryError:
+            return
+        raise AssertionError("expected a key that is no project setting to fail")
+
+    @function
     async def deptry_detects_issue(self) -> None:
         """A project with an unused dependency fails the check."""
         src = self._deptry_project(
@@ -1692,3 +1716,14 @@ print("LAYER_CACHE_OK")
         projects = await deptry(src.as_workspace()).projects().keys()
         if projects:
             raise AssertionError(f"expected no projects, got {projects}")
+
+    @function
+    async def zensical_site_settings(self) -> None:
+        """A site's `[tool.typesafe_daggerverse.zensical]` table overrides the module's settings."""
+        src = _src("deptry")
+        pyproject = await src.file("pyproject.toml").contents()
+        # The broken link fails the strict build (see `zensical_strict_fails_on_broken_link`).
+        src = src.with_new_file("docs/index.md", "[broken](missing.md)\n").with_new_file(
+            "pyproject.toml", f"{pyproject}\n[tool.typesafe_daggerverse.zensical]\nstrict = false\n"
+        )
+        await _run_check(zensical(src.as_workspace()).projects().get(".").check())

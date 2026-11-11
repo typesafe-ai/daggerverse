@@ -280,6 +280,11 @@ def zensical(ws: Workspace, *, groups: list[str] | None = None, extras: list[str
     Only the `zensical.toml`, `pyproject.toml` and `.gitignore` files are
     read.
 
+    A site overrides `groups`, `extras` and `strict` in the
+    `[tool.typesafe_daggerverse.zensical]` table of the `pyproject.toml`
+    next
+    to its `zensical.toml`.
+
     Parameters
     ----------
     ws:

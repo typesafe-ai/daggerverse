@@ -33,7 +33,7 @@ type ModuleTypes {
         )
         .withConstructor(
           function("", typeDef.withObject("Zensical"))
-            .withDescription("Discover the docs sites: one per `zensical.toml` outside `exclude`.\n\nOnly the `zensical.toml`, `pyproject.toml` and `.gitignore` files are read.")
+            .withDescription("Discover the docs sites: one per `zensical.toml` outside `exclude`.\n\nOnly the `zensical.toml`, `pyproject.toml` and `.gitignore` files are read.\n\nA site overrides `groups`, `extras` and `strict` in the\n`[tool.typesafe_daggerverse.zensical]` table of the `pyproject.toml` next\nto its `zensical.toml`.")
             .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or\nconstructed from a Directory.")
             .withArg("groups", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "uv dependency groups to install for the build. They must provide `zensical`. Defaults to `docs`.", defaultValue: ("null" :: Dagger.JSON!))
             .withArg("extras", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Extras of the docs' package to install for the build.", defaultValue: ("null" :: Dagger.JSON!))
