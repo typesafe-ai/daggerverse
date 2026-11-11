@@ -3835,6 +3835,29 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("inputs", _args)
         return Directory(_ctx)
 
+    async def locked_packages(self) -> list[str]:
+        """
+        The names of every package in the workspace's `uv.lock`, sorted, its
+        members included.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("lockedPackages", _args)
+        return await _ctx.execute(list[str])
+
     def manifests(self) -> Directory:
         """Only what resolving the workspace reads: uv.lock, uv.toml and the
         members' pyproject.toml files.

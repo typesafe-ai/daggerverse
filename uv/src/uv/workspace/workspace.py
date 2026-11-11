@@ -182,6 +182,12 @@ class UvWorkspaceSource:
             return None
         return (await ws.file(".python-version").contents()).strip()
 
+    @function
+    async def locked_packages(self) -> list[str]:
+        """The names of every package in the workspace's `uv.lock`, sorted, its members included."""
+        lock = tomllib.loads(await self._ws_dir().file("uv.lock").contents())
+        return sorted({package["name"] for package in lock.get("package", [])})
+
     @staticmethod
     def _member_paths_from(pyproject_data: dict, all_pyprojects: list[str]) -> list[str]:
         members_globs = pyproject_data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])

@@ -33,7 +33,7 @@ everything in an order that caches well, so you don't assemble the build context
       for one workspace by path (`workspace`) or for the collection of every workspace
       it finds (`workspaces`).
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
-      you can read the required `uv` version, `audit` it (a generator), or get a `builder` for its packages.
+      you can read the required `uv` version, list its `locked_packages`, `audit` it (a generator), or get a `builder` for its packages.
     - **`UvWorkspaceBuilder`** builds the workspace's packages: a container with its Python
       environment ready, the package selection (`with_packages`, `with_extras`,
       `with_groups`) and the sync plan resolved from it. `with_dependencies` installs

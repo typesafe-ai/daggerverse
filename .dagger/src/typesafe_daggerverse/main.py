@@ -241,6 +241,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_selective_group", self.uv_workspace_standalone_selective_group)
             tg.start_soon(_run, "no_install_packages", self.uv_workspace_no_install_packages)
+            tg.start_soon(_run, "locked_packages", self.uv_workspace_locked_packages)
             tg.start_soon(
                 _run, "full_workspace_all_extras_all_groups", self.uv_workspace_full_workspace_all_extras_all_groups
             )
@@ -1016,6 +1017,14 @@ print("LAYER_CACHE_OK")
         )
         script = _assert_modules_script(present=["standalone_app"], absent=["tabulate"])
         await ctr.with_exec(["python", "-c", script]).stdout()
+
+    @function
+    async def uv_workspace_locked_packages(self) -> None:
+        """`locked_packages` lists every package in `uv.lock`, the workspace's own included."""
+        packages = await uv(_fixture("uv/tests/_packages/standalone-app")).workspace(".").locked_packages()
+        expected = ["idna", "packaging", "six", "standalone-app", "tabulate"]
+        if packages != expected:
+            raise AssertionError(f"expected {expected}, got {packages}")
 
     @function
     async def uv_workspace_full_workspace_all_extras_all_groups(self) -> None:
