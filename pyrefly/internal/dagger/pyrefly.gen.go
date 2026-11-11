@@ -371,6 +371,8 @@ type PyreflyOpts struct {
 	//
 	// Default: true
 	AllExtras bool
+	// Packages to leave out of the environment, e.g. ones with no wheel for the platform or too heavy to install just to type check. Their imports don't resolve.
+	NoInstallPackages []string
 	// Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).
 	//
 	// Default: true
@@ -408,6 +410,10 @@ func (r *Query) Pyrefly(ws *Workspace, opts ...PyreflyOpts) *Pyrefly { // pyrefl
 		// `allExtras` optional argument
 		if !querybuilder.IsZeroValue(opts[i].AllExtras) {
 			q = q.Arg("allExtras", opts[i].AllExtras)
+		}
+		// `noInstallPackages` optional argument
+		if !querybuilder.IsZeroValue(opts[i].NoInstallPackages) {
+			q = q.Arg("noInstallPackages", opts[i].NoInstallPackages)
 		}
 		// `removeUnusedIgnores` optional argument
 		if !querybuilder.IsZeroValue(opts[i].RemoveUnusedIgnores) {

@@ -259,7 +259,7 @@ class PyreflyWorkspaces(_Type):
 
 
 
-def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, remove_unused_ignores: bool = True, suppress_errors: bool = False, prune_baseline: bool = True, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
+def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, no_install_packages: list[str] | None = None, remove_unused_ignores: bool = True, suppress_errors: bool = False, prune_baseline: bool = True, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
     """
     Discovers the uv workspaces that lock `pyrefly`.
 
@@ -279,6 +279,10 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         Extras to install when `allExtras` is off.
     all_extras:
         Install every extra.
+    no_install_packages:
+        Packages to leave out of the environment, e.g. ones with no wheel
+        for the platform or too heavy to install just to type check. Their
+        imports don't resolve.
     remove_unused_ignores:
         Remove the ignore comments that suppress nothing (`pyrefly check
         --remove-unused-ignores`).
@@ -309,6 +313,8 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         raise _type_error("pyrefly", "extras", extras, "list[str] | None")
     if not (isinstance(all_extras, bool)):
         raise _type_error("pyrefly", "all_extras", all_extras, "bool")
+    if not (no_install_packages is None or (isinstance(no_install_packages, list) and all(isinstance(_v0, str) for _v0 in no_install_packages))):
+        raise _type_error("pyrefly", "no_install_packages", no_install_packages, "list[str] | None")
     if not (isinstance(remove_unused_ignores, bool)):
         raise _type_error("pyrefly", "remove_unused_ignores", remove_unused_ignores, "bool")
     if not (isinstance(suppress_errors, bool)):
@@ -327,6 +333,7 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         _Arg("groups", groups, None),
         _Arg("extras", extras, None),
         _Arg("allExtras", all_extras, True),
+        _Arg("noInstallPackages", no_install_packages, None),
         _Arg("removeUnusedIgnores", remove_unused_ignores, True),
         _Arg("suppressErrors", suppress_errors, False),
         _Arg("pruneBaseline", prune_baseline, True),

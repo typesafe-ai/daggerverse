@@ -81,6 +81,8 @@ groups = ["typing"]
 # Every extra is installed by default. Turn that off to install only `extras`.
 allExtras = false
 extras = ["api"]
+# Packages to leave out of the environment. Their imports don't resolve.
+noInstallPackages = ["my-gpu-kernels"]
 # The fixes `check` applies.
 removeUnusedIgnores = true
 suppressErrors = false

@@ -96,6 +96,7 @@ func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 		Groups              []string
 		Extras              []string
 		AllExtras           bool
+		NoInstallPackages   []string
 		RemoveUnusedIgnores bool
 		SuppressErrors      bool
 		PruneBaseline       bool
@@ -108,6 +109,7 @@ func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 	concrete.Groups = r.Groups
 	concrete.Extras = r.Extras
 	concrete.AllExtras = r.AllExtras
+	concrete.NoInstallPackages = r.NoInstallPackages
 	concrete.RemoveUnusedIgnores = r.RemoveUnusedIgnores
 	concrete.SuppressErrors = r.SuppressErrors
 	concrete.PruneBaseline = r.PruneBaseline
@@ -124,6 +126,7 @@ func (r *PyreflyWorkspace) UnmarshalJSON(bs []byte) error {
 		Groups              []string
 		Extras              []string
 		AllExtras           bool
+		NoInstallPackages   []string
 		RemoveUnusedIgnores bool
 		SuppressErrors      bool
 		PruneBaseline       bool
@@ -140,6 +143,7 @@ func (r *PyreflyWorkspace) UnmarshalJSON(bs []byte) error {
 	r.Groups = concrete.Groups
 	r.Extras = concrete.Extras
 	r.AllExtras = concrete.AllExtras
+	r.NoInstallPackages = concrete.NoInstallPackages
 	r.RemoveUnusedIgnores = concrete.RemoveUnusedIgnores
 	r.SuppressErrors = concrete.SuppressErrors
 	r.PruneBaseline = concrete.PruneBaseline
@@ -218,6 +222,13 @@ func DaggerDispatch(ctx context.Context, parentJSON []byte, parentName string, f
 					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg allExtras", err))
 				}
 			}
+			var noInstallPackages []string
+			if inputArgs["noInstallPackages"] != nil {
+				err = json.Unmarshal([]byte(inputArgs["noInstallPackages"]), &noInstallPackages)
+				if err != nil {
+					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg noInstallPackages", err))
+				}
+			}
 			var removeUnusedIgnores bool
 			if inputArgs["removeUnusedIgnores"] != nil {
 				err = json.Unmarshal([]byte(inputArgs["removeUnusedIgnores"]), &removeUnusedIgnores)
@@ -260,7 +271,7 @@ func DaggerDispatch(ctx context.Context, parentJSON []byte, parentName string, f
 					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg uvCache", err))
 				}
 			}
-			return New(ctx, ws, exclude, groups, extras, allExtras, removeUnusedIgnores, suppressErrors, pruneBaseline, args, baseContainer, uvCache)
+			return New(ctx, ws, exclude, groups, extras, allExtras, noInstallPackages, removeUnusedIgnores, suppressErrors, pruneBaseline, args, baseContainer, uvCache)
 		default:
 			return nil, fmt.Errorf("unknown function %s", fnName)
 		}

@@ -1,12 +1,12 @@
 {
   "version": 1,
   "files": {
-    "cmd/pyrefly-dispatch/main.go": "23349965ff683ed9d316ac8de3e482b2b091b3962405e92c8f0364668d45d080",
-    "dagger.gen.go": "f097efc2950037fef499106f1349aa02df058a5d7732ceeb3e17a25f95a46b5b",
+    "cmd/pyrefly-dispatch/main.go": "0811c2e0f2563d30a77b19715efc79892d7152a48c3fb6e287e93a73614e025d",
+    "dagger.gen.go": "310d6b7a0401fc29506925eb0e75bef17131e1c4774874690069a0bf0129816f",
     "internal/dagger/dagger.gen.go": "3064bed100544d70ac59e088b49d44a8ebc3d5f4ef18308b4398fec150ea476a",
-    "internal/dagger/entrypoint/main.dang": "3932a5c7707877398ab48162c443c7fbb9d59d62b48e4004281918bd320f878d",
-    "internal/dagger/entrypoint/runtime/dagger.gen.go.src": "951733a675f73345fbe8644e457e6056edcb6206c5b50e2eb15ed6aedbdd3efc",
-    "internal/dagger/entrypoint/runtime/main.go.src": "d1e1e81f3e9f0aa04ce67f60181c1d66808396846d5506b8f644e1e6f7c76453",
-    "internal/dagger/pyrefly.gen.go": "c5664e5793a8136af6927d0b9c645c2b211f59667b128a07458bf9f7f14b0b2c"
+    "internal/dagger/entrypoint/main.dang": "689f809a1150abee1f3c2274d716f5b0693b4d7281710fa094d8528fc56ce6f3",
+    "internal/dagger/entrypoint/runtime/dagger.gen.go.src": "4142020e73969fd4b1f770c335e463f39b437c04cf508d090ca3e3847f5b7f9b",
+    "internal/dagger/entrypoint/runtime/main.go.src": "23dbaa51ad770372056039b4aff9bf2600d5761c12d17898e35d54c0e8f845ac",
+    "internal/dagger/pyrefly.gen.go": "0b0c4ccf56178f5c5ea83ddd88e94dbb332dc07ffa2560b6dc00923947c223a5"
   }
 }

@@ -36,6 +36,8 @@ type PyreflyWorkspace struct {
 	// +private
 	AllExtras bool
 	// +private
+	NoInstallPackages []string
+	// +private
 	RemoveUnusedIgnores bool
 	// +private
 	SuppressErrors bool
@@ -68,6 +70,9 @@ func (m *PyreflyWorkspace) container(ctx context.Context) (*dagger.Container, st
 		builder = builder.WithAllExtras()
 	} else if len(m.Extras) > 0 {
 		builder = builder.WithExtras(m.Extras)
+	}
+	if len(m.NoInstallPackages) > 0 {
+		builder = builder.WithNoInstallPackages(m.NoInstallPackages)
 	}
 	ctr := builder.WithDependencies().Container()
 	workdir, err := ctr.Workdir(ctx)
@@ -250,6 +255,9 @@ func New(
 	// Install every extra.
 	// +default=true
 	allExtras bool,
+	// Packages to leave out of the environment, e.g. ones with no wheel for the platform or too heavy to install just to type check. Their imports don't resolve.
+	// +optional
+	noInstallPackages []string,
 	// Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).
 	// +default=true
 	removeUnusedIgnores bool,
@@ -290,6 +298,7 @@ func New(
 				Groups:              groups,
 				Extras:              extras,
 				AllExtras:           allExtras,
+				NoInstallPackages:   noInstallPackages,
 				RemoveUnusedIgnores: removeUnusedIgnores,
 				SuppressErrors:      suppressErrors,
 				PruneBaseline:       pruneBaseline,
