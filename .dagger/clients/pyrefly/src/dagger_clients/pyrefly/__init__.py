@@ -242,7 +242,7 @@ class PyreflyWorkspaces(_Type):
 
 
 
-def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = False, remove_unused_ignores: bool = True, suppress_errors: bool = False, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
+def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, remove_unused_ignores: bool = True, suppress_errors: bool = False, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
     """
     Discovers the uv workspaces that lock `pyrefly`.
 
@@ -259,9 +259,9 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         unless `[tool.uv] default-groups` is set). The environment must
         provide `pyrefly`.
     extras:
-        Extras to install.
+        Extras to install when `allExtras` is off.
     all_extras:
-        Install every extra. Overrides `extras`.
+        Install every extra.
     remove_unused_ignores:
         Remove the ignore comments that suppress nothing (`pyrefly check
         --remove-unused-ignores`).
@@ -303,7 +303,7 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         _Arg("exclude", exclude, None),
         _Arg("groups", groups, None),
         _Arg("extras", extras, None),
-        _Arg("allExtras", all_extras, False),
+        _Arg("allExtras", all_extras, True),
         _Arg("removeUnusedIgnores", remove_unused_ignores, True),
         _Arg("suppressErrors", suppress_errors, False),
         _Arg("args", args, None),

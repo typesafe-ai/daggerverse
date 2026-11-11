@@ -171,11 +171,11 @@ func New(
 	// uv dependency groups to install on top of the default ones (`dev`, unless `[tool.uv] default-groups` is set). The environment must provide `pyrefly`.
 	// +optional
 	groups []string,
-	// Extras to install.
+	// Extras to install when `allExtras` is off.
 	// +optional
 	extras []string,
-	// Install every extra. Overrides `extras`.
-	// +default=false
+	// Install every extra.
+	// +default=true
 	allExtras bool,
 	// Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).
 	// +default=true

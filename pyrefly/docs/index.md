@@ -58,9 +58,9 @@ Set the module's settings in `dagger.toml`:
 exclude = ["**/tests/_packages/**"]
 # uv dependency groups to install on top of the default ones.
 groups = ["typing"]
-# Extras to install, or every extra with allExtras.
-extras = ["api"]
+# Every extra is installed by default. Turn that off to install only `extras`.
 allExtras = false
+extras = ["api"]
 # The fixes `check` applies.
 removeUnusedIgnores = true
 suppressErrors = false

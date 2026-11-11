@@ -353,9 +353,11 @@ type PyreflyOpts struct {
 	Exclude []string
 	// uv dependency groups to install on top of the default ones (`dev`, unless `[tool.uv] default-groups` is set). The environment must provide `pyrefly`.
 	Groups []string
-	// Extras to install.
+	// Extras to install when `allExtras` is off.
 	Extras []string
-	// Install every extra. Overrides `extras`.
+	// Install every extra.
+	//
+	// Default: true
 	AllExtras bool
 	// Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).
 	//
