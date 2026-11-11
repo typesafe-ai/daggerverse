@@ -1,6 +1,8 @@
 import asyncio
 import dataclasses
 import posixpath
+import re
+import tomllib
 from typing import Annotated, Self
 
 from dagger import Doc, collection, function, get, keys, object_type
@@ -32,6 +34,11 @@ async def _load(
     return layout.load(await layout.inputs(ws, handlers), handlers)
 
 
+def _normalize(name: str) -> str:
+    """A package name as uv.lock spells it."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _project_of_src_path(path: str) -> str:
     """The project root of a `<root>/src/<entry>` path, `.` for the workspace root."""
     return posixpath.dirname(posixpath.dirname(path)) or "."
@@ -61,6 +68,28 @@ class UvWorkspaces:
     async def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """The uv workspace rooted at `path`."""
         return await _load(self.ws, self.layouts, self.handlers, path)
+
+    @function
+    async def filter(
+        self,
+        has_packages: Annotated[
+            list[str] | None,
+            Doc("Keep the workspaces whose uv.lock locks every one of these packages, e.g. a tool to run in them."),
+        ] = None,
+    ) -> Self:
+        """The workspaces matching every given criterion, read from their uv.lock files alone."""
+        assert self.ws is not None
+        wanted = {_normalize(name) for name in has_packages or []}
+        if not wanted:
+            return self
+
+        async def matches(layout: UvWorkspaceLayout) -> bool:
+            lock = tomllib.loads(await self.ws.file(posixpath.join(layout.path, "uv.lock")).contents())
+            return wanted <= {package["name"] for package in lock.get("package", [])}
+
+        matched = await asyncio.gather(*(matches(layout) for layout in self.layouts))
+        layouts = [layout for layout, keep in zip(self.layouts, matched, strict=True) if keep]
+        return dataclasses.replace(self, paths=[layout.path for layout in layouts], layouts=layouts)
 
 
 @object_type

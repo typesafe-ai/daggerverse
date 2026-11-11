@@ -189,6 +189,10 @@ type ModuleTypes {
             .withDescription("`workspaces` finds one workspace per uv.lock in the source tree.")
         )
         .withFunction(
+          function("uv_filters_workspaces", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`workspaces().filter` keeps the workspaces whose uv.lock locks every package in `has_packages`.")
+        )
+        .withFunction(
           function("uv_license_file_patterns", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("License arrays filter package-relative files without replacing the scaffold.")
         )
