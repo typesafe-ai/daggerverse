@@ -198,6 +198,10 @@ type ModuleTypes {
             .withDescription("Another module's handler (`setuptools-package-dir`) builds a package the built-in backends can't.")
         )
         .withFunction(
+          function("uv_build_input_above_package", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A package builds when its backend reads a file above it, staged from the workspace root.\n\n`my-lib` takes its version from hatch's `version.path = \"../VERSION\"`.")
+        )
+        .withFunction(
           function("uv_build_layouts", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Virtual members, renamed modules, multiple modules, custom roots, namespace and stub packages build together.\n\nBesides uv_build members, flit and pdm-backend members find a namespace and a stub package under `src/`.")
         )

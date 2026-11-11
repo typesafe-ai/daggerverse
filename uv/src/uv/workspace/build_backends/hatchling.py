@@ -11,7 +11,7 @@ from typing import ClassVar, Self
 from dagger import object_type
 
 from uv.workspace.build_backends.handler import BuiltinHandler
-from uv.workspace.build_backends.paths import is_file, is_module, tree, within_package
+from uv.workspace.build_backends.paths import in_workspace, is_file, is_module, tree
 
 # Hatch's default script for `custom` build and metadata hooks.
 _DEFAULT_HOOK_SCRIPT = "hatch_build.py"
@@ -67,8 +67,8 @@ class HatchlingSettings:
             packages=paths(option("packages")),
             only_include=paths(option("only-include")),
             bypass_selection=option("bypass-selection", False),
-            force_include=within_package({**build.get("force-include", {}), **wheel.get("force-include", {})}),
-            shared_paths=within_package(
+            force_include=in_workspace({**build.get("force-include", {}), **wheel.get("force-include", {})}),
+            shared_paths=in_workspace(
                 {
                     **wheel.get("shared-data", {}),
                     **wheel.get("shared-scripts", {}),

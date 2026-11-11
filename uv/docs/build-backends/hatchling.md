@@ -20,6 +20,10 @@ Applies to packages with `build-backend = "hatchling.build"`. The module reads:
 - The version file of the [`regex`](https://hatch.pypa.io/latest/plugins/version-source/regex/)
   and [`code`](https://hatch.pypa.io/latest/plugins/version-source/code/) version sources.
 
+A file above the package, such as a version file at `../VERSION` or a `force-include`
+source at `../shared`, is staged from the workspace root. It has to be inside the Dagger
+workspace.
+
 Options under `[tool.hatch.build.targets.wheel]` take precedence over the same options
 under `[tool.hatch.build]`, as in Hatchling. Without an explicit selection, the module
 expects the [conventional layout](index.md#unknown-build-backends).
@@ -36,6 +40,5 @@ path = "scripts/hatch_metadata.py"
 
 !!! warning "Not supported"
     - Version sources that read git, such as `hatch-vcs` or `uv-dynamic-versioning`.
-    - `force-include` and shared-data sources outside the package directory
-      (for example `../shared`).
+    - `force-include` and shared-data sources given as absolute paths.
     - Files a hook script reads on its own, other than the readme and license files.

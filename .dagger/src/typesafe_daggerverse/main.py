@@ -235,6 +235,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_build_layouts", self.uv_build_layouts)
             tg.start_soon(_run, "uv_build_backend_handler", self.uv_build_backend_handler)
             tg.start_soon(_run, "uv_maturin_outside_workspace", self.uv_maturin_outside_workspace)
+            tg.start_soon(_run, "uv_build_input_above_package", self.uv_build_input_above_package)
             tg.start_soon(_run, "uv_maturin_editable_cached_build", self.uv_maturin_editable_cached_build)
             tg.start_soon(_run, "uv_maturin_target_cache_tracks_source", self.uv_maturin_target_cache_tracks_source)
             tg.start_soon(_run, "uv_maturin_dist", self.uv_maturin_dist)
@@ -604,6 +605,37 @@ class TypesafeDaggerverse:
                 .with_exec(
                     ["uv", "run", "--no-sync", "python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"]
                 )
+                .sync()
+            )
+
+    @function
+    async def uv_build_input_above_package(self) -> None:
+        """A package builds when its backend reads a file above it, staged from the workspace root.
+
+        `my-lib` takes its version from hatch's `version.path = "../VERSION"`.
+        """
+        src = _src("uv/tests/_packages/workspace")
+        pyproject = await src.file("my-lib/pyproject.toml").contents()
+        for old, new in (
+            ('version = "0.1.0"', 'dynamic = ["version"]'),
+            ('requires = ["uv_build>=0.10.4,<0.11.0"]', 'requires = ["hatchling==1.27.0"]'),
+            ('build-backend = "uv_build"', 'build-backend = "hatchling.build"'),
+        ):
+            if old not in pyproject:
+                raise AssertionError(f"expected {old!r} in the fixture's my-lib/pyproject.toml")
+            pyproject = pyproject.replace(old, new)
+        pyproject += '\n[tool.hatch.version]\npath = "../VERSION"\npattern = "^(?P<version>.+?)$"\n'
+        src = src.with_new_file("my-lib/pyproject.toml", pyproject).with_new_file("VERSION", "1.2.3\n")
+        script = "from importlib.metadata import version; assert version('my-lib') == '1.2.3', version('my-lib')"
+        for no_editable in (False, True):
+            await (
+                uv(src.as_workspace())
+                .workspace(".")
+                .builder(no_editable=no_editable)
+                .with_packages(["my-app"])
+                .with_dependencies()
+                .container()
+                .with_exec(["python", "-c", script])
                 .sync()
             )
 
