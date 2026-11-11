@@ -341,8 +341,13 @@ def build_uv_sync_args(
     all_packages: bool,
     no_editable: bool = False,
     no_default_groups: bool = False,
+    exact: bool = False,
 ) -> list[str]:
     args = ["uv", "sync", "--frozen", "--link-mode", "copy"]
+    # Inexact by default: keep packages a caller installed on the base container (e.g. a
+    # CPU-only torch left out with `--no-install-package`) instead of removing them.
+    if not exact:
+        args.append("--inexact")
     if no_editable:
         args.append("--no-editable")
     if no_default_groups:

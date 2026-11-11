@@ -290,7 +290,10 @@ class TestBuildUvSyncArgs:
         return build_uv_sync_args(**{**defaults, **overrides})
 
     def test_bare_defaults(self):
-        assert self._args() == ["uv", "sync", "--frozen", "--link-mode", "copy"]
+        assert self._args() == ["uv", "sync", "--frozen", "--link-mode", "copy", "--inexact"]
+
+    def test_exact_drops_inexact(self):
+        assert self._args(exact=True) == ["uv", "sync", "--frozen", "--link-mode", "copy"]
 
     def test_no_editable_flag(self):
         assert self._args(no_editable=True) == [
@@ -299,6 +302,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--no-editable",
         ]
 
@@ -309,6 +313,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--no-default-groups",
         ]
 
@@ -319,6 +324,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--all-extras",
         ]
 
@@ -329,6 +335,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--all-groups",
         ]
 
@@ -339,6 +346,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--all-packages",
         ]
 
@@ -349,6 +357,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--extra",
             "gpu",
             "--extra",
@@ -362,6 +371,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--group",
             "dev",
             "--group",
@@ -375,6 +385,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--package",
             "my-app",
         ]
@@ -386,6 +397,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--package",
             "my-app",
             "--package",
@@ -407,6 +419,7 @@ class TestBuildUvSyncArgs:
             "--frozen",
             "--link-mode",
             "copy",
+            "--inexact",
             "--all-extras",
             "--extra",
             "gpu",

@@ -83,6 +83,7 @@ class UvWorkspaceBuilder:
     all_groups: Annotated[bool, Doc("Every dependency group is selected")] = field(default=False)
     no_default_groups: Annotated[bool, Doc("The default dependency groups are left out")] = field(default=False)
     no_editable: Annotated[bool, Doc("Local packages install non-editable")] = field(default=False)
+    exact: Annotated[bool, Doc("The sync removes packages the selection doesn't install")] = field(default=False)
     no_install_packages: Annotated[list[str], Doc("Packages left uninstalled")] = field(default=list)
 
     plan: Annotated[
@@ -103,6 +104,7 @@ class UvWorkspaceBuilder:
             all_packages=self.all_packages,
             no_default_groups=self.no_default_groups,
             no_editable=self.no_editable,
+            exact=self.exact,
         )
         return dataclasses.replace(self, plan=plan)
 
@@ -142,11 +144,21 @@ class UvWorkspaceBuilder:
         return dataclasses.replace(self, no_default_groups=True, plan=None)
 
     @function
+    def with_exact(self) -> UvWorkspaceBuilder:
+        """This builder syncing exactly: `uv sync` removes packages the selection doesn't install.
+
+        By default the sync is inexact (`uv sync --inexact`), so packages already in the
+        environment, such as ones installed on the base container, stay.
+        """
+        return dataclasses.replace(self, exact=True, plan=None)
+
+    @function
     def with_no_install_packages(self, packages: NoInstallPackage) -> UvWorkspaceBuilder:
         """This builder leaving `packages` uninstalled (`uv sync --no-install-package`), though they stay locked.
 
-        E.g. to install a different build of a package after the sync, such as
-        CPU-only torch in place of the locked CUDA one.
+        E.g. to use a different build of a package, such as CPU-only torch in place
+        of the locked CUDA one. The sync is inexact unless `with_exact`, so a build
+        installed on the base container before the sync stays.
         """
         return dataclasses.replace(self, no_install_packages=[*self.no_install_packages, *packages])
 
