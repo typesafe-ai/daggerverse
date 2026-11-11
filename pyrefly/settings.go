@@ -12,14 +12,11 @@ const settingsTable = "tool.typesafe_daggerverse.pyrefly"
 
 // settings are the module settings a workspace can override.
 type settings struct {
-	Groups              []string `toml:"groups"`
-	Extras              []string `toml:"extras"`
-	AllExtras           bool     `toml:"all-extras"`
-	NoInstallPackages   []string `toml:"no-install-packages"`
-	RemoveUnusedIgnores bool     `toml:"remove-unused-ignores"`
-	SuppressErrors      bool     `toml:"suppress-errors"`
-	PruneBaseline       bool     `toml:"prune-baseline"`
-	Args                []string `toml:"args"`
+	Groups            []string `toml:"groups"`
+	Extras            []string `toml:"extras"`
+	AllExtras         bool     `toml:"all-extras"`
+	NoInstallPackages []string `toml:"no-install-packages"`
+	Args              []string `toml:"args"`
 }
 
 // override returns the settings with the keys the `pyproject.toml`'s table sets replaced by its values.

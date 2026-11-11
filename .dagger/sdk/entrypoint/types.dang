@@ -122,31 +122,23 @@ type ModuleTypes {
         )
         .withFunction(
           function("pyrefly_baseline", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`update_baseline` records the type errors, `check` then passes, and prunes the entries once fixed.")
+            .withDescription("`update_baseline` records the type errors, and `check` then passes.")
         )
         .withFunction(
           function("pyrefly_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("The `check` generator changes nothing in a workspace with nothing to fix.")
+            .withDescription("`check` passes in a workspace with no type error.")
         )
         .withFunction(
           function("pyrefly_discovers_workspaces", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`workspaces` holds the uv workspaces that lock `pyrefly`, and no other.")
+            .withDescription("`workspaces` holds the uv workspaces that install `pyrefly`, and no other.")
         )
         .withFunction(
           function("pyrefly_fails_on_type_error", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("The `check` generator fails on a type error.")
+            .withDescription("`check` fails on a type error.")
         )
         .withFunction(
           function("pyrefly_go_test", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run the pyrefly module's Go unit tests (the settings overrides, engine-free).")
-        )
-        .withFunction(
-          function("pyrefly_removes_unused_ignore", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("The `check` generator removes an unused ignore comment and changes nothing else.")
-        )
-        .withFunction(
-          function("pyrefly_suppresses_errors", typeDef.withKind(TypeDefKind.STRING_KIND))
-            .withDescription("With `suppress_errors`, the `check` generator adds an ignore comment instead of failing.")
         )
         .withFunction(
           function("pyrefly_workspace_settings", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

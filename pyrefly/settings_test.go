@@ -7,10 +7,8 @@ import (
 )
 
 var moduleSettings = settings{
-	Groups:              []string{"typing"},
-	AllExtras:           true,
-	RemoveUnusedIgnores: true,
-	PruneBaseline:       true,
+	Groups:    []string{"typing"},
+	AllExtras: true,
 }
 
 func TestOverrideKeepsModuleSettingsWithoutTable(t *testing.T) {
@@ -31,7 +29,6 @@ func TestOverrideReplacesOnlyTheKeysSet(t *testing.T) {
 all-extras = false
 extras = ["cpu"]
 no-install-packages = ["kernels"]
-remove-unused-ignores = false
 `)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +37,6 @@ remove-unused-ignores = false
 		Groups:            []string{"typing"},
 		Extras:            []string{"cpu"},
 		NoInstallPackages: []string{"kernels"},
-		PruneBaseline:     true,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)

@@ -11,10 +11,9 @@ import (
 
 // Type check Python with [Pyrefly](https://pyrefly.org).
 //
-// Every uv workspace (`uv.lock`) that locks `pyrefly` is type checked in its
-// own environment, built by the `uv` module, with the pyrefly version the
-// workspace locks. Each workspace is its own generator: it applies the fixes
-// pyrefly can make and fails on the type errors that remain.
+// Runs over the uv workspaces (`uv.lock`) that install `pyrefly`. Each is type
+// checked in its own environment, built by the `uv` module, with the pyrefly
+// version its `uv.lock` pins. Each workspace is its own check.
 type Pyrefly struct { // pyrefly (../../:0:0)
 	query *querybuilder.Selection
 	// refetchID is set when this object is built through a field marked
@@ -89,7 +88,7 @@ func (r *Pyrefly) UnmarshalJSON(bs []byte) error {
 	return nil
 }
 
-// The uv workspaces pyrefly checks: those that lock `pyrefly`, less those matching `exclude`.
+// The uv workspaces pyrefly checks: those that install `pyrefly`, less those matching `exclude`.
 func (r *Pyrefly) Workspaces() *PyreflyWorkspaces {
 	q := r.query.Select("workspaces")
 
@@ -120,15 +119,11 @@ func (r *PyreflyWorkspace) WithGraphQLQuery(q *querybuilder.Selection) *PyreflyW
 	}
 }
 
-// Type check this workspace with `pyrefly check`, fixing what pyrefly can.
-//
-// The fixes are the module's `removeUnusedIgnores`, `suppressErrors` and
-// `pruneBaseline` settings: `dagger generate` applies them, and `dagger check --generated`
-// fails while they would change a file. Fails when type errors remain.
-func (r *PyreflyWorkspace) Check() *Changeset {
+// Type check this workspace with `pyrefly check`. Fails on any type error.
+func (r *PyreflyWorkspace) Check() *Check {
 	q := r.query.Select("check")
 
-	return new(Changeset).WithGraphQLQuery(q)
+	return new(Check).WithGraphQLQuery(q)
 }
 
 // A unique identifier for this PyreflyWorkspace.
@@ -214,7 +209,7 @@ func (r *PyreflyWorkspace) UpdateBaseline() *Changeset {
 // The uv workspaces pyrefly checks, keyed by root.
 //
 // `check` runs once per selected workspace, so each workspace is its own
-// generator that can be selected or skipped on its own.
+// check that can be selected or skipped on its own.
 type PyreflyWorkspaces struct { // pyrefly (../../:0:0)
 	query *querybuilder.Selection
 	// refetchID is set when this object is built through a field marked
@@ -373,16 +368,6 @@ type PyreflyOpts struct {
 	AllExtras bool
 	// Packages to leave out of the environment, e.g. ones with no wheel for the platform or too heavy to install just to type check. Their imports don't resolve.
 	NoInstallPackages []string
-	// Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).
-	//
-	// Default: true
-	RemoveUnusedIgnores bool
-	// Add ignore comments for the type errors found (`pyrefly check --suppress-errors`) instead of failing on them.
-	SuppressErrors bool
-	// Drop the baseline entries that match no error anymore (`pyrefly check --prune-baseline`), in workspaces whose pyrefly configuration sets a `baseline`.
-	//
-	// Default: true
-	PruneBaseline bool
 	// Additional arguments to pass to `pyrefly check`.
 	Args []string
 	// Container the uv workspace's environment is built on, e.g. one carrying private index credentials. Defaults to the uv module's Debian uv image.
@@ -414,18 +399,6 @@ func (r *Query) Pyrefly(ws *Workspace, opts ...PyreflyOpts) *Pyrefly { // pyrefl
 		// `noInstallPackages` optional argument
 		if !querybuilder.IsZeroValue(opts[i].NoInstallPackages) {
 			q = q.Arg("noInstallPackages", opts[i].NoInstallPackages)
-		}
-		// `removeUnusedIgnores` optional argument
-		if !querybuilder.IsZeroValue(opts[i].RemoveUnusedIgnores) {
-			q = q.Arg("removeUnusedIgnores", opts[i].RemoveUnusedIgnores)
-		}
-		// `suppressErrors` optional argument
-		if !querybuilder.IsZeroValue(opts[i].SuppressErrors) {
-			q = q.Arg("suppressErrors", opts[i].SuppressErrors)
-		}
-		// `pruneBaseline` optional argument
-		if !querybuilder.IsZeroValue(opts[i].PruneBaseline) {
-			q = q.Arg("pruneBaseline", opts[i].PruneBaseline)
 		}
 		// `args` optional argument
 		if !querybuilder.IsZeroValue(opts[i].Args) {

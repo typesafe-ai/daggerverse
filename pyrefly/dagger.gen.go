@@ -90,18 +90,15 @@ func (r *PyreflyWorkspaces) UnmarshalJSON(bs []byte) error {
 
 func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 	var concrete struct {
-		Path                string
-		Inputs              *dagger.Directory
-		UvCache             *dagger.CacheVolume
-		Groups              []string
-		Extras              []string
-		AllExtras           bool
-		NoInstallPackages   []string
-		RemoveUnusedIgnores bool
-		SuppressErrors      bool
-		PruneBaseline       bool
-		Args                []string
-		BaseContainer       *dagger.Container
+		Path              string
+		Inputs            *dagger.Directory
+		UvCache           *dagger.CacheVolume
+		Groups            []string
+		Extras            []string
+		AllExtras         bool
+		NoInstallPackages []string
+		Args              []string
+		BaseContainer     *dagger.Container
 	}
 	concrete.Path = r.Path
 	concrete.Inputs = r.Inputs
@@ -110,9 +107,6 @@ func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 	concrete.Extras = r.Extras
 	concrete.AllExtras = r.AllExtras
 	concrete.NoInstallPackages = r.NoInstallPackages
-	concrete.RemoveUnusedIgnores = r.RemoveUnusedIgnores
-	concrete.SuppressErrors = r.SuppressErrors
-	concrete.PruneBaseline = r.PruneBaseline
 	concrete.Args = r.Args
 	concrete.BaseContainer = r.BaseContainer
 	return json.Marshal(&concrete)
@@ -120,18 +114,15 @@ func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 
 func (r *PyreflyWorkspace) UnmarshalJSON(bs []byte) error {
 	var concrete struct {
-		Path                string
-		Inputs              *dagger.Directory
-		UvCache             *dagger.CacheVolume
-		Groups              []string
-		Extras              []string
-		AllExtras           bool
-		NoInstallPackages   []string
-		RemoveUnusedIgnores bool
-		SuppressErrors      bool
-		PruneBaseline       bool
-		Args                []string
-		BaseContainer       *dagger.Container
+		Path              string
+		Inputs            *dagger.Directory
+		UvCache           *dagger.CacheVolume
+		Groups            []string
+		Extras            []string
+		AllExtras         bool
+		NoInstallPackages []string
+		Args              []string
+		BaseContainer     *dagger.Container
 	}
 	err := json.Unmarshal(bs, &concrete)
 	if err != nil {
@@ -144,9 +135,6 @@ func (r *PyreflyWorkspace) UnmarshalJSON(bs []byte) error {
 	r.Extras = concrete.Extras
 	r.AllExtras = concrete.AllExtras
 	r.NoInstallPackages = concrete.NoInstallPackages
-	r.RemoveUnusedIgnores = concrete.RemoveUnusedIgnores
-	r.SuppressErrors = concrete.SuppressErrors
-	r.PruneBaseline = concrete.PruneBaseline
 	r.Args = concrete.Args
 	r.BaseContainer = concrete.BaseContainer
 	return nil
@@ -229,27 +217,6 @@ func DaggerDispatch(ctx context.Context, parentJSON []byte, parentName string, f
 					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg noInstallPackages", err))
 				}
 			}
-			var removeUnusedIgnores bool
-			if inputArgs["removeUnusedIgnores"] != nil {
-				err = json.Unmarshal([]byte(inputArgs["removeUnusedIgnores"]), &removeUnusedIgnores)
-				if err != nil {
-					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg removeUnusedIgnores", err))
-				}
-			}
-			var suppressErrors bool
-			if inputArgs["suppressErrors"] != nil {
-				err = json.Unmarshal([]byte(inputArgs["suppressErrors"]), &suppressErrors)
-				if err != nil {
-					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg suppressErrors", err))
-				}
-			}
-			var pruneBaseline bool
-			if inputArgs["pruneBaseline"] != nil {
-				err = json.Unmarshal([]byte(inputArgs["pruneBaseline"]), &pruneBaseline)
-				if err != nil {
-					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg pruneBaseline", err))
-				}
-			}
 			var args []string
 			if inputArgs["args"] != nil {
 				err = json.Unmarshal([]byte(inputArgs["args"]), &args)
@@ -271,7 +238,7 @@ func DaggerDispatch(ctx context.Context, parentJSON []byte, parentName string, f
 					panic(fmt.Errorf("%s: %w", "failed to unmarshal input arg uvCache", err))
 				}
 			}
-			return New(ctx, ws, exclude, groups, extras, allExtras, noInstallPackages, removeUnusedIgnores, suppressErrors, pruneBaseline, args, baseContainer, uvCache)
+			return New(ctx, ws, exclude, groups, extras, allExtras, noInstallPackages, args, baseContainer, uvCache)
 		default:
 			return nil, fmt.Errorf("unknown function %s", fnName)
 		}
@@ -288,7 +255,7 @@ func DaggerDispatch(ctx context.Context, parentJSON []byte, parentName string, f
 			if err != nil {
 				panic(fmt.Errorf("%s: %w", "failed to unmarshal parent object", err))
 			}
-			return (*PyreflyWorkspace).Check(&parent, ctx)
+			return nil, (*PyreflyWorkspace).Check(&parent, ctx)
 		case "UpdateBaseline":
 			var parent PyreflyWorkspace
 			err = json.Unmarshal(parentJSON, &parent)

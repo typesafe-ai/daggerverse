@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	posixpath "path"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -16,8 +15,8 @@ import (
 	"dagger/pyrefly/internal/dagger/clients/uv"
 )
 
-// The locked package that makes a uv workspace one pyrefly checks.
-const lockedPackage = "pyrefly"
+// The package a uv workspace installs to be one pyrefly checks.
+const toolPackage = "pyrefly"
 
 // One uv workspace that pyrefly type checks.
 type PyreflyWorkspace struct {
@@ -38,12 +37,6 @@ type PyreflyWorkspace struct {
 	AllExtras bool
 	// +private
 	NoInstallPackages []string
-	// +private
-	RemoveUnusedIgnores bool
-	// +private
-	SuppressErrors bool
-	// +private
-	PruneBaseline bool
 	// +private
 	Args []string
 	// +private
@@ -104,47 +97,16 @@ func (m *PyreflyWorkspace) failure(err error) error {
 	return fmt.Errorf("pyrefly found errors in %s (exit code %d):\n\n%s", m.Path, exec.ExitCode, strings.Join(report, "\n"))
 }
 
-// Type check this workspace with `pyrefly check`, fixing what pyrefly can.
+// Type check this workspace with `pyrefly check`. Fails on any type error.
 //
-// The fixes are the module's `removeUnusedIgnores`, `suppressErrors` and
-// `pruneBaseline` settings: `dagger generate` applies them, and `dagger check --generated`
-// fails while they would change a file. Fails when type errors remain.
-//
-// +generate
-func (m *PyreflyWorkspace) Check(ctx context.Context) (*dagger.Changeset, error) {
-	ctr, workdir, err := m.container(ctx)
+// +check
+func (m *PyreflyWorkspace) Check(ctx context.Context) error {
+	ctr, _, err := m.container(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	check := append([]string{"pyrefly", "check"}, m.Args...)
-	var fixes []string
-	if m.RemoveUnusedIgnores {
-		fixes = append(fixes, "--remove-unused-ignores")
-	}
-	if m.SuppressErrors {
-		fixes = append(fixes, "--suppress-errors")
-	}
-	// pyrefly exits non-zero on the errors it found, even those it has just suppressed.
-	tolerant := dagger.ContainerWithExecOpts{Expect: dagger.ReturnTypeAny}
-	fixed := ctr
-	if len(fixes) > 0 {
-		fixed = fixed.WithExec(append(slices.Clone(check), fixes...), tolerant)
-	}
-	if m.PruneBaseline {
-		baseline, err := m.hasBaseline(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if baseline {
-			// On its own: it fails without touching a file when no baseline is configured after all.
-			fixed = fixed.WithExec(append(slices.Clone(check), "--prune-baseline"), tolerant)
-		}
-	}
-	fixed, err = fixed.WithExec(check).Sync(ctx)
-	if err != nil {
-		return nil, m.failure(err)
-	}
-	return m.changes(ctr, fixed, workdir), nil
+	_, err = ctr.WithExec(append([]string{"pyrefly", "check"}, m.Args...)).Sync(ctx)
+	return m.failure(err)
 }
 
 // Record every type error pyrefly finds in the workspace's baseline file (`pyrefly check --update-baseline`).
@@ -179,30 +141,10 @@ func (m *PyreflyWorkspace) changes(before, after *dagger.Container, workdir stri
 	return at(after).Changes(at(before))
 }
 
-// The `baseline` option of a pyrefly configuration.
-var baselineOption = regexp.MustCompile(`(?m)^\s*baseline\s*=`)
-
-// hasBaseline reports whether the configuration at the workspace root sets a baseline file.
-func (m *PyreflyWorkspace) hasBaseline(ctx context.Context) (bool, error) {
-	root := m.Inputs.Directory(m.Path)
-	entries, err := root.Entries(ctx)
-	if err != nil {
-		return false, err
-	}
-	// pyrefly.toml takes precedence over pyproject.toml.
-	for _, name := range []string{"pyrefly.toml", "pyproject.toml"} {
-		if slices.Contains(entries, name) {
-			config, err := root.File(name).Contents(ctx)
-			return baselineOption.MatchString(config), err
-		}
-	}
-	return false, nil
-}
-
 // The uv workspaces pyrefly checks, keyed by root.
 //
 // `check` runs once per selected workspace, so each workspace is its own
-// generator that can be selected or skipped on its own.
+// check that can be selected or skipped on its own.
 //
 // +collection
 type PyreflyWorkspaces struct {
@@ -230,16 +172,15 @@ func (m *PyreflyWorkspaces) Workspace(
 
 // Type check Python with [Pyrefly](https://pyrefly.org).
 //
-// Every uv workspace (`uv.lock`) that locks `pyrefly` is type checked in its
-// own environment, built by the `uv` module, with the pyrefly version the
-// workspace locks. Each workspace is its own generator: it applies the fixes
-// pyrefly can make and fails on the type errors that remain.
+// Runs over the uv workspaces (`uv.lock`) that install `pyrefly`. Each is type
+// checked in its own environment, built by the `uv` module, with the pyrefly
+// version its `uv.lock` pins. Each workspace is its own check.
 type Pyrefly struct {
 	// +private
 	Items []*PyreflyWorkspace
 }
 
-// Discovers the uv workspaces that lock `pyrefly`.
+// Discovers the uv workspaces that install `pyrefly`.
 //
 // A workspace overrides the settings below, other than `exclude`,
 // `baseContainer` and `uvCache`, in the `[tool.typesafe_daggerverse.pyrefly]`
@@ -263,15 +204,6 @@ func New(
 	// Packages to leave out of the environment, e.g. ones with no wheel for the platform or too heavy to install just to type check. Their imports don't resolve.
 	// +optional
 	noInstallPackages []string,
-	// Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).
-	// +default=true
-	removeUnusedIgnores bool,
-	// Add ignore comments for the type errors found (`pyrefly check --suppress-errors`) instead of failing on them.
-	// +default=false
-	suppressErrors bool,
-	// Drop the baseline entries that match no error anymore (`pyrefly check --prune-baseline`), in workspaces whose pyrefly configuration sets a `baseline`.
-	// +default=true
-	pruneBaseline bool,
 	// Additional arguments to pass to `pyrefly check`.
 	// +optional
 	args []string,
@@ -283,20 +215,17 @@ func New(
 	uvCache *dagger.CacheVolume,
 ) (*Pyrefly, error) {
 	workspaces := uv.New(ws, uv.UvOpts{Exclude: exclude, UvCache: uvCache}).Workspaces().
-		Filter(uv.UvWorkspacesFilterOpts{HasPackages: []string{lockedPackage}})
+		Filter(uv.UvWorkspacesFilterOpts{HasPackages: []string{toolPackage}})
 	paths, err := workspaces.Keys(ctx)
 	if err != nil {
 		return nil, err
 	}
 	module := settings{
-		Groups:              groups,
-		Extras:              extras,
-		AllExtras:           allExtras,
-		NoInstallPackages:   noInstallPackages,
-		RemoveUnusedIgnores: removeUnusedIgnores,
-		SuppressErrors:      suppressErrors,
-		PruneBaseline:       pruneBaseline,
-		Args:                args,
+		Groups:            groups,
+		Extras:            extras,
+		AllExtras:         allExtras,
+		NoInstallPackages: noInstallPackages,
+		Args:              args,
 	}
 	items := make([]*PyreflyWorkspace, len(paths))
 	group, ctx := errgroup.WithContext(ctx)
@@ -312,18 +241,15 @@ func New(
 				return fmt.Errorf("%s: %w", posixpath.Join(path, "pyproject.toml"), err)
 			}
 			items[i] = &PyreflyWorkspace{
-				Path:                path,
-				Inputs:              workspace.Inputs(),
-				UvCache:             uvCache,
-				Groups:              own.Groups,
-				Extras:              own.Extras,
-				AllExtras:           own.AllExtras,
-				NoInstallPackages:   own.NoInstallPackages,
-				RemoveUnusedIgnores: own.RemoveUnusedIgnores,
-				SuppressErrors:      own.SuppressErrors,
-				PruneBaseline:       own.PruneBaseline,
-				Args:                own.Args,
-				BaseContainer:       baseContainer,
+				Path:              path,
+				Inputs:            workspace.Inputs(),
+				UvCache:           uvCache,
+				Groups:            own.Groups,
+				Extras:            own.Extras,
+				AllExtras:         own.AllExtras,
+				NoInstallPackages: own.NoInstallPackages,
+				Args:              own.Args,
+				BaseContainer:     baseContainer,
 			}
 			return nil
 		})
@@ -334,7 +260,7 @@ func New(
 	return &Pyrefly{Items: items}, nil
 }
 
-// The uv workspaces pyrefly checks: those that lock `pyrefly`, less those matching `exclude`.
+// The uv workspaces pyrefly checks: those that install `pyrefly`, less those matching `exclude`.
 func (m *Pyrefly) Workspaces() *PyreflyWorkspaces {
 	paths := make([]string, len(m.Items))
 	for i, item := range m.Items {

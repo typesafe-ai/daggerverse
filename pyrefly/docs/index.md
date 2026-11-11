@@ -1,7 +1,7 @@
 ---
 icon: lucide/rocket
 title: Overview
-description: A Dagger module that type checks Python with Pyrefly, one generator per uv workspace.
+description: A Dagger module that type checks Python with Pyrefly, one check per uv workspace.
 ---
 
 # pyrefly
@@ -9,12 +9,10 @@ description: A Dagger module that type checks Python with Pyrefly, one generator
 A [Dagger](https://dagger.io) module that type checks Python with
 [Pyrefly](https://pyrefly.org).
 
-The module checks each uv workspace (a directory with a `uv.lock`) that locks
-`pyrefly`, and skips the ones that don't. Each workspace is checked in its own
-environment, using the pyrefly version it locks. The
-[`uv`](https://daggerverse.docs.typesafe.ai/uv/) module builds that environment
-and installs every workspace member into it, so pyrefly can resolve imports of
-the members and of their dependencies.
+It runs over the uv workspaces that install `pyrefly`, each in its own
+environment, with the pyrefly version its `uv.lock` pins. This module uses the
+[`uv`](https://daggerverse.docs.typesafe.ai/uv/) module to build the Python
+environment for Pyrefly.
 
 ## Installation
 
@@ -22,36 +20,30 @@ the members and of their dependencies.
 $ dagger install github.com/typesafe-ai/daggerverse/pyrefly
 ```
 
-Then add `pyrefly` to each workspace you want checked. It has to be in a
-dependency group the environment installs, and `dev` is installed by default:
+!!! hint
 
-```console
-$ uv add --dev pyrefly
-```
+    The module discovers workspaces on its own. It runs over every uv workspace
+    that installs `pyrefly` and skips the rest, so a workspace that already uses
+    pyrefly needs no setup.
 
 ## Usage
 
-Every workspace gets its own [generator](https://docs.dagger.io/reference/sdks/python/#generators),
-called `check`. The generators run in parallel:
+Every workspace gets its own check, called `check`. The checks run in parallel:
 
 ```console
-$ dagger generate --pyrefly              # apply pyrefly's fixes
-$ dagger check --generated --pyrefly     # fail on pending fixes and on type errors
+$ dagger check --pyrefly
 ```
 
 `check` runs `pyrefly check` from the workspace root, so pyrefly picks up the
-workspace's own configuration (`pyrefly.toml` or `[tool.pyrefly]`). If type
-errors are left once the fixes are applied, it fails.
+workspace's own configuration (`pyrefly.toml` or `[tool.pyrefly]`). It fails on
+any type error.
 
-## Fixes
+Check a single workspace by its path (see
+[Select collection items](https://docs.dagger.io/using/checking/#select-collection-items)):
 
-`check` can apply three fixes, each controlled by a setting:
-
-| Setting | Default | Fix |
-|---------|---------|-----|
-| `removeUnusedIgnores` | `true` | Remove the ignore comments that suppress nothing (`--remove-unused-ignores`). |
-| `suppressErrors` | `false` | Add an ignore comment for each type error (`--suppress-errors`) instead of failing on it. |
-| `pruneBaseline` | `true` | Drop the baseline entries that match no error anymore (`--prune-baseline`), in workspaces that set a `baseline`. |
+```console
+$ dagger check --pyrefly --pyrefly-workspace=services/api
+```
 
 ## Adopting pyrefly in an existing codebase
 
@@ -72,7 +64,7 @@ environment `check` uses and writes the baseline file into your working tree:
 $ dagger -c 'pyrefly | workspaces | get . | update-baseline | export --path .'
 ```
 
-As you fix errors, `check` removes their entries from the baseline.
+Run it again after fixing errors to drop their entries from the baseline.
 
 ## Configuration
 
@@ -89,10 +81,6 @@ allExtras = false
 extras = ["api"]
 # Packages to leave out of the environment. Their imports don't resolve.
 noInstallPackages = ["my-gpu-kernels"]
-# The fixes `check` applies.
-removeUnusedIgnores = true
-suppressErrors = false
-pruneBaseline = true
 # Additional arguments to pass to `pyrefly check`.
 args = ["--min-severity", "warn"]
 ```

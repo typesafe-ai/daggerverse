@@ -1,6 +1,6 @@
 [project]
 site_name = "pyrefly — Dagger module"
-site_description = "A Dagger module that type checks Python with Pyrefly, one generator per uv workspace."
+site_description = "A Dagger module that type checks Python with Pyrefly, one check per uv workspace."
 site_url = "https://typesafe-ai.github.io/daggerverse/pyrefly/"
 site_author = "Typesafe AI"
 repo_url = "https://github.com/typesafe-ai/daggerverse"

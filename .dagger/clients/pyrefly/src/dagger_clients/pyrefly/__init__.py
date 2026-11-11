@@ -30,6 +30,7 @@ _check_core(NAME, CORE_DIGEST, _installed_core)
 from dagger_clients.core import (  # noqa: E402
     CacheVolume,
     Changeset,
+    Check,
     Container,
     Workspace,
 )
@@ -39,11 +40,11 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 
 
 class Pyrefly(_Type):
-    """ Type check Python with [Pyrefly](https://pyrefly.org).  Every uv
-    workspace (`uv.lock`) that locks `pyrefly` is type checked in its own
-    environment, built by the `uv` module, with the pyrefly version the
-    workspace locks. Each workspace is its own generator: it applies the
-    fixes pyrefly can make and fails on the type errors that remain.  """
+    """ Type check Python with [Pyrefly](https://pyrefly.org).  Runs over
+    the uv workspaces (`uv.lock`) that install `pyrefly`. Each is type
+    checked in its own environment, built by the `uv` module, with the
+    pyrefly version its `uv.lock` pins. Each workspace is its own check.
+    """
 
     async def id(self) -> str:
         """A unique identifier for this Pyrefly.
@@ -75,7 +76,7 @@ class Pyrefly(_Type):
 
     def workspaces(self) -> "PyreflyWorkspaces":
         """
-        The uv workspaces pyrefly checks: those that lock `pyrefly`, less
+        The uv workspaces pyrefly checks: those that install `pyrefly`, less
         those matching `exclude`.
         """
         _args: list[_Arg] = []
@@ -86,19 +87,14 @@ class Pyrefly(_Type):
 class PyreflyWorkspace(_Type):
     """ One uv workspace that pyrefly type checks.  """
 
-    def check(self) -> Changeset:
+    def check(self) -> Check:
         """
-        Type check this workspace with `pyrefly check`, fixing what pyrefly
-        can.
-
-        The fixes are the module's `removeUnusedIgnores`, `suppressErrors` and
-        `pruneBaseline` settings: `dagger generate` applies them, and `dagger
-        check --generated`
-        fails while they would change a file. Fails when type errors remain.
+        Type check this workspace with `pyrefly check`. Fails on any type
+        error.
         """
         _args: list[_Arg] = []
         _ctx = self._select("check", _args)
-        return Changeset(_ctx)
+        return Check(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this PyreflyWorkspace.
@@ -170,8 +166,8 @@ class PyreflyWorkspace(_Type):
 
 class PyreflyWorkspaces(_Type):
     """ The uv workspaces pyrefly checks, keyed by root.  `check` runs
-    once per selected workspace, so each workspace is its own generator
-    that can be selected or skipped on its own.  """
+    once per selected workspace, so each workspace is its own check that
+    can be selected or skipped on its own.  """
 
     def get(self, key: str) -> PyreflyWorkspace:
         """
@@ -259,9 +255,9 @@ class PyreflyWorkspaces(_Type):
 
 
 
-def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, no_install_packages: list[str] | None = None, remove_unused_ignores: bool = True, suppress_errors: bool = False, prune_baseline: bool = True, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
+def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str] | None = None, extras: list[str] | None = None, all_extras: bool = True, no_install_packages: list[str] | None = None, args: list[str] | None = None, base_container: Container | None = None, uv_cache: CacheVolume | None = None, session: _Session | None = None,) -> Pyrefly:
     """
-    Discovers the uv workspaces that lock `pyrefly`.
+    Discovers the uv workspaces that install `pyrefly`.
 
     A workspace overrides the settings below, other than `exclude`,
     `baseContainer` and `uvCache`, in the
@@ -289,16 +285,6 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         Packages to leave out of the environment, e.g. ones with no wheel
         for the platform or too heavy to install just to type check. Their
         imports don't resolve.
-    remove_unused_ignores:
-        Remove the ignore comments that suppress nothing (`pyrefly check
-        --remove-unused-ignores`).
-    suppress_errors:
-        Add ignore comments for the type errors found (`pyrefly check
-        --suppress-errors`) instead of failing on them.
-    prune_baseline:
-        Drop the baseline entries that match no error anymore (`pyrefly
-        check --prune-baseline`), in workspaces whose pyrefly
-        configuration sets a `baseline`.
     args:
         Additional arguments to pass to `pyrefly check`.
     base_container:
@@ -321,12 +307,6 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         raise _type_error("pyrefly", "all_extras", all_extras, "bool")
     if not (no_install_packages is None or (isinstance(no_install_packages, list) and all(isinstance(_v0, str) for _v0 in no_install_packages))):
         raise _type_error("pyrefly", "no_install_packages", no_install_packages, "list[str] | None")
-    if not (isinstance(remove_unused_ignores, bool)):
-        raise _type_error("pyrefly", "remove_unused_ignores", remove_unused_ignores, "bool")
-    if not (isinstance(suppress_errors, bool)):
-        raise _type_error("pyrefly", "suppress_errors", suppress_errors, "bool")
-    if not (isinstance(prune_baseline, bool)):
-        raise _type_error("pyrefly", "prune_baseline", prune_baseline, "bool")
     if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
         raise _type_error("pyrefly", "args", args, "list[str] | None")
     if not (base_container is None or isinstance(base_container, Container)):
@@ -340,9 +320,6 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
         _Arg("extras", extras, None),
         _Arg("allExtras", all_extras, True),
         _Arg("noInstallPackages", no_install_packages, None),
-        _Arg("removeUnusedIgnores", remove_unused_ignores, True),
-        _Arg("suppressErrors", suppress_errors, False),
-        _Arg("pruneBaseline", prune_baseline, True),
         _Arg("args", args, None),
         _Arg("baseContainer", base_container, None),
         _Arg("uvCache", uv_cache, None),

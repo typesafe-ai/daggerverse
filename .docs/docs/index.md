@@ -46,11 +46,11 @@
 
     [:octicons-book-16: Docs](./deptry/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/deptry) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/deptry)
 
--   :octicons-check-circle-16:{ .lg .middle } __pyrefly__
+-   ![pyrefly](assets/logos/pyrefly.svg){ .lg .middle style="width: 40px; height: 40px" } __pyrefly__
 
     ---
 
-    Type check Python with [Pyrefly](https://pyrefly.org), one generator per uv workspace that applies pyrefly's fixes.
+    Type check Python with [Pyrefly](https://pyrefly.org), one check per uv workspace.
 
     ---
 

@@ -1755,7 +1755,6 @@ print("LAYER_CACHE_OK")
     # ---- pyrefly module checks ----
 
     _PYREFLY_FIXTURE = "pyrefly/tests/_packages/typed"
-    _PYREFLY_SOURCE = "src/typed/__init__.py"
 
     @check
     @function
@@ -1763,26 +1762,19 @@ print("LAYER_CACHE_OK")
         """Run all checks for the `pyrefly` module in parallel."""
         async with anyio.create_task_group() as tg:
             tg.start_soon(self.pyrefly_discovers_workspaces)
-            tg.start_soon(self.pyrefly_removes_unused_ignore)
             tg.start_soon(self.pyrefly_clean)
             tg.start_soon(self.pyrefly_base_container_at_root)
             tg.start_soon(self.pyrefly_fails_on_type_error)
-            tg.start_soon(self.pyrefly_suppresses_errors)
             tg.start_soon(self.pyrefly_baseline)
             tg.start_soon(self.pyrefly_workspace_settings)
             tg.start_soon(self.pyrefly_go_test)
 
-    def _pyrefly_clean_source(self) -> Directory:
-        return _src(self._PYREFLY_FIXTURE).with_new_file(
-            self._PYREFLY_SOURCE, "def double(value: int) -> int:\n    return value * 2\n"
-        )
-
     def _pyrefly_broken_source(self) -> Directory:
-        return self._pyrefly_clean_source().with_new_file("src/typed/broken.py", 'count: int = "one"\n')
+        return _src(self._PYREFLY_FIXTURE).with_new_file("src/typed/broken.py", 'count: int = "one"\n')
 
     @function
     async def pyrefly_discovers_workspaces(self) -> None:
-        """`workspaces` holds the uv workspaces that lock `pyrefly`, and no other."""
+        """`workspaces` holds the uv workspaces that install `pyrefly`, and no other."""
         pyproject = '[project]\nname = "x"\nversion = "0"\n'
         src = (
             core()
@@ -1797,44 +1789,29 @@ print("LAYER_CACHE_OK")
             raise AssertionError(f"expected ['checked'], got {paths}")
 
     @function
-    async def pyrefly_removes_unused_ignore(self) -> str:
-        """The `check` generator removes an unused ignore comment and changes nothing else."""
-        changeset = pyrefly(_fixture(self._PYREFLY_FIXTURE)).workspaces().get(".").check()
-        return await self._assert_changeset_only_modifies(changeset, {self._PYREFLY_SOURCE})
-
-    @function
     async def pyrefly_clean(self) -> None:
-        """The `check` generator changes nothing in a workspace with nothing to fix."""
-        workspace = pyrefly(self._pyrefly_clean_source().as_workspace()).workspaces().get(".")
-        if not await workspace.check().is_empty():
-            raise AssertionError("expected pyrefly check to change nothing in a clean workspace")
+        """`check` passes in a workspace with no type error."""
+        await _run_check(pyrefly(_src(self._PYREFLY_FIXTURE).as_workspace()).workspaces().get(".").check())
 
     @function
     async def pyrefly_base_container_at_root(self) -> None:
         """A base container whose working directory is `/` still checks only the workspace."""
         base = _base().with_workdir("/")
-        workspace = pyrefly(self._pyrefly_clean_source().as_workspace(), base_container=base).workspaces().get(".")
-        if not await workspace.check().is_empty():
-            raise AssertionError("expected pyrefly check to change nothing in a clean workspace")
+        workspace = pyrefly(_src(self._PYREFLY_FIXTURE).as_workspace(), base_container=base).workspaces().get(".")
+        await _run_check(workspace.check())
 
     @function
     async def pyrefly_fails_on_type_error(self) -> None:
-        """The `check` generator fails on a type error."""
+        """`check` fails on a type error."""
         try:
-            await pyrefly(self._pyrefly_broken_source().as_workspace()).workspaces().get(".").check().sync()
-        except QueryError:
+            await _run_check(pyrefly(self._pyrefly_broken_source().as_workspace()).workspaces().get(".").check())
+        except CheckFailedError:
             return
         raise AssertionError("expected pyrefly check to fail on a type error")
 
     @function
-    async def pyrefly_suppresses_errors(self) -> str:
-        """With `suppress_errors`, the `check` generator adds an ignore comment instead of failing."""
-        workspace = pyrefly(self._pyrefly_broken_source().as_workspace(), suppress_errors=True).workspaces().get(".")
-        return await self._assert_changeset_only_modifies(workspace.check(), {"src/typed/broken.py"})
-
-    @function
     async def pyrefly_baseline(self) -> None:
-        """`update_baseline` records the type errors, `check` then passes, and prunes the entries once fixed."""
+        """`update_baseline` records the type errors, and `check` then passes."""
         fixture = _src(self._PYREFLY_FIXTURE)
         # `[tool.pyrefly]` is the fixture's last table.
         config = await fixture.file("pyproject.toml").contents() + 'baseline = "pyrefly-baseline.json"\n'
@@ -1846,30 +1823,23 @@ print("LAYER_CACHE_OK")
         recorded = workspace(broken).update_baseline()
         if await recorded.added_paths() != ["pyrefly-baseline.json"]:
             raise AssertionError(f"expected only the baseline to be added, got {await recorded.added_paths()}")
-        baselined = broken.with_changes(recorded)
-        if not await workspace(baselined).check().is_empty():
-            raise AssertionError("expected pyrefly check to pass and change nothing with the errors in the baseline")
-        pruned = workspace(baselined.without_file("src/typed/broken.py")).check()
-        if await pruned.modified_paths() != ["pyrefly-baseline.json"]:
-            raise AssertionError(f"expected the stale baseline entry to be pruned, got {await pruned.modified_paths()}")
+        await _run_check(workspace(broken.with_changes(recorded)).check())
 
     @function
     async def pyrefly_workspace_settings(self) -> None:
         """A workspace's `[tool.typesafe_daggerverse.pyrefly]` table overrides the module's settings."""
-        fixture = _src(self._PYREFLY_FIXTURE)
-        pyproject = await fixture.file("pyproject.toml").contents()
+        pyproject = await _src(self._PYREFLY_FIXTURE).file("pyproject.toml").contents()
 
         def workspace(table: str) -> PyreflyWorkspace:
-            source = fixture.with_new_file(
+            source = self._pyrefly_broken_source().with_new_file(
                 "pyproject.toml", f"{pyproject}\n[tool.typesafe_daggerverse.pyrefly]\n{table}"
             )
             return pyrefly(source.as_workspace()).workspaces().get(".")
 
-        # The fixture has an unused ignore, which the module's default removes.
-        if not await workspace("remove-unused-ignores = false\n").check().is_empty():
-            raise AssertionError("expected the workspace's setting to keep the unused ignore")
+        # The type error fails the check (see `pyrefly_fails_on_type_error`) unless the workspace ignores its kind.
+        await _run_check(workspace('args = ["--ignore", "bad-assignment"]\n').check())
         try:
-            await workspace("removeUnusedIgnores = false\n").check().sync()
+            await workspace("allExtras = false\n").check().pass_()
         except QueryError:
             return
         raise AssertionError("expected a key that is no setting to fail")
