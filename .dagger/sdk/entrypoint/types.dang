@@ -62,6 +62,10 @@ type ModuleTypes {
             .withDescription("A `subset` of the projects checks only those, so a broken-but-unselected tree passes.")
         )
         .withFunction(
+          function("deptry_version_from_lock", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`\nby default, and a project without one fails.")
+        )
+        .withFunction(
           function("docs_build", typeDef.withObject("Directory"))
             .withDescription("Build the combined docs site for GitHub Pages.\n\nThe `zensical` module builds every docs site; each module's lands under its\npath (e.g. `uv` -> `/uv`), and the `.docs` project's is the landing page at\n`/`. Each site's links and assets are relative, so they resolve under their\nsubpath.")
         )

@@ -108,6 +108,28 @@ def _assert_modules_script(present: list[str], absent: list[str]) -> str:
     )
 
 
+def _deptry_lock(root: str, source: str, groups: dict[str, list[str]]) -> str:
+    """A uv.lock whose root project `root` (an `editable` or `virtual` source) locks deptry in `groups`.
+
+    A group lists the deptry versions it locks; with more than one in the lock, each entry names its version.
+    """
+    versions = sorted({v for vs in groups.values() for v in vs})
+    entry = (
+        (lambda v: f'{{ name = "deptry", version = "{v}" }}')
+        if len(versions) > 1
+        else (lambda v: '{ name = "deptry" }')
+    )
+    lock = f'version = 1\n\n[[package]]\nname = "{root}"\nversion = "0"\nsource = {{ {source} = "." }}\n\n'
+    lock += "[package.dev-dependencies]\n" + "".join(
+        f"{group} = [{', '.join(entry(v) for v in vs)}]\n" for group, vs in groups.items()
+    )
+    for v in versions:
+        lock += (
+            f'\n[[package]]\nname = "deptry"\nversion = "{v}"\nsource = {{ registry = "https://pypi.org/simple" }}\n'
+        )
+    return lock
+
+
 @object_type
 class TypesafeDaggerverse:
     """CI checks for modules published from this repo."""
@@ -1412,7 +1434,14 @@ print("LAYER_CACHE_OK")
     # ---- deptry module checks ----
 
     def _deptry_project(self, pyproject: str, sources: dict[str, str]) -> Directory:
-        d = core().directory().with_new_file("pyproject.toml", pyproject)
+        """A standalone project from `pyproject` and `sources`, with a uv.lock locking deptry in its `dev` group."""
+        name = tomllib.loads(pyproject)["project"]["name"]
+        d = (
+            core()
+            .directory()
+            .with_new_file("pyproject.toml", pyproject)
+            .with_new_file("uv.lock", _deptry_lock(name, source="editable", groups={"dev": ["0.25.1"]}))
+        )
         for path, content in sources.items():
             d = d.with_new_file(path, content)
         return d
@@ -1486,15 +1515,60 @@ print("LAYER_CACHE_OK")
     @function
     async def all_deptry(self) -> None:
         """Run all checks for the `deptry` module in parallel."""
+        tests = [
+            self.deptry_discovers_projects,
+            self.deptry_clean_flat_layout,
+            self.deptry_clean_src_layout,
+            self.deptry_detects_issue,
+            self.deptry_subset,
+            self.deptry_projects_exclude,
+            self.deptry_config_opts_in_nonstandard_layout,
+            self.deptry_skips_project_without_layout_or_config,
+            self.deptry_version_from_lock,
+        ]
+
+        async def run(test) -> None:
+            # Most fixtures are a single project at `.`: the test's name says which one a span belongs to.
+            with get_tracer().start_as_current_span(f"Test deptry: {test.__name__.removeprefix('deptry_')}"):
+                await test()
+
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.deptry_discovers_projects)
-            tg.start_soon(self.deptry_clean_flat_layout)
-            tg.start_soon(self.deptry_clean_src_layout)
-            tg.start_soon(self.deptry_detects_issue)
-            tg.start_soon(self.deptry_subset)
-            tg.start_soon(self.deptry_projects_exclude)
-            tg.start_soon(self.deptry_config_opts_in_nonstandard_layout)
-            tg.start_soon(self.deptry_skips_project_without_layout_or_config)
+            for test in tests:
+                tg.start_soon(run, test)
+
+    @function
+    async def deptry_version_from_lock(self) -> None:
+        """Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`
+        by default, and a project without one fails."""
+        pyproject = '[project]\nname = "{name}"\nversion = "0"\ndependencies = []\n'
+        src = (
+            core()
+            .directory()
+            .with_new_file("pyproject.toml", '[tool.uv.workspace]\nmembers = ["member"]\n')
+            .with_new_file(
+                "uv.lock", _deptry_lock("root", source="virtual", groups={"dev": ["0.24.0"], "lint": ["0.25.1"]})
+            )
+            .with_new_file("member/pyproject.toml", pyproject.format(name="member"))
+            .with_new_file("member/member/__init__.py", "")
+            .with_new_file("unlocked/pyproject.toml", pyproject.format(name="unlocked"))
+            .with_new_file("unlocked/unlocked/__init__.py", "")
+        )
+        member = deptry(src.as_workspace()).projects().get("member")
+        if (version := await member.version()) != "0.24.0":
+            raise AssertionError(f"expected the dev group's 0.24.0, got {version}")
+        # The locked version installs and runs.
+        await _run_check(member.check())
+        lint = deptry(src.as_workspace(), group="lint").projects().get("member")
+        if (version := await lint.version()) != "0.25.1":
+            raise AssertionError(f"expected the lint group's 0.25.1, got {version}")
+        try:
+            await deptry(src.as_workspace()).projects().get("unlocked").version()
+        except QueryError as exc:
+            # The module's error is in the stderr of the failed call, not its message.
+            if "no unlocked/uv.lock" not in getattr(exc, "stderr", str(exc)):
+                raise
+        else:
+            raise AssertionError("expected a project without a uv.lock to fail")
 
     @function
     async def deptry_discovers_projects(self) -> None:

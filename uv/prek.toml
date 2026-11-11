@@ -7,5 +7,5 @@
 [[repos]]
 repo = "local"
 hooks = [
-  { id = "deptry", name = "deptry", entry = "uvx deptry@0.25.1 --known-first-party uv --extend-exclude sdk --extend-exclude clients .", language = "system", pass_filenames = false, files = '(\.py|pyproject\.toml)$' },
+  { id = "deptry", name = "deptry", entry = "uv run --frozen --only-group dev deptry --known-first-party uv --extend-exclude sdk --extend-exclude clients .", language = "system", pass_filenames = false, files = '(\.py|pyproject\.toml)$' },
 ]
