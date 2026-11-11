@@ -218,8 +218,14 @@ func New(
 ) (*Pyrefly, error) {
 	workspaces := uv.New(ws, uv.UvOpts{Exclude: exclude, UvCache: uvCache}).Workspaces().
 		Filter(uv.UvWorkspacesFilterOpts{HasPackages: []string{toolPackage}})
-	paths, err := workspaces.Keys(ctx)
-	if err != nil {
+	// One query loads every workspace: the uv module's objects are resolved
+	// together, and `inputs` is a field, so reading it calls no function.
+	var paths []string
+	var sources []uv.UvWorkspaceSource
+	listing, listCtx := errgroup.WithContext(ctx)
+	listing.Go(func() (err error) { paths, err = workspaces.Keys(listCtx); return })
+	listing.Go(func() (err error) { sources, err = workspaces.List(listCtx); return })
+	if err := listing.Wait(); err != nil {
 		return nil, err
 	}
 	module := settings{
@@ -233,7 +239,12 @@ func New(
 	group, ctx := errgroup.WithContext(ctx)
 	for i, path := range paths {
 		group.Go(func() error {
-			workspace := workspaces.Get(path)
+			// Resolved here, concurrently: left lazy, the inputs resolve one
+			// workspace at a time when the returned object is serialized.
+			inputs, err := sources[i].Inputs().Sync(ctx)
+			if err != nil {
+				return err
+			}
 			pyproject, err := ws.File(posixpath.Join(path, "pyproject.toml")).Contents(ctx)
 			if err != nil {
 				return err
@@ -244,7 +255,7 @@ func New(
 			}
 			items[i] = &PyreflyWorkspace{
 				Path:              path,
-				Inputs:            workspace.Inputs(),
+				Inputs:            inputs,
 				UvCache:           uvCache,
 				Groups:            own.Groups,
 				Extras:            own.Extras,

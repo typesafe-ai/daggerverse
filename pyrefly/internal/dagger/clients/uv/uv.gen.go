@@ -3883,11 +3883,7 @@ func (r *UvWorkspaceSource) Indices(ctx context.Context, opts ...UvWorkspaceSour
 	return convert(response), nil
 }
 
-// Every file a `builder` reads, at workspace-root-relative paths.
-//
-// `Uv.workspace` loads the workspace's directories from just these files.
-// A module that reads more of the workspace can merge its own files into
-// them and hand the result on with `as_workspace()`.
+// Every file a `builder` reads, at workspace-root-relative paths. `Uv.workspace` loads the workspace's directories from just these files. A module that reads more of the workspace can merge its own files into them and hand the result on with `as_workspace()`.
 func (r *UvWorkspaceSource) Inputs() *Directory { // uv (../../:0:0)
 	q := r.query.Select("inputs")
 
