@@ -63,7 +63,7 @@ baseline = "pyrefly-baseline.json"
 Then record the errors, in the same environment `check` runs in:
 
 ```console
-$ dagger -c 'pyrefly | workspaces | get . | update-baseline'
+$ dagger -c 'pyrefly | workspaces | get . | update-baseline | export --path .'
 ```
 
 `check` keeps the baseline pruned as the errors get fixed.
