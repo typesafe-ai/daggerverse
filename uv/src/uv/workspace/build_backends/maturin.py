@@ -6,7 +6,7 @@ See https://www.maturin.rs/project_layout and https://www.maturin.rs/config.
 import dataclasses
 import posixpath
 from dataclasses import dataclass
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, Any, ClassVar, Self, override
 
 from dagger import Doc, field, function, object_type
 from dagger_clients.core import CacheSharingMode, CacheVolume, Container, core
@@ -61,7 +61,7 @@ class MaturinSettings:
     cargo_metadata: tuple[str, ...] = ()
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str) -> Self:
         maturin = metadata.get("tool", {}).get("maturin", {})
         includes = [
             entry if isinstance(entry, str) else entry["path"]
@@ -184,6 +184,7 @@ class MaturinHandler(BuiltinHandler):
         return dataclasses.replace(self, package_inputs=inputs)
 
     @function
+    @override
     async def build_inputs(self, pyproject: str, name: str) -> list[str]:
         extra = self.package_inputs.get(normalize_package_name(name), [])
         return [*self._settings(pyproject, name).build_inputs, *extra]
@@ -211,6 +212,7 @@ class MaturinHandler(BuiltinHandler):
         )
 
     @function
+    @override
     async def setup(self, container: Container) -> Container:
         if base_home := await container.env_variable("CARGO_HOME"):
             container = container.with_env_variable(_BASE_CARGO_HOME, base_home)
@@ -223,6 +225,7 @@ class MaturinHandler(BuiltinHandler):
         )
 
     @function
+    @override
     async def teardown(self, container: Container) -> Container:
         base_home = await container.env_variable(_BASE_CARGO_HOME)
         # The volume is private to this build, so nothing else is using what gets cleared.

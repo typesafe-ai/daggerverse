@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from typing import Any
 
 import pytest
 from github.status_monitor.types import MISSING, Status, Step, Verdict
@@ -10,7 +11,7 @@ def make_console() -> Console:
     return Console(record=True, width=200, force_terminal=False, force_interactive=False)
 
 
-def make_watcher(expected: Iterable[str], **kwargs) -> tuple[Watcher, Console]:
+def make_watcher(expected: Iterable[str], **kwargs: Any) -> tuple[Watcher, Console]:
     c = make_console()
     return Watcher(expected, console=c, **kwargs), c
 
@@ -131,7 +132,7 @@ def test_disappearing_status_reverts_to_missing():
 
 def test_realistic_success_sequence():
     w, _ = make_watcher(["a", "b", "c"])
-    sequence = [
+    sequence: list[dict[str, Status]] = [
         {},
         {"a": Status("pending")},
         {"a": Status("pending"), "b": Status("pending")},
@@ -272,7 +273,7 @@ class FakeClock:
         return self.t
 
 
-def make_step_watcher(expected: Iterable[str], **kwargs) -> tuple[Watcher, Console, FakeClock]:
+def make_step_watcher(expected: Iterable[str], **kwargs: Any) -> tuple[Watcher, Console, FakeClock]:
     c = make_console()
     clock = FakeClock()
     w = Watcher(expected, console=c, clock=clock, **kwargs)

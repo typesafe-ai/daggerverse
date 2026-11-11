@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator, Mapping
+from typing import Any
 
 import httpx
 
@@ -31,7 +32,7 @@ _CHECK_RUN_STATUS_MAP: dict[str, str] = {
 }
 
 
-def _check_run_state(run: dict) -> str:
+def _check_run_state(run: dict[str, Any]) -> str:
     status = run["status"]
     if status == "completed":
         conclusion = run.get("conclusion", "failure")

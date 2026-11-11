@@ -22,8 +22,13 @@ dagger-clients-core = "dagger_clients"
 [dependency-groups]
 dev = [
     "deptry==0.25.1",
+    "pyrefly>=1.4.1",
     "pytest>=8",
 ]
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core"]
+
+[tool.pyrefly]
+preset = "strict"
+project-includes = ["src", "tests"]

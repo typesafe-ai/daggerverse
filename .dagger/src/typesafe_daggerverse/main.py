@@ -2,7 +2,8 @@
 
 import posixpath
 import tomllib
-from typing import Annotated
+from collections.abc import Awaitable, Callable
+from typing import Annotated, Any
 
 import anyio
 import yaml
@@ -115,7 +116,7 @@ def _deptry_lock(root: str, source: str, groups: dict[str, list[str]]) -> str:
     A group lists the deptry versions it locks; with more than one in the lock, each entry names its version.
     """
     versions = sorted({v for vs in groups.values() for v in vs})
-    entry = (
+    entry: Callable[[str], str] = (
         (lambda v: f'{{ name = "deptry", version = "{v}" }}')
         if len(versions) > 1
         else (lambda v: '{ name = "deptry" }')
@@ -135,7 +136,8 @@ def _deptry_lock(root: str, source: str, groups: dict[str, list[str]]) -> str:
 class TypesafeDaggerverse:
     """CI checks for modules published from this repo."""
 
-    @function(cache="never")
+    # The SDK's `function` overloads leave out `cache`.
+    @function(cache="never")  # pyrefly: ignore[no-matching-overload]
     async def wait_dagger_checks(
         self,
         repo: Annotated[str, Doc("GitHub repo as 'owner/name'")],
@@ -213,7 +215,7 @@ class TypesafeDaggerverse:
                 raise AssertionError(f"expected no audit fixes for {await workspace.path()}")
 
     @staticmethod
-    async def _uv_audit_fixes(fixture: str, **kwargs) -> tuple[str, str]:
+    async def _uv_audit_fixes(fixture: str, **kwargs: Any) -> tuple[str, str]:
         """The fixed uv.lock and pyproject.toml `audit` generates for `fixture`."""
         after = uv(_fixture(fixture), **kwargs).workspace(".").audit().after()
         return await after.file("uv.lock").contents(), await after.file("pyproject.toml").contents()
@@ -229,7 +231,7 @@ class TypesafeDaggerverse:
         """Run all checks for the `uv` module in parallel."""
         tracer = get_tracer()
 
-        async def _run(name: str, fn) -> None:
+        async def _run(name: str, fn: Callable[[], Awaitable[object]]) -> None:
             with tracer.start_as_current_span(name):
                 await fn()
 
@@ -320,14 +322,15 @@ class TypesafeDaggerverse:
             .with_new_file("b/pyproject.toml", pyproject)
         )
         workspaces = uv(src.as_workspace()).workspaces()
-        for has_packages, expected in (
+        cases: list[tuple[list[str], list[str]]] = [
             (["pyrefly"], ["a"]),
             (["pyrefly", "ruff"], ["a"]),
             (["pyrefly", "typing-extensions"], []),
             # Names match as uv.lock spells them.
             (["Typing_Extensions"], ["b"]),
             ([], ["a", "b"]),
-        ):
+        ]
+        for has_packages, expected in cases:
             paths = await workspaces.filter(has_packages=has_packages).keys()
             if paths != expected:
                 raise AssertionError(f"has_packages={has_packages}: expected {expected}, got {paths}")
@@ -880,7 +883,7 @@ class TypesafeDaggerverse:
         files = ["LICENSE.txt", "NOTICE", "licenses/COPYING.md", "licenses/vendor/COPYING.txt"]
         for path in [*files, "nested/LICENSE.txt", "licenses/unrelated.txt"]:
             source = source.with_new_file(path, path)
-        cases = [
+        cases: list[tuple[list[str] | None, list[str]]] = [
             (None, []),
             ([], []),
             (["LICENSE.txt", "NOTICE"], ["LICENSE.txt", "NOTICE"]),
@@ -927,7 +930,7 @@ class TypesafeDaggerverse:
                 raise ValueError(f"no entry for {repo!r} in {_REAL_WORLD_PROJECTS}")
         tracer = get_tracer()
 
-        async def _build(project: dict, no_editable: bool) -> None:
+        async def _build(project: dict[str, Any], no_editable: bool) -> None:
             with tracer.start_as_current_span(f"{project['repo']} (no_editable={no_editable})"):
                 source = core().git(f"https://github.com/{project['repo']}").commit(project["rev"]).tree()
                 names = [
@@ -1564,7 +1567,7 @@ print("LAYER_CACHE_OK")
             self.deptry_version_from_lock,
         ]
 
-        async def run(test) -> None:
+        async def run(test: Callable[[], Awaitable[None]]) -> None:
             # Most fixtures are a single project at `.`: the test's name says which one a span belongs to.
             with get_tracer().start_as_current_span(f"Test deptry: {test.__name__.removeprefix('deptry_')}"):
                 await test()

@@ -13,7 +13,7 @@ interface.
 """
 
 from dataclasses import dataclass, field
-from typing import Self
+from typing import Any, Self
 
 from dagger import function, object_type
 
@@ -84,7 +84,7 @@ class PackageBackend:
     project_inputs: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str, settings: BackendSettings | None = None) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str, settings: BackendSettings | None = None) -> Self:
         """The package's backend; `settings` (resolved from a handler) replaces the built-in ones."""
         backend = metadata.get("build-system", {}).get("build-backend")
         if settings is None and (builtin := BACKENDS.get(backend) if backend else None):
@@ -122,7 +122,7 @@ class PackageBackend:
         return list(dict.fromkeys([*self.project_inputs, *backend_inputs]))
 
 
-def _project_inputs(project: dict) -> list[str]:
+def _project_inputs(project: dict[str, Any]) -> list[str]:
     """Files named by PEP 621 metadata: `license-files`, a readme file, and a legacy `license.file`."""
     paths = list(project.get("license-files", []))
     readme = project.get("readme")

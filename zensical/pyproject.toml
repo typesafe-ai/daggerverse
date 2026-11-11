@@ -24,6 +24,7 @@ dagger-clients-uv = "dagger_clients"
 [dependency-groups]
 dev = [
     "deptry==0.25.1",
+    "pyrefly>=1.4.1",
 ]
 docs = [
     "pymdown-extensions>=11.0.1",
@@ -32,3 +33,7 @@ docs = [
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core", "clients/uv"]
+
+[tool.pyrefly]
+preset = "strict"
+project-includes = ["src"]

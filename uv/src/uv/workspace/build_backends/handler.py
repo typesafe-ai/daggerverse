@@ -14,7 +14,7 @@ import asyncio
 import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, ClassVar, Protocol, Self
+from typing import Annotated, Any, ClassVar, Protocol, Self
 
 from dagger import Doc, field, function, interface, object_type
 from dagger_clients.core import Container
@@ -142,7 +142,7 @@ class BuiltinHandler:
     # The `[build-system].build-backend` value it handles.
     backend: ClassVar[str]
     # Its settings, parsed from a package's metadata and distribution name.
-    parse: ClassVar[Callable[[dict, str], BackendSettings]]
+    parse: ClassVar[Callable[[dict[str, Any], str], BackendSettings]]
     # Whether `setup`/`teardown` do anything, so a build without a handler runs them.
     has_hooks: ClassVar[bool] = False
 

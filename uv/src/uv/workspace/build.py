@@ -150,12 +150,18 @@ class UvWorkspaceBuilder:
         """
         return dataclasses.replace(self, no_install_packages=[*self.no_install_packages, *packages])
 
+    def _resolved_plan(self) -> UvSyncPlan:
+        """The sync plan, for the steps that run once it is resolved."""
+        assert self.plan is not None
+        return self.plan
+
     def _sync_args(self) -> list[str]:
         """The plan's `uv sync` arguments, with the packages left uninstalled."""
-        assert self.plan is not None
-        return [*self.plan.uv_sync_args, *(f"--no-install-package={p}" for p in self.no_install_packages)]
+        return [*self._resolved_plan().uv_sync_args, *(f"--no-install-package={p}" for p in self.no_install_packages)]
 
-    async def _exec_step(self, span_name: str, argv: list[str], attributes: dict[str, object]) -> UvWorkspaceBuilder:
+    async def _exec_step(
+        self, span_name: str, argv: list[str], attributes: dict[str, str | list[str]]
+    ) -> UvWorkspaceBuilder:
         """Run `argv` in the build container under a span, returning a new build with the result.
 
         `with_exec` is lazy; sync() inside the span so it captures the actual work
@@ -335,7 +341,7 @@ class UvWorkspaceBuilder:
             posixpath.join(ctr_base, "pyproject.toml").lstrip("/"),
             pkg.pyproject_contents,
         )
-        if pkg.name in self.plan.flat_packages:
+        if pkg.name in self._resolved_plan().flat_packages:
             return overlay
         overlay = overlay.with_new_file(posixpath.join(ctr_base, "README.md").lstrip("/"), "")
         for stub in _module_stubs(pkg):
@@ -344,7 +350,7 @@ class UvWorkspaceBuilder:
         package_inputs = [path for path in pkg.build_inputs if not path.startswith("/")]
         root_inputs = [path.lstrip("/") for path in pkg.build_inputs if path.startswith("/")]
         if package_inputs:
-            resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
+            resolved = posixpath.normpath(posixpath.join(self._resolved_plan().workspace_path, pkg.path))
             overlay = overlay.with_directory(
                 ctr_base.lstrip("/"),
                 pkg.source.directory(resolved),
@@ -352,15 +358,16 @@ class UvWorkspaceBuilder:
             )
         if root_inputs:
             # Workspace-root-relative inputs, e.g. a Cargo workspace above the package.
-            assert self.plan.root_inputs_dir is not None
+            root_inputs_dir = self._resolved_plan().root_inputs_dir
+            assert root_inputs_dir is not None
             overlay = overlay.with_directory(
-                self._root_path(workdir).lstrip("/") or ".", self.plan.root_inputs_dir, include=root_inputs
+                self._root_path(workdir).lstrip("/") or ".", root_inputs_dir, include=root_inputs
             )
         return overlay
 
     def _root_path(self, workdir: str) -> str:
         """Where the workspace root sits in the container, which mirrors it with the uv workspace at `workdir`."""
-        return posixpath.normpath(posixpath.join(workdir, posixpath.relpath(".", self.plan.workspace_path)))
+        return posixpath.normpath(posixpath.join(workdir, posixpath.relpath(".", self._resolved_plan().workspace_path)))
 
     def _hooks(self) -> dict[str, BackendHooks]:
         """The `setup`/`teardown` around the local packages' build, once each, keyed for the trace.
@@ -368,12 +375,14 @@ class UvWorkspaceBuilder:
         A package's handler provides them; without one, its built-in backend, if it needs any.
         """
         hooks: dict[str, BackendHooks] = {}
-        for pkg in self.plan.needed_local:
+        for pkg in self._resolved_plan().needed_local:
             backend = pkg.build_backend.name
-            if pkg.name in self.plan.flat_packages or backend is None:
+            if pkg.name in self._resolved_plan().flat_packages or backend is None:
                 continue
             if pkg.handler is not None:
-                hooks.setdefault(f"{backend} handler #{pkg.handler}", HandlerHooks(self.plan.handlers[pkg.handler]))
+                hooks.setdefault(
+                    f"{backend} handler #{pkg.handler}", HandlerHooks(self._resolved_plan().handlers[pkg.handler])
+                )
             elif (builtin := BACKENDS.get(backend)) and builtin.has_hooks:
                 hooks.setdefault(backend, builtin())
         return hooks
@@ -445,7 +454,7 @@ class UvWorkspaceBuilder:
         return dataclasses.replace(self, container=container)
 
     def _copy_package(self, overlay: Directory, workdir: str, pkg: LocalPackage) -> Directory:
-        resolved = posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path))
+        resolved = posixpath.normpath(posixpath.join(self._resolved_plan().workspace_path, pkg.path))
         ctr_base = posixpath.normpath(posixpath.join(workdir, pkg.path))
         for source_path in pkg.source_paths:
             target = posixpath.join(ctr_base, source_path).lstrip("/")
@@ -464,10 +473,12 @@ class UvWorkspaceBuilder:
         Python graph-building and report ~zero duration.
         """
         overlay = core().directory()
-        packages = [pkg for pkg in self.plan.needed_local if pkg.name not in self.plan.flat_packages]
+        packages = [
+            pkg for pkg in self._resolved_plan().needed_local if pkg.name not in self._resolved_plan().flat_packages
+        ]
         with get_tracer().start_as_current_span("copy local dependency sources") as span:
-            span.set_attribute("packages.count", len(self.plan.needed_local))
-            span.set_attribute("packages.names", [pkg.name for pkg in self.plan.needed_local])
+            span.set_attribute("packages.count", len(self._resolved_plan().needed_local))
+            span.set_attribute("packages.names", [pkg.name for pkg in self._resolved_plan().needed_local])
             for pkg in packages:
                 overlay = self._copy_package(overlay, workdir, pkg)
             # Drop the module stubs the real source doesn't replace, e.g. the `__init__.py`
@@ -483,7 +494,7 @@ class UvWorkspaceBuilder:
         candidates = [
             (
                 pkg.source,
-                posixpath.normpath(posixpath.join(self.plan.workspace_path, pkg.path, stub)),
+                posixpath.normpath(posixpath.join(self._resolved_plan().workspace_path, pkg.path, stub)),
                 posixpath.normpath(posixpath.join(workdir, pkg.path, stub)),
             )
             for pkg in packages
@@ -502,7 +513,7 @@ class UvWorkspaceBuilder:
         new dangling links.
         """
         seen: set[str] = set()
-        source = self.plan.source_dir
+        source = self._resolved_plan().source_dir
         with get_tracer().start_as_current_span("resolve dangling symlinks") as span:
             while True:
                 listing = await (
@@ -523,7 +534,7 @@ class UvWorkspaceBuilder:
                 for link in links:
                     # The container mirrors the source tree with the workspace root at `workdir`.
                     relative = posixpath.relpath(f"/{link}", workdir)
-                    source_path = posixpath.normpath(posixpath.join(self.plan.workspace_path, relative))
+                    source_path = posixpath.normpath(posixpath.join(self._resolved_plan().workspace_path, relative))
                     if await source.exists(source_path, expected_type=ExistsType.DIRECTORY_TYPE):
                         overlay = overlay.without_file(link).with_directory(link, source.directory(source_path))
                     elif await source.exists(source_path):
@@ -541,8 +552,8 @@ class UvWorkspaceBuilder:
         """
         return [
             f"--reinstall-package={pkg.name}"
-            for pkg in self.plan.needed_local
-            if pkg.name not in self.plan.flat_packages
+            for pkg in self._resolved_plan().needed_local
+            if pkg.name not in self._resolved_plan().flat_packages
         ]
 
     async def _exec_with_hooks(self, ctr: Container, commands: list[list[str]]) -> Container:

@@ -23,6 +23,7 @@ dagger-clients-pyproject = "dagger_clients"
 
 [dependency-groups]
 dev = [
+    "pyrefly>=1.4.1",
     "pytest>=9.0.3",
     "zensical>=0.0.57",
 ]
@@ -33,3 +34,7 @@ docs = [
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core", "clients/pyproject"]
+
+[tool.pyrefly]
+preset = "strict"
+project-includes = ["src"]

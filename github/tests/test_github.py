@@ -1,5 +1,7 @@
 import asyncio
+from typing import Any, cast
 
+import httpx
 import pytest
 from github.status_monitor.api import _check_run_state, fetch_check_runs_snapshot
 from github.status_monitor.main import check_path
@@ -37,7 +39,7 @@ def test_check_run_state_mapping(status: str, conclusion: str | None, expected: 
 
 
 class FakeResponse:
-    def __init__(self, json_data):
+    def __init__(self, json_data: dict[str, Any]):
         self._json = json_data
 
     def raise_for_status(self):
@@ -48,11 +50,11 @@ class FakeResponse:
 
 
 class FakeClient:
-    def __init__(self, pages: list[dict]):
+    def __init__(self, pages: list[dict[str, Any]]):
         self._pages = pages
         self._call = 0
 
-    async def get(self, url, params=None):
+    async def get(self, url: str, params: dict[str, int] | None = None):
         idx = self._call
         self._call += 1
         return FakeResponse(self._pages[idx] if idx < len(self._pages) else {"check_runs": []})
@@ -69,7 +71,7 @@ def test_fetch_check_runs_snapshot_basic():
             {"name": "pulumi / up (k8s:dev)", "status": "in_progress"},
         ],
     }
-    client = FakeClient([page])
+    client = cast("httpx.AsyncClient", FakeClient([page]))
     result = asyncio.run(fetch_check_runs_snapshot(client, "https://api.github.com/test"))
     assert result == {
         "pulumi / up (org:core)": Status(state="success"),
@@ -84,7 +86,7 @@ def test_fetch_check_runs_snapshot_keeps_first_per_name():
             {"name": "a", "status": "completed", "conclusion": "failure"},
         ],
     }
-    client = FakeClient([page])
+    client = cast("httpx.AsyncClient", FakeClient([page]))
     result = asyncio.run(fetch_check_runs_snapshot(client, "https://api.github.com/test"))
     assert result == {"a": Status(state="success")}
 
@@ -100,5 +102,5 @@ def test_fetch_check_runs_snapshot_keeps_first_per_name():
         ("dag://?check=audit&uv-workspace-source=uv", "audit"),
     ],
 )
-def test_check_path(uri, expected):
+def test_check_path(uri: str, expected: str):
     assert check_path(uri) == expected

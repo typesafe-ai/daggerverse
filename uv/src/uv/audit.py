@@ -215,7 +215,7 @@ def _exemptions_table(doc: tomlkit.TOMLDocument, uv_toml: bool, create: bool):
     return parent, parent["exclude-newer-package"]
 
 
-def _is_ours(item) -> bool:
+def _is_ours(item: object) -> bool:
     # tomlkit hands booleans back as plain `bool`s, with no trivia to carry a comment.
     trivia = getattr(item, "trivia", None)
     return trivia is not None and EXEMPTION_MARKER in (trivia.comment or "")
@@ -225,6 +225,7 @@ def add_exemptions(config: str, exemptions: dict[str, str], *, uv_toml: bool) ->
     """`config` with each `package = cutoff` exemption written to `exclude-newer-package`."""
     doc = tomlkit.parse(config)
     _, table = _exemptions_table(doc, uv_toml, create=True)
+    assert table is not None
     for package, cutoff in sorted(exemptions.items()):
         table[package] = cutoff
         table[package].comment(EXEMPTION_MARKER)

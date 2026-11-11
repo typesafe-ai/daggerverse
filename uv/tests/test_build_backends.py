@@ -2,8 +2,11 @@
 
 import asyncio
 import subprocess
+from pathlib import Path
+from typing import Any
 
 import pytest
+from dagger_clients.core import Container
 from uv.workspace.build_backends import PackageBackend, maturin
 from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.handler import BuildBackendLayout
@@ -16,20 +19,22 @@ from uv.workspace.build_backends.uv_build import UvBuildSettings
 from uv.workspace.plan import handlers_by_backend
 
 
-def _system(backend: str, tool: dict | None = None, project: dict | None = None, name: str = "example"):
+def _system(
+    backend: str, tool: dict[str, Any] | None = None, project: dict[str, Any] | None = None, name: str = "example"
+):
     metadata = {"build-system": {"build-backend": backend}, "tool": tool or {}, "project": project or {}}
     return PackageBackend.from_pyproject(metadata, name)
 
 
-def _uv_build(settings: dict | None = None, name: str = "example") -> PackageBackend:
+def _uv_build(settings: dict[str, Any] | None = None, name: str = "example") -> PackageBackend:
     return _system("uv_build", {"uv": {"build-backend": settings or {}}}, name=name)
 
 
-def _hatchling(hatch: dict) -> PackageBackend:
+def _hatchling(hatch: dict[str, Any]) -> PackageBackend:
     return _system("hatchling.build", {"hatch": hatch})
 
 
-def _pdm(pdm: dict, name: str = "example") -> PackageBackend:
+def _pdm(pdm: dict[str, Any], name: str = "example") -> PackageBackend:
     return _system("pdm.backend", {"pdm": pdm}, name=name)
 
 
@@ -46,7 +51,7 @@ def _pdm(pdm: dict, name: str = "example") -> PackageBackend:
         (None, type(None)),
     ],
 )
-def test_registry_selects_settings(backend, settings):
+def test_registry_selects_settings(backend: str | None, settings: type):
     system = PackageBackend.from_pyproject({"build-system": {"build-backend": backend}}, "example")
     assert system.name == backend
     assert type(system.settings) is settings
@@ -73,7 +78,7 @@ def test_other_backend_uses_the_generic_layout():
         ({"license": "MIT"}, []),
     ],
 )
-def test_project_inputs(project, expected):
+def test_project_inputs(project: dict[str, Any], expected: list[str]):
     assert _system("setuptools.build_meta", project=project).build_inputs == expected
 
 
@@ -90,7 +95,7 @@ def test_build_inputs_deduplicated():
 
 
 @pytest.mark.parametrize("root", ["", ".", "./"])
-def test_uv_build_flat_roots_copy_only_declared_modules(root):
+def test_uv_build_flat_roots_copy_only_declared_modules(root: str):
     system = _uv_build({"module-name": ["actual_package", "compat_package"], "module-root": root})
     assert isinstance(system.settings, UvBuildSettings)
     assert system.settings.module_root == ""
@@ -157,7 +162,7 @@ def test_hatchling_packages_and_only_include_combine():
 
 
 @pytest.mark.parametrize("selection", [{}, {"packages": []}])
-def test_hatchling_bypass_selection_or_empty_packages_ship_no_modules(selection):
+def test_hatchling_bypass_selection_or_empty_packages_ship_no_modules(selection: dict[str, Any]):
     system = _hatchling({"build": {"targets": {"wheel": {"bypass-selection": True, **selection}}}})
     assert system.module_paths == system.source_paths == []
 
@@ -208,7 +213,7 @@ def test_hatchling_force_include_and_shared_sources_in_the_workspace():
         (".", "..data/x", "..data/x"),
     ],
 )
-def test_rooted_stages_inputs_above_the_package_from_the_workspace_root(package_root, path, expected):
+def test_rooted_stages_inputs_above_the_package_from_the_workspace_root(package_root: str, path: str, expected: str):
     assert rooted(package_root, path) == expected
 
 
@@ -253,7 +258,7 @@ def test_pdm_defaults_use_the_generic_layout_and_stage_the_default_hook():
         ({"source": "scm"}, ["pdm_build.py"]),
     ],
 )
-def test_pdm_version_file_is_a_build_input(version, expected):
+def test_pdm_version_file_is_a_build_input(version: dict[str, Any], expected: list[str]):
     assert _pdm({"version": version}).build_inputs == expected
 
 
@@ -265,7 +270,7 @@ def test_pdm_version_file_is_a_build_input(version, expected):
         (".", ["my_pkg"], ["my_pkg"]),
     ],
 )
-def test_pdm_package_dir(package_dir, module_paths, source_paths):
+def test_pdm_package_dir(package_dir: str, module_paths: list[str], source_paths: list[str]):
     system = _pdm({"build": {"package-dir": package_dir}}, name="My-Pkg")
     assert system.module_paths == module_paths
     assert system.source_paths == source_paths
@@ -290,7 +295,7 @@ def test_pdm_custom_hook_path():
 # ---- flit_core ----
 
 
-def _flit(flit: dict, project: dict | None = None, name: str = "example-dist") -> PackageBackend:
+def _flit(flit: dict[str, Any], project: dict[str, Any] | None = None, name: str = "example-dist") -> PackageBackend:
     return _system("flit_core.buildapi", {"flit": flit}, project, name=name)
 
 
@@ -307,7 +312,7 @@ def test_flit_dotted_module_name():
 
 
 @pytest.mark.parametrize("dynamic", [["version"], ["description"], ["version", "description"]])
-def test_flit_dynamic_metadata_stages_the_module(dynamic):
+def test_flit_dynamic_metadata_stages_the_module(dynamic: list[str]):
     backend = _flit({"module": {"name": "ns.pkg"}}, {"dynamic": dynamic})
     assert backend.build_inputs == ["ns/pkg/__init__.py", "src/ns/pkg/__init__.py"]
 
@@ -323,14 +328,14 @@ def test_flit_external_data():
 @pytest.mark.parametrize(
     "backend", ["uv_build", "hatchling.build", "pdm.backend", "poetry.core.masonry.api", "setuptools.build_meta"]
 )
-def test_only_flit_declares_a_module_name(backend):
+def test_only_flit_declares_a_module_name(backend: str):
     assert _system(backend).module_name is None
 
 
 # ---- poetry-core ----
 
 
-def _poetry(poetry: dict) -> PackageBackend:
+def _poetry(poetry: dict[str, Any]) -> PackageBackend:
     return _system("poetry.core.masonry.api", {"poetry": poetry})
 
 
@@ -397,6 +402,12 @@ class _SetuptoolsHandler:
     async def editable_writes_source(self, pyproject: str, name: str) -> bool:
         return True
 
+    def setup(self, container: Container) -> Container:
+        return container
+
+    def teardown(self, container: Container) -> Container:
+        return container
+
 
 def test_handler_layout_resolves_every_answer():
     layout = asyncio.run(BuildBackendLayout.resolve(_SetuptoolsHandler(), "", "plugged"))
@@ -410,7 +421,7 @@ def test_handler_layout_resolves_every_answer():
 
 
 @pytest.mark.parametrize("backend", ["setuptools.build_meta", "hatchling.build"])
-def test_handler_layout_replaces_builtin_settings(backend):
+def test_handler_layout_replaces_builtin_settings(backend: str):
     layout = BuildBackendLayout(module_paths=["lib/plugged"], source_paths=["lib"], build_inputs=["VERSION"])
     metadata = {"build-system": {"build-backend": backend}, "project": {"readme": "README.md"}}
     system = PackageBackend.from_pyproject(metadata, "plugged", layout)
@@ -423,7 +434,9 @@ def test_handler_layout_replaces_builtin_settings(backend):
 # ---- maturin ----
 
 
-def _maturin(maturin: dict, project: dict | None = None, name: str = "example-dist") -> PackageBackend:
+def _maturin(
+    maturin: dict[str, Any], project: dict[str, Any] | None = None, name: str = "example-dist"
+) -> PackageBackend:
     return _system("maturin", {"maturin": maturin}, project, name=name)
 
 
@@ -469,7 +482,9 @@ def test_maturin_cargo_metadata_files_and_wheel_includes():
     ("max_target_size", "cleared"),
     [(0, True), (1, False)],
 )
-def test_maturin_target_prune_clears_only_past_the_limit(tmp_path, monkeypatch, max_target_size, cleared):
+def test_maturin_target_prune_clears_only_past_the_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, max_target_size: int, cleared: bool
+):
     target = tmp_path / "target"
     (target / "release").mkdir(parents=True)
     (target / "release" / "libcore.rlib").write_bytes(b"x" * 1024)
@@ -501,7 +516,7 @@ def test_maturin_target_prune_clears_only_past_the_limit(tmp_path, monkeypatch, 
         (None, {}, False),
     ],
 )
-def test_editable_writes_source(backend, tool, writes_source):
+def test_editable_writes_source(backend: str | None, tool: dict[str, Any], writes_source: bool):
     metadata = {"build-system": {"build-backend": backend}, "tool": tool} if backend else {}
     assert PackageBackend.from_pyproject(metadata, "example-dist").editable_writes_source is writes_source
 
