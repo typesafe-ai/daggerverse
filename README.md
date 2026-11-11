@@ -13,6 +13,7 @@ $ dagger install github.com/typesafe-ai/daggerverse/twingate
 $ dagger install github.com/typesafe-ai/daggerverse/zizmor
 $ dagger install github.com/typesafe-ai/daggerverse/deptry
 $ dagger install github.com/typesafe-ai/daggerverse/zensical
+$ dagger install github.com/typesafe-ai/daggerverse/pyrefly
 ```
 
 ## Modules
@@ -27,3 +28,4 @@ $ dagger install github.com/typesafe-ai/daggerverse/zensical
 | [`zizmor`](./zizmor) | Static analysis of GitHub Actions for security issues using [zizmor](https://github.com/woodruffw/zizmor). Detects template injection, credential leaks, excessive permissions, and more. Runs offline by default; pass a GitHub token for online audits. |
 | [`deptry`](./deptry) | Find unused, missing, misplaced, and transitive Python dependencies with [deptry](https://deptry.com). Each Python project (`pyproject.toml`) in the source tree is its own check, and the checks run in parallel. |
 | [`zensical`](./zensical) | Build [Zensical](https://zensical.org) docs sites. Each `zensical.toml` is its own check, built in its uv workspace's environment with configurable dependency groups and extras, so API-reference plugins can import the project. |
+| [`pyrefly`](./pyrefly) | Type check Python with [Pyrefly](https://pyrefly.org). Each uv workspace that installs `pyrefly` is its own check, run in the workspace's environment. |

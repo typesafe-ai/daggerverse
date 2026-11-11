@@ -46,6 +46,16 @@
 
     [:octicons-book-16: Docs](./deptry/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/deptry) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/deptry)
 
+-   ![pyrefly](assets/logos/pyrefly.svg){ .lg .middle style="width: 40px; height: 40px" } __pyrefly__
+
+    ---
+
+    Type check Python with [Pyrefly](https://pyrefly.org), one check per uv workspace.
+
+    ---
+
+    [:octicons-book-16: Docs](./pyrefly/) · [:octicons-package-16: SDK](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/pyrefly) · [:octicons-mark-github-16: Source](https://github.com/typesafe-ai/daggerverse/tree/main/pyrefly)
+
 -   ![zizmor](assets/logos/zizmor.svg){ .lg .middle style="width: 40px; height: 40px" } __zizmor__
 
     ---

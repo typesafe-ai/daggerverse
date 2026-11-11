@@ -8,6 +8,7 @@ members = [
     "dagger-clients-deptry",
     "dagger-clients-github",
     "dagger-clients-pyproject",
+    "dagger-clients-pyrefly",
     "dagger-clients-pytest",
     "dagger-clients-ruff",
     "dagger-clients-setuptools-package-dir",
@@ -182,6 +183,21 @@ requires-dist = [
 name = "dagger-clients-pyproject"
 version = "0.0.0"
 source = { editable = "clients/pyproject" }
+dependencies = [
+    { name = "dagger-clients-core" },
+    { name = "dagger-io" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagger-clients-core", editable = "clients/core" },
+    { name = "dagger-io", editable = "sdk" },
+]
+
+[[package]]
+name = "dagger-clients-pyrefly"
+version = "0.0.0"
+source = { editable = "clients/pyrefly" }
 dependencies = [
     { name = "dagger-clients-core" },
     { name = "dagger-io" },
@@ -754,6 +770,7 @@ dependencies = [
     { name = "dagger-clients-deptry" },
     { name = "dagger-clients-github" },
     { name = "dagger-clients-pyproject" },
+    { name = "dagger-clients-pyrefly" },
     { name = "dagger-clients-pytest" },
     { name = "dagger-clients-ruff" },
     { name = "dagger-clients-setuptools-package-dir" },
@@ -777,6 +794,7 @@ requires-dist = [
     { name = "dagger-clients-deptry", editable = "clients/deptry" },
     { name = "dagger-clients-github", editable = "clients/github" },
     { name = "dagger-clients-pyproject", editable = "clients/pyproject" },
+    { name = "dagger-clients-pyrefly", editable = "clients/pyrefly" },
     { name = "dagger-clients-pytest", editable = "clients/pytest" },
     { name = "dagger-clients-ruff", editable = "clients/ruff" },
     { name = "dagger-clients-setuptools-package-dir", editable = "clients/setuptools-package-dir" },

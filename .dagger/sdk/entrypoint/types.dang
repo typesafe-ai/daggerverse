@@ -15,6 +15,11 @@ type ModuleTypes {
             .withCheck
         )
         .withFunction(
+          function("all_pyrefly", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run all checks for the `pyrefly` module in parallel.")
+            .withCheck
+        )
+        .withFunction(
           function("all_ruff", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run all checks for the `ruff` module in parallel.")
             .withCheck
@@ -110,6 +115,34 @@ type ModuleTypes {
         .withFunction(
           function("pyproject_workspace_source_and_manifests", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A workspace's source leaves out unrelated nested projects; its manifests hold only resolver inputs.")
+        )
+        .withFunction(
+          function("pyrefly_base_container_at_root", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A base container whose working directory is `/` still checks only the workspace.")
+        )
+        .withFunction(
+          function("pyrefly_baseline", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`update_baseline` records the type errors, and `check` then passes.")
+        )
+        .withFunction(
+          function("pyrefly_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`check` passes in a workspace with no type error.")
+        )
+        .withFunction(
+          function("pyrefly_discovers_workspaces", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`workspaces` holds the uv workspaces that install `pyrefly`, and no other.")
+        )
+        .withFunction(
+          function("pyrefly_fails_on_type_error", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`check` fails on a type error.")
+        )
+        .withFunction(
+          function("pyrefly_go_test", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run the pyrefly module's Go unit tests (the settings overrides, engine-free).")
+        )
+        .withFunction(
+          function("pyrefly_workspace_settings", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A workspace's `[tool.typesafe_daggerverse.pyrefly]` table overrides the module's settings.")
         )
         .withFunction(
           function("ruff_check_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
