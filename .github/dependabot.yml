@@ -10,3 +10,17 @@ updates:
       default-days: 7
     commit-message:
       prefix: chore
+
+  # The fixtures under uv/tests/_packages pin old or vulnerable versions on purpose.
+  # `ignore` stops security updates for them; the zero limit stops version updates,
+  # which listing the ecosystem would otherwise turn on.
+  - package-ecosystem: uv
+    directories:
+      - "/uv/tests/_packages/**"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
