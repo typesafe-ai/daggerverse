@@ -144,6 +144,25 @@ class DeptryProject(_Type):
         _ctx = self._select("path", _args)
         return await _ctx.execute(str)
 
+    async def version(self) -> str | None:
+        """Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("version", _args)
+        return await _ctx.execute(str | None)
+
 
 class DeptryProjects(_Type):
     """ Every Python project deptry checks in the source tree, keyed by
@@ -236,7 +255,7 @@ class DeptryProjects(_Type):
 
 
 
-def deptry(ws: Workspace, *, exclude: list[str] | None = None, version: str = '0.25.1', ctr: Container | None = None, args: list[str] | None = None, session: _Session | None = None,) -> Deptry:
+def deptry(ws: Workspace, *, exclude: list[str] | None = None, version: str | None = None, ctr: Container | None = None, args: list[str] | None = None, session: _Session | None = None,) -> Deptry:
     """
     Discover the projects: one per `pyproject.toml` the `pyproject` module
     finds, other than Dagger-generated ones, that declares dependencies
@@ -260,7 +279,9 @@ def deptry(ws: Workspace, *, exclude: list[str] | None = None, version: str = '0
         Glob patterns of project paths to leave out of projects, e.g.
         **/tests/_packages/**.
     version:
-        deptry version to use (ignored when `ctr` is set).
+        deptry version to use for every project (ignored when `ctr` is
+        set). Defaults, per project, to the one its uv workspace's uv.lock
+        pins, else 0.25.1.
     ctr:
         Container with deptry installed. Defaults to the official
         ghcr.io/astral-sh/uv image with deptry installed as a uv tool.
@@ -273,8 +294,8 @@ def deptry(ws: Workspace, *, exclude: list[str] | None = None, version: str = '0
         raise _type_error("deptry", "ws", ws, "Workspace")
     if not (exclude is None or (isinstance(exclude, list) and all(isinstance(_v0, str) for _v0 in exclude))):
         raise _type_error("deptry", "exclude", exclude, "list[str] | None")
-    if not (isinstance(version, str)):
-        raise _type_error("deptry", "version", version, "str")
+    if not (version is None or isinstance(version, str)):
+        raise _type_error("deptry", "version", version, "str | None")
     if not (ctr is None or isinstance(ctr, Container)):
         raise _type_error("deptry", "ctr", ctr, "Container | None")
     if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
@@ -282,7 +303,7 @@ def deptry(ws: Workspace, *, exclude: list[str] | None = None, version: str = '0
     _args = [
         _Arg("ws", ws),
         _Arg("exclude", exclude, None),
-        _Arg("version", version, '0.25.1'),
+        _Arg("version", version, None),
         _Arg("ctr", ctr, None),
         _Arg("args", args, None),
     ]

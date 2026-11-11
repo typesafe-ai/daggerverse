@@ -1463,6 +1463,33 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.deptry_projects_exclude)
             tg.start_soon(self.deptry_config_opts_in_nonstandard_layout)
             tg.start_soon(self.deptry_skips_project_without_layout_or_config)
+            tg.start_soon(self.deptry_version_from_lock)
+
+    @function
+    async def deptry_version_from_lock(self) -> None:
+        """Each project runs the deptry its uv workspace's uv.lock pins, and the module's default without one."""
+        pyproject = '[project]\nname = "{name}"\nversion = "0"\ndependencies = []\n'
+        src = (
+            core()
+            .directory()
+            .with_new_file(
+                "pyproject.toml",
+                pyproject.format(name="root") + '[tool.uv.workspace]\nmembers = ["member"]\n',
+            )
+            .with_new_file("uv.lock", 'version = 1\n\n[[package]]\nname = "deptry"\nversion = "0.24.0"\n')
+            .with_new_file("member/pyproject.toml", pyproject.format(name="member"))
+            .with_new_file("member/member/__init__.py", "")
+            .with_new_file("standalone/pyproject.toml", pyproject.format(name="standalone"))
+            .with_new_file("standalone/standalone/__init__.py", "")
+        )
+        projects = deptry(src.as_workspace()).projects()
+        member, standalone = await projects.get("member").version(), await projects.get("standalone").version()
+        if member != "0.24.0":
+            raise AssertionError(f"expected member's workspace's locked 0.24.0, got {member}")
+        if standalone in (None, "0.24.0"):
+            raise AssertionError(f"expected the module's default for a project without a lock, got {standalone}")
+        # The locked version installs and runs.
+        await _run_check(projects.get("member").check())
 
     @function
     async def deptry_discovers_projects(self) -> None:

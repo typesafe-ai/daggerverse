@@ -28,7 +28,7 @@ Run the checks over the current source tree:
 $ dagger check --deptry
 ```
 
-A project is in `projects` when its `pyproject.toml` declares dependencies and it
+A project is checked when its `pyproject.toml` declares dependencies and it
 either:
 
 - has a `src/` layout matching `[project].name`
@@ -52,10 +52,12 @@ source-relative path, and leaves matching projects out of `projects`:
 exclude = ["**/tests/_packages/**"]
 ```
 
+By default, the module picks up `deptry` version per `uv` workspace, as pinned in `uv.lock`.
+
 ### Configuring deptry
 
 `dagger check` runs checks with their default arguments, so deptry's options are
-constructor settings too: `version` picks the deptry release, and `args` adds
+constructor settings too: `version` overrides the deptry release, and `args` adds
 arguments before the project root. String settings are JSON, so they need inner quotes:
 
 ```toml title="dagger.toml"

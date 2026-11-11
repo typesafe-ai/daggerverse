@@ -16,6 +16,9 @@ from deptry.args import Exclude
 
 _DEFAULT_VERSION = "0.25.1"
 
+# The lock file a project's deptry version comes from: its uv workspace's.
+_LOCK = "uv.lock"
+
 
 def pinned_image(name: str) -> str:
     """The image reference in this package's `images/<name>/Dockerfile`, which Dependabot keeps current."""
@@ -32,6 +35,22 @@ _BASE_IMAGE = pinned_image("uv")
 
 # What `pyproject` discovery reads, with its default workspace markers.
 _DISCOVERY_INCLUDE = ["**/pyproject.toml", "**/.gitignore", "**/uv.lock", "**/pylock.toml"]
+
+
+def _locked_version(lock: str) -> str | None:
+    """The deptry version a `uv.lock` pins, if it locks deptry."""
+    for package in tomllib.loads(lock).get("package", []):
+        if package.get("name") == "deptry":
+            return package.get("version")
+    return None
+
+
+async def _version(locks: Directory, root: str) -> str:
+    """The deptry version the `uv.lock` at `root` in `locks` pins, else the module's default."""
+    lock = posixpath.normpath(posixpath.join(root, _LOCK))
+    if not await locks.glob(lock):
+        return _DEFAULT_VERSION
+    return _locked_version(await locks.file(lock).contents()) or _DEFAULT_VERSION
 
 
 def _root_path(path: str, *names: str) -> str:
@@ -132,6 +151,11 @@ class DeptryProject:
         Doc("Project path, relative to the workspace root. `.` for the root."),
     ] = field()
 
+    version: Annotated[
+        str | None,
+        Doc("The deptry version the check runs: its uv workspace's locked one. None when `ctr` provides deptry."),
+    ] = field()
+
     # Not `field()`s: internal state.
     module: str | None
     files: Directory
@@ -224,9 +248,13 @@ class Deptry:
         ws: Workspace,
         exclude: Exclude = None,
         version: Annotated[
-            str,
-            Doc("deptry version to use (ignored when `ctr` is set)."),
-        ] = _DEFAULT_VERSION,
+            str | None,
+            Doc(
+                "deptry version to use for every project (ignored when `ctr` is set). Defaults, per "
+                "project, to the one its uv workspace's uv.lock pins, else "
+                f"{_DEFAULT_VERSION}."
+            ),
+        ] = None,
         ctr: Annotated[
             Container | None,
             Doc(
@@ -254,19 +282,39 @@ class Deptry:
         # contents, so discovery stays cached until one of the files it reads changes.
         discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
         found = await pyproject(discovery_ws, exclude=exclude).project_list()
-        container = ctr if ctr is not None else _container(version)
+        locks = discovery_ws.directory("/")
+        # One read per lock file and one container per deptry version, shared by the projects.
+        versions: dict[str, asyncio.Task[str]] = {}
+        containers: dict[str, Container] = {}
+
+        async def _deptry(root: str) -> tuple[str | None, Container]:
+            if ctr is not None:
+                return None, ctr
+            if version is not None:
+                resolved = version
+            else:
+                if root not in versions:
+                    versions[root] = asyncio.ensure_future(_version(locks, root))
+                resolved = await versions[root]
+            if resolved not in containers:
+                containers[resolved] = _container(resolved)
+            return resolved, containers[resolved]
 
         async def _project(project) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.
             if await project.generated():
                 return None
-            path, files_include, files_exclude = await asyncio.gather(
-                project.path(), project.files_include(), project.files_exclude()
+            path, files_include, files_exclude, workspace = await asyncio.gather(
+                project.path(), project.files_include(), project.files_exclude(), project.workspace()
             )
             checkable, module, configured = _project_info(await project.pyproject().contents())
             if checkable and (configured or await _has_package_layout(ws, path, module)):
                 files = ws.directory("/", include=files_include, exclude=files_exclude, gitignore=True)
-                return DeptryProject(path=path, module=module, files=files, ctr=container, args=args or [])
+                # A workspace member's deptry comes from its workspace's lock, a standalone project's from its own.
+                resolved, container = await _deptry(workspace or path)
+                return DeptryProject(
+                    path=path, version=resolved, module=module, files=files, ctr=container, args=args or []
+                )
             return None
 
         projects = await asyncio.gather(*(_project(project) for project in found))
