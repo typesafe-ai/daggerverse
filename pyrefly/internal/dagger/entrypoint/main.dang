@@ -32,7 +32,7 @@ type Entrypoint implements ModuleEntrypoint {
         .withFunction(
           function("Workspaces", typeDef.withObject("PyreflyWorkspaces"))
             .withDescription("The uv workspaces pyrefly checks: those that lock `pyrefly`, less those matching `exclude`.")
-            .withSourceMap(sourceMap("main.go", 341, 1))
+            .withSourceMap(sourceMap("main.go", 338, 1))
         )
         .withConstructor(
           function("", typeDef.withObject("Pyrefly"))

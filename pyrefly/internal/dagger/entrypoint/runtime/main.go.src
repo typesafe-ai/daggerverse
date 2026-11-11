@@ -284,7 +284,8 @@ func New(
 	// +optional
 	uvCache *dagger.CacheVolume,
 ) (*Pyrefly, error) {
-	workspaces := uv.New(ws, uv.UvOpts{Exclude: exclude, UvCache: uvCache}).Workspaces()
+	workspaces := uv.New(ws, uv.UvOpts{Exclude: exclude, UvCache: uvCache}).Workspaces().
+		Filter(uv.UvWorkspacesFilterOpts{HasPackages: []string{lockedPackage}})
 	paths, err := workspaces.Keys(ctx)
 	if err != nil {
 		return nil, err
@@ -304,10 +305,6 @@ func New(
 	for i, path := range paths {
 		group.Go(func() error {
 			workspace := workspaces.Get(path)
-			locked, err := workspace.LockedPackages(ctx)
-			if err != nil || !slices.Contains(locked, lockedPackage) {
-				return err
-			}
 			pyproject, err := ws.File(posixpath.Join(path, "pyproject.toml")).Contents(ctx)
 			if err != nil {
 				return err
@@ -336,7 +333,7 @@ func New(
 	if err := group.Wait(); err != nil {
 		return nil, err
 	}
-	return &Pyrefly{Items: slices.DeleteFunc(items, func(item *PyreflyWorkspace) bool { return item == nil })}, nil
+	return &Pyrefly{Items: items}, nil
 }
 
 // The uv workspaces pyrefly checks: those that lock `pyrefly`, less those matching `exclude`.

@@ -5,16 +5,18 @@ import posixpath
 import re
 import tomllib
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import dagger
 from dagger import Doc, check, collection, field, function, get, keys, object_type
-from dagger_clients.core import Container, Directory, Workspace, core
+from dagger.telemetry import get_tracer
+from dagger_clients.core import Container, Directory, File, Workspace, core
 from dagger_clients.pyproject import pyproject
 
 from deptry.args import Exclude
 
-_DEFAULT_VERSION = "0.25.1"
+# The lock file a project's deptry version comes from: its uv workspace's.
+_LOCK = "uv.lock"
 
 
 def pinned_image(name: str) -> str:
@@ -27,11 +29,30 @@ def pinned_image(name: str) -> str:
     raise ValueError(msg)
 
 
-# The uv image deptry is installed into.
+# The uv image deptry is installed into, unless `base_container` provides uv.
 _BASE_IMAGE = pinned_image("uv")
 
 # What `pyproject` discovery reads, with its default workspace markers.
 _DISCOVERY_INCLUDE = ["**/pyproject.toml", "**/.gitignore", "**/uv.lock", "**/pylock.toml"]
+
+
+def _locked_version(lock: str, group: str) -> str | None:
+    """The deptry version a `uv.lock` resolves for its root project's dependency `group`, if the group has deptry.
+
+    The root project is the one at the lock's directory. The group's entry names a
+    version only when the lock holds more than one deptry; otherwise there's just one.
+    """
+    packages = tomllib.loads(lock).get("package", [])
+    for package in packages:
+        if "." not in (package.get("source", {}).get(kind) for kind in ("editable", "virtual")):
+            continue
+        for dependency in package.get("dev-dependencies", {}).get(group, []):
+            if dependency["name"] == "deptry":
+                if "version" in dependency:
+                    return dependency["version"]
+                (version,) = (p["version"] for p in packages if p["name"] == "deptry")
+                return version
+    return None
 
 
 def _root_path(path: str, *names: str) -> str:
@@ -76,6 +97,27 @@ def _project_info(pyproject_content: str) -> tuple[bool, str | None, bool]:
     module = _to_module_name(name) if isinstance(name, str) else None
     configured = "deptry" in data.get("tool", {})
     return True, module, configured
+
+
+# The settings a project overrides in its own `pyproject.toml`.
+_OWN_SETTINGS = {"args"}
+
+
+def _own_settings(pyproject_content: str | None) -> dict[str, Any]:
+    """The module settings a `pyproject.toml` overrides in its `[tool.typesafe_daggerverse.deptry]` table.
+
+    A key that is no setting is an error, so a typo doesn't pass for a setting left at its default.
+    """
+    if pyproject_content is None:
+        return {}
+    try:
+        table = tomllib.loads(pyproject_content).get("tool", {}).get("typesafe_daggerverse", {}).get("deptry", {})
+    except tomllib.TOMLDecodeError:
+        return {}
+    if unknown := sorted(set(table) - _OWN_SETTINGS):
+        msg = f"[tool.typesafe_daggerverse.deptry] has no setting {', '.join(unknown)}; it takes {', '.join(sorted(_OWN_SETTINGS))}"
+        raise ValueError(msg)
+    return table
 
 
 async def _has_package_layout(workspace: Workspace, path: str, module: str | None) -> bool:
@@ -132,11 +174,42 @@ class DeptryProject:
         Doc("Project path, relative to the workspace root. `.` for the root."),
     ] = field()
 
+    workspace: Annotated[
+        str | None,
+        Doc("Root of the uv workspace the project belongs to, whose uv.lock pins its deptry. None outside any."),
+    ] = field()
+
+    group: Annotated[
+        str,
+        Doc("Dependency group of the uv workspace's root project that locks deptry."),
+    ] = field()
+
     # Not `field()`s: internal state.
     module: str | None
     files: Directory
-    ctr: Container
+    lock: File | None
+    base: Container
     args: list[str]
+
+    @function
+    async def version(self) -> str:
+        """The deptry version the check runs: the one the uv workspace's uv.lock resolves for `group`.
+
+        Fails for a project outside any uv workspace, or whose workspace has no uv.lock.
+        """
+        if self.lock is None:
+            lock = posixpath.normpath(posixpath.join(self.workspace or self.path, _LOCK))
+            msg = f"{self.path}: no {lock} to lock deptry in; deptry runs the version its uv workspace's uv.lock locks"
+            raise ValueError(msg)
+        version = _locked_version(await self.lock.contents(), self.group)
+        if version is None:
+            lock = posixpath.normpath(posixpath.join(self.workspace or ".", _LOCK))
+            msg = (
+                f"{self.path}: {lock} locks no deptry in the {self.group!r} group of its root project; "
+                f"add it there (`uv add --group {self.group} deptry`) and lock"
+            )
+            raise ValueError(msg)
+        return version
 
     @check
     @function
@@ -146,7 +219,12 @@ class DeptryProject:
         Only the files this project owns are loaded: its directory less the
         projects nested in it, such as generated Dagger code or test fixtures.
         """
+        with get_tracer().start_as_current_span(f"Run deptry: {self.path}"):
+            await self._check()
+
+    async def _check(self) -> None:
         known = ["--known-first-party", self.module] if self.module else []
+        ctr = self.base.with_exec(["uv", "tool", "install", f"deptry=={await self.version()}"])
         project_dir = self.files if self.path == "." else self.files.directory(self.path)
         try:
             await (
@@ -154,7 +232,7 @@ class DeptryProject:
                 # stdout is a pipe, so Dagger's rendered exec logs show color. The
                 # copy folded into the raised error has the codes stripped (see
                 # `_format_failure`). Pass `--no-ansi` via the `args` setting to opt out.
-                self.ctr.with_env_variable("FORCE_COLOR", "1")
+                ctr.with_env_variable("FORCE_COLOR", "1")
                 .with_workdir("/work")
                 .with_directory("/work", project_dir)
                 .with_exec(["deptry", *known, *self.args, "."])
@@ -191,15 +269,13 @@ class DeptryProjects:
         raise ValueError(msg)
 
 
-def _container(version: str) -> Container:
+def _base(ctr: Container | None) -> Container:
+    """`ctr`, or the uv image, set up for `uv tool install deptry`."""
     return (
-        core()
-        .container()
-        .from_(_BASE_IMAGE)
+        (ctr if ctr is not None else core().container().from_(_BASE_IMAGE))
         .with_env_variable("UV_COMPILE_BYTECODE", "1")
         # put the `deptry` launcher on PATH so a plain `deptry` works.
         .with_env_variable("UV_TOOL_BIN_DIR", "/usr/local/bin")
-        .with_exec(["uv", "tool", "install", f"deptry=={version}"])
     )
 
 
@@ -223,17 +299,13 @@ class Deptry:
         cls,
         ws: Workspace,
         exclude: Exclude = None,
-        version: Annotated[
+        group: Annotated[
             str,
-            Doc("deptry version to use (ignored when `ctr` is set)."),
-        ] = _DEFAULT_VERSION,
-        ctr: Annotated[
+            Doc("Dependency group of each uv workspace's root project whose locked deptry its projects' checks run."),
+        ] = "dev",
+        base_container: Annotated[
             Container | None,
-            Doc(
-                "Container with deptry installed. Defaults to the official "
-                "ghcr.io/astral-sh/uv image with deptry installed as a uv tool. "
-                "Overrides `version`."
-            ),
+            Doc("Container with uv, to install deptry into. Defaults to the official ghcr.io/astral-sh/uv image."),
         ] = None,
         args: Annotated[
             list[str] | None,
@@ -247,26 +319,50 @@ class Deptry:
         members in subdirectories) is left out, unless its `[tool.deptry]`
         section opts it in explicitly. Paths matching `exclude` are left out too.
 
+        A project overrides `args` in the `[tool.typesafe_daggerverse.deptry]`
+        table of its `pyproject.toml`.
+
         The workspace is walked on the host, and only the pyproject.toml files
         are loaded.
         """
         # A workspace made from a directory and passed to a module is keyed by its
         # contents, so discovery stays cached until one of the files it reads changes.
         discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
-        found = await pyproject(discovery_ws, exclude=exclude).project_list()
-        container = ctr if ctr is not None else _container(version)
+        discovery = pyproject(discovery_ws, exclude=exclude)
+        found = await discovery.project_list()
+        base = _base(base_container)
+        locks: dict[str, asyncio.Task[File | None]] = {}
+
+        async def _lock(root: str) -> File | None:
+            """The `uv.lock` of the uv workspace at `root`, if it has one."""
+            workspace = discovery.workspaces().get(root)
+            if _LOCK not in await workspace.lockfiles():
+                return None
+            return workspace.manifests().file(posixpath.normpath(posixpath.join(root, _LOCK)))
 
         async def _project(project) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.
             if await project.generated():
                 return None
-            path, files_include, files_exclude = await asyncio.gather(
-                project.path(), project.files_include(), project.files_exclude()
+            path, files_include, files_exclude, workspace = await asyncio.gather(
+                project.path(), project.files_include(), project.files_exclude(), project.workspace()
             )
-            checkable, module, configured = _project_info(await project.pyproject().contents())
+            contents = await project.pyproject().contents()
+            checkable, module, configured = _project_info(contents)
             if checkable and (configured or await _has_package_layout(ws, path, module)):
                 files = ws.directory("/", include=files_include, exclude=files_exclude, gitignore=True)
-                return DeptryProject(path=path, module=module, files=files, ctr=container, args=args or [])
+                if workspace is not None and workspace not in locks:
+                    locks[workspace] = asyncio.ensure_future(_lock(workspace))
+                return DeptryProject(
+                    path=path,
+                    workspace=workspace,
+                    group=group,
+                    module=module,
+                    files=files,
+                    lock=await locks[workspace] if workspace is not None else None,
+                    base=base,
+                    args=_own_settings(contents).get("args", args or []),
+                )
             return None
 
         projects = await asyncio.gather(*(_project(project) for project in found))

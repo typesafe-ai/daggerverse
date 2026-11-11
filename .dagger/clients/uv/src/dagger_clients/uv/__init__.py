@@ -4017,6 +4017,25 @@ class UvWorkspaces(_Type):
     its path.  `audit` runs once per selected workspace, so each workspace
     is its own generator that can be selected or skipped on its own.  """
 
+    def filter(self, *, has_packages: list[str] | None = None,) -> _Self:
+        """
+        The workspaces matching every given criterion, read from their uv.lock
+        files alone.
+
+        Parameters
+        ----------
+        has_packages:
+            Keep the workspaces whose uv.lock locks every one of these
+            packages, e.g. a tool to run in them.
+        """
+        if not (has_packages is None or (isinstance(has_packages, list) and all(isinstance(_v0, str) for _v0 in has_packages))):
+            raise _type_error("UvWorkspaces.filter", "has_packages", has_packages, "list[str] | None")
+        _args = [
+            _Arg("hasPackages", has_packages, None),
+        ]
+        _ctx = self._select("filter", _args)
+        return UvWorkspaces(_ctx)
+
     def get(self, key: str) -> UvWorkspaceSource:
         """
         The uv workspace rooted at `path`.

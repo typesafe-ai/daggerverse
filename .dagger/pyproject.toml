@@ -43,5 +43,10 @@ dagger-clients-setuptools-package-dir = "dagger_clients"
 dagger-clients-zensical = "dagger_clients"
 dagger-clients-pyrefly = "dagger_clients"
 
+[dependency-groups]
+dev = [
+    "deptry==0.25.1",
+]
+
 [tool.uv.workspace]
 members = ["sdk", "clients/core", "clients/github", "clients/deptry", "clients/pytest", "clients/twingate", "clients/ruff", "clients/uv", "clients/zizmor", "clients/pyproject", "clients/setuptools-package-dir", "clients/zensical", "clients/pyrefly"]

@@ -55,6 +55,10 @@ type ModuleTypes {
             .withDescription("`projects` finds one entry per pyproject.toml that declares dependencies.\n\nA tooling-only pyproject (no `[project].dependencies`) and a\nDagger-generated one (`[tool.dagger] generated`) are left out.")
         )
         .withFunction(
+          function("deptry_project_settings", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A project's `[tool.typesafe_daggerverse.deptry]` table overrides the module's `args`.")
+        )
+        .withFunction(
           function("deptry_projects_exclude", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`exclude` leaves matching projects out of `projects`.")
         )
@@ -65,6 +69,10 @@ type ModuleTypes {
         .withFunction(
           function("deptry_subset", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A `subset` of the projects checks only those, so a broken-but-unselected tree passes.")
+        )
+        .withFunction(
+          function("deptry_version_from_lock", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`\nby default, and a project without one fails.")
         )
         .withFunction(
           function("docs_build", typeDef.withObject("Directory"))
@@ -222,6 +230,10 @@ type ModuleTypes {
             .withDescription("`workspaces` finds one workspace per uv.lock in the source tree.")
         )
         .withFunction(
+          function("uv_filters_workspaces", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`workspaces().filter` keeps the workspaces whose uv.lock locks every package in `has_packages`.")
+        )
+        .withFunction(
           function("uv_license_file_patterns", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("License arrays filter package-relative files without replacing the scaffold.")
         )
@@ -331,6 +343,10 @@ type ModuleTypes {
         .withFunction(
           function("zensical_discovers_projects", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`projects` finds one site per zensical.toml, in the innermost uv workspace holding it.\n\nDocs in a workspace member build that member's package; docs outside\nevery uv workspace have none.")
+        )
+        .withFunction(
+          function("zensical_site_settings", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A site's `[tool.typesafe_daggerverse.zensical]` table overrides the module's settings.")
         )
         .withFunction(
           function("zensical_strict_fails_on_broken_link", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

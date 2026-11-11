@@ -4000,6 +4000,32 @@ func (r *UvWorkspaces) WithGraphQLQuery(q *querybuilder.Selection) *UvWorkspaces
 	}
 }
 
+// UvWorkspacesFilterOpts contains options for UvWorkspaces.Filter
+type UvWorkspacesFilterOpts struct {
+	//
+	// Keep the workspaces whose uv.lock locks every one of these packages, e.g. a tool to run in them.
+	//
+	//
+	// Default: null
+	HasPackages []string // uv (../../:0:0)
+}
+
+// The workspaces matching every given criterion, read from their uv.lock files alone.
+func (r *UvWorkspaces) Filter(opts ...UvWorkspacesFilterOpts) *UvWorkspaces { // uv (../../:0:0)
+	q := r.query.Select("filter")
+	for i := len(opts) - 1; i >= 0; i-- {
+		// `hasPackages` optional argument
+		if !querybuilder.IsZeroValue(opts[i].HasPackages) {
+			q = q.Arg("hasPackages", opts[i].HasPackages)
+		}
+	}
+
+	return &UvWorkspaces{
+		query:     q,
+		refetchID: r.refetchID,
+	}
+}
+
 // The uv workspace rooted at `path`.
 func (r *UvWorkspaces) Get(key string) *UvWorkspaceSource { // uv (../../:0:0)
 	q := r.query.Select("get")

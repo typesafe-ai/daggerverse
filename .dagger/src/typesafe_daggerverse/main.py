@@ -109,6 +109,28 @@ def _assert_modules_script(present: list[str], absent: list[str]) -> str:
     )
 
 
+def _deptry_lock(root: str, source: str, groups: dict[str, list[str]]) -> str:
+    """A uv.lock whose root project `root` (an `editable` or `virtual` source) locks deptry in `groups`.
+
+    A group lists the deptry versions it locks; with more than one in the lock, each entry names its version.
+    """
+    versions = sorted({v for vs in groups.values() for v in vs})
+    entry = (
+        (lambda v: f'{{ name = "deptry", version = "{v}" }}')
+        if len(versions) > 1
+        else (lambda v: '{ name = "deptry" }')
+    )
+    lock = f'version = 1\n\n[[package]]\nname = "{root}"\nversion = "0"\nsource = {{ {source} = "." }}\n\n'
+    lock += "[package.dev-dependencies]\n" + "".join(
+        f"{group} = [{', '.join(entry(v) for v in vs)}]\n" for group, vs in groups.items()
+    )
+    for v in versions:
+        lock += (
+            f'\n[[package]]\nname = "deptry"\nversion = "{v}"\nsource = {{ registry = "https://pypi.org/simple" }}\n'
+        )
+    return lock
+
+
 @object_type
 class TypesafeDaggerverse:
     """CI checks for modules published from this repo."""
@@ -214,6 +236,7 @@ class TypesafeDaggerverse:
         async with anyio.create_task_group() as tg:
             tg.start_soon(_run, "detect_version_uv_toml_precedence", self.uv_detect_version_uv_toml_precedence)
             tg.start_soon(_run, "discovers_workspaces", self.uv_discovers_workspaces)
+            tg.start_soon(_run, "filters_workspaces", self.uv_filters_workspaces)
             tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
             tg.start_soon(_run, "audit_subset", self.uv_audit_subset)
             tg.start_soon(_run, "audit_exclude", self.uv_audit_exclude)
@@ -279,6 +302,39 @@ class TypesafeDaggerverse:
         paths = await uv(src.as_workspace()).workspaces().keys()
         if paths != ["a", "b/c"]:
             raise AssertionError(f"expected ['a', 'b/c'], got {paths}")
+
+    @function
+    async def uv_filters_workspaces(self) -> None:
+        """`workspaces().filter` keeps the workspaces whose uv.lock locks every package in `has_packages`."""
+        pyproject = '[project]\nname = "x"\nversion = "0"\n'
+
+        def lock(*names: str) -> str:
+            return "".join(f'[[package]]\nname = "{name}"\nversion = "0"\n\n' for name in names)
+
+        src = (
+            core()
+            .directory()
+            .with_new_file("a/uv.lock", lock("x", "pyrefly", "ruff"))
+            .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("b/uv.lock", lock("x", "typing-extensions"))
+            .with_new_file("b/pyproject.toml", pyproject)
+        )
+        workspaces = uv(src.as_workspace()).workspaces()
+        for has_packages, expected in (
+            (["pyrefly"], ["a"]),
+            (["pyrefly", "ruff"], ["a"]),
+            (["pyrefly", "typing-extensions"], []),
+            # Names match as uv.lock spells them.
+            (["Typing_Extensions"], ["b"]),
+            ([], ["a", "b"]),
+        ):
+            paths = await workspaces.filter(has_packages=has_packages).keys()
+            if paths != expected:
+                raise AssertionError(f"has_packages={has_packages}: expected {expected}, got {paths}")
+        # A kept workspace still loads.
+        path = await workspaces.filter(has_packages=["pyrefly"]).get("a").path()
+        if path != "a":
+            raise AssertionError(f"expected the workspace at 'a', got {path!r}")
 
     @function
     async def uv_audit_detects_vulnerability(self) -> None:
@@ -1413,7 +1469,14 @@ print("LAYER_CACHE_OK")
     # ---- deptry module checks ----
 
     def _deptry_project(self, pyproject: str, sources: dict[str, str]) -> Directory:
-        d = core().directory().with_new_file("pyproject.toml", pyproject)
+        """A standalone project from `pyproject` and `sources`, with a uv.lock locking deptry in its `dev` group."""
+        name = tomllib.loads(pyproject)["project"]["name"]
+        d = (
+            core()
+            .directory()
+            .with_new_file("pyproject.toml", pyproject)
+            .with_new_file("uv.lock", _deptry_lock(name, source="editable", groups={"dev": ["0.25.1"]}))
+        )
         for path, content in sources.items():
             d = d.with_new_file(path, content)
         return d
@@ -1437,6 +1500,7 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.zensical_discovers_projects)
             tg.start_soon(self.zensical_builds_module_docs)
             tg.start_soon(self.zensical_strict_fails_on_broken_link)
+            tg.start_soon(self.zensical_site_settings)
 
     @function
     async def zensical_discovers_projects(self) -> None:
@@ -1487,15 +1551,61 @@ print("LAYER_CACHE_OK")
     @function
     async def all_deptry(self) -> None:
         """Run all checks for the `deptry` module in parallel."""
+        tests = [
+            self.deptry_discovers_projects,
+            self.deptry_clean_flat_layout,
+            self.deptry_clean_src_layout,
+            self.deptry_detects_issue,
+            self.deptry_project_settings,
+            self.deptry_subset,
+            self.deptry_projects_exclude,
+            self.deptry_config_opts_in_nonstandard_layout,
+            self.deptry_skips_project_without_layout_or_config,
+            self.deptry_version_from_lock,
+        ]
+
+        async def run(test) -> None:
+            # Most fixtures are a single project at `.`: the test's name says which one a span belongs to.
+            with get_tracer().start_as_current_span(f"Test deptry: {test.__name__.removeprefix('deptry_')}"):
+                await test()
+
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.deptry_discovers_projects)
-            tg.start_soon(self.deptry_clean_flat_layout)
-            tg.start_soon(self.deptry_clean_src_layout)
-            tg.start_soon(self.deptry_detects_issue)
-            tg.start_soon(self.deptry_subset)
-            tg.start_soon(self.deptry_projects_exclude)
-            tg.start_soon(self.deptry_config_opts_in_nonstandard_layout)
-            tg.start_soon(self.deptry_skips_project_without_layout_or_config)
+            for test in tests:
+                tg.start_soon(run, test)
+
+    @function
+    async def deptry_version_from_lock(self) -> None:
+        """Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`
+        by default, and a project without one fails."""
+        pyproject = '[project]\nname = "{name}"\nversion = "0"\ndependencies = []\n'
+        src = (
+            core()
+            .directory()
+            .with_new_file("pyproject.toml", '[tool.uv.workspace]\nmembers = ["member"]\n')
+            .with_new_file(
+                "uv.lock", _deptry_lock("root", source="virtual", groups={"dev": ["0.24.0"], "lint": ["0.25.1"]})
+            )
+            .with_new_file("member/pyproject.toml", pyproject.format(name="member"))
+            .with_new_file("member/member/__init__.py", "")
+            .with_new_file("unlocked/pyproject.toml", pyproject.format(name="unlocked"))
+            .with_new_file("unlocked/unlocked/__init__.py", "")
+        )
+        member = deptry(src.as_workspace()).projects().get("member")
+        if (version := await member.version()) != "0.24.0":
+            raise AssertionError(f"expected the dev group's 0.24.0, got {version}")
+        # The locked version installs and runs.
+        await _run_check(member.check())
+        lint = deptry(src.as_workspace(), group="lint").projects().get("member")
+        if (version := await lint.version()) != "0.25.1":
+            raise AssertionError(f"expected the lint group's 0.25.1, got {version}")
+        try:
+            await deptry(src.as_workspace()).projects().get("unlocked").version()
+        except QueryError as exc:
+            # The module's error is in the stderr of the failed call, not its message.
+            if "no unlocked/uv.lock" not in getattr(exc, "stderr", str(exc)):
+                raise
+        else:
+            raise AssertionError("expected a project without a uv.lock to fail")
 
     @function
     async def deptry_discovers_projects(self) -> None:
@@ -1547,6 +1657,28 @@ print("LAYER_CACHE_OK")
             },
         )
         await self._deptry_check_all(src)
+
+    @function
+    async def deptry_project_settings(self) -> None:
+        """A project's `[tool.typesafe_daggerverse.deptry]` table overrides the module's `args`."""
+        pyproject = '[project]\nname = "badpkg"\nversion = "0"\ndependencies = ["requests"]\n'
+        sources = {"src/badpkg/__init__.py": "x = 1\n"}
+        # The unused dependency fails the check (see `deptry_detects_issue`) unless the project ignores the rule.
+        table = '\n[tool.typesafe_daggerverse.deptry]\nargs = ["--ignore", "DEP002"]\n'
+        await self._deptry_check_all(self._deptry_project(pyproject + table, sources))
+        try:
+            await (
+                deptry(
+                    self._deptry_project(
+                        pyproject + "\n[tool.typesafe_daggerverse.deptry]\nversion = 1\n", sources
+                    ).as_workspace()
+                )
+                .projects()
+                .keys()
+            )
+        except QueryError:
+            return
+        raise AssertionError("expected a key that is no project setting to fail")
 
     @function
     async def deptry_detects_issue(self) -> None:
@@ -1746,3 +1878,14 @@ print("LAYER_CACHE_OK")
     async def pyrefly_go_test(self) -> None:
         """Run the pyrefly module's Go unit tests (the settings overrides, engine-free)."""
         await _go_test("pyrefly").sync()
+
+    @function
+    async def zensical_site_settings(self) -> None:
+        """A site's `[tool.typesafe_daggerverse.zensical]` table overrides the module's settings."""
+        src = _src("deptry")
+        pyproject = await src.file("pyproject.toml").contents()
+        # The broken link fails the strict build (see `zensical_strict_fails_on_broken_link`).
+        src = src.with_new_file("docs/index.md", "[broken](missing.md)\n").with_new_file(
+            "pyproject.toml", f"{pyproject}\n[tool.typesafe_daggerverse.zensical]\nstrict = false\n"
+        )
+        await _run_check(zensical(src.as_workspace()).projects().get(".").check())
