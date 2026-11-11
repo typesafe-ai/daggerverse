@@ -1,0 +1,12 @@
+# The module is written in Go; this project only builds its docs site.
+[project]
+name = "pyrefly-docs"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+docs = [
+    "pymdown-extensions>=11.0.1",
+    "zensical>=0.0.44",
+]

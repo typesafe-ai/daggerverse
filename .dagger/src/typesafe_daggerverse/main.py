@@ -12,6 +12,7 @@ from dagger_clients.core import Changeset, Check, Container, Directory, ReturnTy
 from dagger_clients.deptry import deptry
 from dagger_clients.github import github
 from dagger_clients.pyproject import pyproject
+from dagger_clients.pyrefly import pyrefly
 from dagger_clients.ruff import ruff
 from dagger_clients.setuptools_package_dir import setuptools_package_dir
 from dagger_clients.twingate import twingate
@@ -1586,3 +1587,71 @@ print("LAYER_CACHE_OK")
         projects = await deptry(src.as_workspace()).projects().keys()
         if projects:
             raise AssertionError(f"expected no projects, got {projects}")
+
+    # ---- pyrefly module checks ----
+
+    _PYREFLY_FIXTURE = "pyrefly/tests/_packages/typed"
+    _PYREFLY_SOURCE = "src/typed/__init__.py"
+
+    @check
+    @function
+    async def all_pyrefly(self) -> None:
+        """Run all checks for the `pyrefly` module in parallel."""
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.pyrefly_discovers_workspaces)
+            tg.start_soon(self.pyrefly_removes_unused_ignore)
+            tg.start_soon(self.pyrefly_clean)
+            tg.start_soon(self.pyrefly_fails_on_type_error)
+            tg.start_soon(self.pyrefly_suppresses_errors)
+
+    def _pyrefly_clean_source(self) -> Directory:
+        return _src(self._PYREFLY_FIXTURE).with_new_file(
+            self._PYREFLY_SOURCE, "def double(value: int) -> int:\n    return value * 2\n"
+        )
+
+    def _pyrefly_broken_source(self) -> Directory:
+        return self._pyrefly_clean_source().with_new_file("src/typed/broken.py", 'count: int = "one"\n')
+
+    @function
+    async def pyrefly_discovers_workspaces(self) -> None:
+        """`workspaces` holds the uv workspaces that lock `pyrefly`, and no other."""
+        pyproject = '[project]\nname = "x"\nversion = "0"\n'
+        src = (
+            core()
+            .directory()
+            .with_new_file("checked/pyproject.toml", pyproject)
+            .with_new_file("checked/uv.lock", 'version = 1\n\n[[package]]\nname = "pyrefly"\nversion = "1.4.1"\n')
+            .with_new_file("unchecked/pyproject.toml", pyproject)
+            .with_new_file("unchecked/uv.lock", "version = 1\n")
+        )
+        paths = await pyrefly(src.as_workspace()).workspaces().keys()
+        if paths != ["checked"]:
+            raise AssertionError(f"expected ['checked'], got {paths}")
+
+    @function
+    async def pyrefly_removes_unused_ignore(self) -> str:
+        """The `check` generator removes an unused ignore comment and changes nothing else."""
+        changeset = pyrefly(_fixture(self._PYREFLY_FIXTURE)).workspaces().get(".").check()
+        return await self._assert_changeset_only_modifies(changeset, {self._PYREFLY_SOURCE})
+
+    @function
+    async def pyrefly_clean(self) -> None:
+        """The `check` generator changes nothing in a workspace with nothing to fix."""
+        workspace = pyrefly(self._pyrefly_clean_source().as_workspace()).workspaces().get(".")
+        if not await workspace.check().is_empty():
+            raise AssertionError("expected pyrefly check to change nothing in a clean workspace")
+
+    @function
+    async def pyrefly_fails_on_type_error(self) -> None:
+        """The `check` generator fails on a type error."""
+        try:
+            await pyrefly(self._pyrefly_broken_source().as_workspace()).workspaces().get(".").check().sync()
+        except QueryError:
+            return
+        raise AssertionError("expected pyrefly check to fail on a type error")
+
+    @function
+    async def pyrefly_suppresses_errors(self) -> str:
+        """With `suppress_errors`, the `check` generator adds an ignore comment instead of failing."""
+        workspace = pyrefly(self._pyrefly_broken_source().as_workspace(), suppress_errors=True).workspaces().get(".")
+        return await self._assert_changeset_only_modifies(workspace.check(), {"src/typed/broken.py"})

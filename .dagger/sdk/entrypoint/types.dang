@@ -15,6 +15,11 @@ type ModuleTypes {
             .withCheck
         )
         .withFunction(
+          function("all_pyrefly", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("Run all checks for the `pyrefly` module in parallel.")
+            .withCheck
+        )
+        .withFunction(
           function("all_ruff", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Run all checks for the `ruff` module in parallel.")
             .withCheck
@@ -102,6 +107,26 @@ type ModuleTypes {
         .withFunction(
           function("pyproject_workspace_source_and_manifests", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("A workspace's source leaves out unrelated nested projects; its manifests hold only resolver inputs.")
+        )
+        .withFunction(
+          function("pyrefly_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The `check` generator changes nothing in a workspace with nothing to fix.")
+        )
+        .withFunction(
+          function("pyrefly_discovers_workspaces", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`workspaces` holds the uv workspaces that lock `pyrefly`, and no other.")
+        )
+        .withFunction(
+          function("pyrefly_fails_on_type_error", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("The `check` generator fails on a type error.")
+        )
+        .withFunction(
+          function("pyrefly_removes_unused_ignore", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("The `check` generator removes an unused ignore comment and changes nothing else.")
+        )
+        .withFunction(
+          function("pyrefly_suppresses_errors", typeDef.withKind(TypeDefKind.STRING_KIND))
+            .withDescription("With `suppress_errors`, the `check` generator adds an ignore comment instead of failing.")
         )
         .withFunction(
           function("ruff_check_clean", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

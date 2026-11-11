@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": {
+    "cmd/pyrefly-dispatch/main.go": "cf20e7cf894a0f1d31206214a60aca6c5664c1ddffed137a7d1de5a2a37c648b",
+    "dagger.gen.go": "9cc46475253c7a665832ca9b9c5ff776dc6bb638098aacea077d0b759eeba4e5",
+    "internal/dagger/dagger.gen.go": "3064bed100544d70ac59e088b49d44a8ebc3d5f4ef18308b4398fec150ea476a",
+    "internal/dagger/entrypoint/main.dang": "b6788f5749efe80429673850c54cfa30cc70bbd8374455aabc6f2f00e5e4ef01",
+    "internal/dagger/entrypoint/runtime/dagger.gen.go.src": "3ca8388986c986211a4d9ce329c0c93d992eb183ca474376218b81d2d968ef38",
+    "internal/dagger/entrypoint/runtime/main.go.src": "c8e09dec1985a5dfef4393afdde8c8e56a81e02de0d03a79c6fc34e63e1588e3",
+    "internal/dagger/pyrefly.gen.go": "05d7aedd29a04ba47bf4fd3c43d8f52eb7a64e8c7478bd7ec133a272830159f2"
+  }
+}

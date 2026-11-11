@@ -56,7 +56,7 @@ is-module = true
 clients = ["./uv"]
 
 [sdks.python.scopes.".dagger"]
-clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor", "./pyproject", "./uv/tests/setuptools-package-dir", "./zensical"]
+clients = ["./github", "./deptry", "github.com/dagger/pytest@dd183e94449051abdc3c7d745dd148fdc08396d4", "./twingate", "./ruff", "./uv", "./zizmor", "./pyproject", "./uv/tests/setuptools-package-dir", "./zensical", "./pyrefly"]
 is-module = true
 
 [sdks.python.scopes."uv/tests/setuptools-package-dir"]
@@ -74,3 +74,8 @@ module = "go-sdk"
 [sdks.go.scopes.pyproject]
 is-module = true
 name = "pyproject"
+
+[sdks.go.scopes.pyrefly]
+is-module = true
+name = "pyrefly"
+clients = ["./uv"]
