@@ -251,6 +251,10 @@ type ModuleTypes {
             .withDescription("Keep workspace metadata/dependencies stable when only package source changes.")
         )
         .withFunction(
+          function("uv_workspace_locked_packages", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`locked_packages` lists every package in `uv.lock`, the workspace's own included.")
+        )
+        .withFunction(
           function("uv_workspace_no_install_packages", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`with_no_install_packages` leaves a locked dependency uninstalled and installs the rest.")
         )

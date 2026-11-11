@@ -524,6 +524,10 @@ type ModuleTypes {
             .withDescription("Every file a `builder` reads, at workspace-root-relative paths.\n\n`Uv.workspace` loads the workspace's directories from just these files.\nA module that reads more of the workspace can merge its own files into\nthem and hand the result on with `as_workspace()`.")
         )
         .withFunction(
+          function("locked_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)))
+            .withDescription("The names of every package in the workspace's `uv.lock`, sorted, its members included.")
+        )
+        .withFunction(
           function("package", typeDef.withObject("UvPackageSource"))
             .withDescription("A single member package within this workspace.")
             .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Member package path relative to the workspace root.")
