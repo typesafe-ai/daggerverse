@@ -50,6 +50,10 @@ type ModuleTypes {
             .withDescription("`projects` finds one entry per pyproject.toml that declares dependencies.\n\nA tooling-only pyproject (no `[project].dependencies`) and a\nDagger-generated one (`[tool.dagger] generated`) are left out.")
         )
         .withFunction(
+          function("deptry_project_settings", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A project's `[tool.typesafe_daggerverse.deptry]` table overrides the module's `args`.")
+        )
+        .withFunction(
           function("deptry_projects_exclude", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`exclude` leaves matching projects out of `projects`.")
         )
@@ -294,6 +298,10 @@ type ModuleTypes {
         .withFunction(
           function("zensical_discovers_projects", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`projects` finds one site per zensical.toml, in the innermost uv workspace holding it.\n\nDocs in a workspace member build that member's package; docs outside\nevery uv workspace have none.")
+        )
+        .withFunction(
+          function("zensical_site_settings", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("A site's `[tool.typesafe_daggerverse.zensical]` table overrides the module's settings.")
         )
         .withFunction(
           function("zensical_strict_fails_on_broken_link", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

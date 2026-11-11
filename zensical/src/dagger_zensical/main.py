@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import posixpath
 import tomllib
-from typing import Annotated
+from typing import Annotated, Any
 
 import dagger
 from dagger import Doc, check, collection, field, function, get, keys, object_type
@@ -38,6 +38,27 @@ def _project_name(pyproject_content: str | None) -> str | None:
     except tomllib.TOMLDecodeError:
         return None
     return name if isinstance(name, str) else None
+
+
+# The settings a docs site overrides in the `pyproject.toml` next to its `zensical.toml`.
+_OWN_SETTINGS = {"groups", "extras", "strict"}
+
+
+def _own_settings(pyproject_content: str | None) -> dict[str, Any]:
+    """The module settings a `pyproject.toml` overrides in its `[tool.typesafe_daggerverse.zensical]` table.
+
+    A key that is no setting is an error, so a typo doesn't pass for a setting left at its default.
+    """
+    if pyproject_content is None:
+        return {}
+    try:
+        table = tomllib.loads(pyproject_content).get("tool", {}).get("typesafe_daggerverse", {}).get("zensical", {})
+    except tomllib.TOMLDecodeError:
+        return {}
+    if unknown := sorted(set(table) - _OWN_SETTINGS):
+        msg = f"[tool.typesafe_daggerverse.zensical] has no setting {', '.join(unknown)}; it takes {', '.join(sorted(_OWN_SETTINGS))}"
+        raise ValueError(msg)
+    return table
 
 
 def _site_name(config_content: str) -> str | None:
@@ -229,6 +250,10 @@ class Zensical:
         """Discover the docs sites: one per `zensical.toml` outside `exclude`.
 
         Only the `zensical.toml`, `pyproject.toml` and `.gitignore` files are read.
+
+        A site overrides `groups`, `extras` and `strict` in the
+        `[tool.typesafe_daggerverse.zensical]` table of the `pyproject.toml` next
+        to its `zensical.toml`.
         """
         discovered = ws.directory("/", include=_DISCOVERY_INCLUDE, exclude=exclude, gitignore=True)
         configs, workspaces = await asyncio.gather(
@@ -241,19 +266,23 @@ class Zensical:
             workspace = _enclosing_workspace(path, workspaces)
             packages: list[str] = []
             pyproject = _root_path(path, "pyproject.toml")
-            if workspace is not None and path != workspace and await discovered.exists(pyproject):
+            pyproject_content = (
+                await discovered.file(pyproject).contents() if await discovered.exists(pyproject) else None
+            )
+            if workspace is not None and path != workspace:
                 # The docs live in a workspace member: build that member, not the root's package.
-                name = _project_name(await discovered.file(pyproject).contents())
+                name = _project_name(pyproject_content)
                 packages = [name] if name else []
+            own = _own_settings(pyproject_content)
             return ZensicalProject(
                 path=path,
                 workspace=workspace,
                 ws=ws,
                 exclude=exclude,
                 packages=packages,
-                groups=groups,
-                extras=extras or [],
-                strict=strict,
+                groups=own.get("groups", groups),
+                extras=own.get("extras", extras or []),
+                strict=own.get("strict", strict),
                 base_container=base_container,
             )
 
