@@ -63,7 +63,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("deptry_version_from_lock", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`\nby default, and a project without one fails its check.")
+            .withDescription("Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`\nby default, and a project without one fails.")
         )
         .withFunction(
           function("docs_build", typeDef.withObject("Directory"))

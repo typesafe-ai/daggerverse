@@ -168,6 +168,9 @@ class DeptryProject(_Type):
         The deptry version the check runs: the one the uv workspace's uv.lock
         resolves for `group`.
 
+        Fails for a project outside any uv workspace, or whose workspace has
+        no uv.lock.
+
         Returns
         -------
         str
@@ -186,10 +189,10 @@ class DeptryProject(_Type):
         _ctx = self._select("version", _args)
         return await _ctx.execute(str)
 
-    async def workspace(self) -> str:
+    async def workspace(self) -> str | None:
         """Returns
         -------
-        str
+        str | None
             The `String` scalar type represents textual data, represented as
             UTF-8 character sequences. The String type is most often used by
             GraphQL to represent free-form human-readable text.
@@ -203,7 +206,7 @@ class DeptryProject(_Type):
         """
         _args: list[_Arg] = []
         _ctx = self._select("workspace", _args)
-        return await _ctx.execute(str)
+        return await _ctx.execute(str | None)
 
 
 class DeptryProjects(_Type):
