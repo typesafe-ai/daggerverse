@@ -1483,21 +1483,31 @@ print("LAYER_CACHE_OK")
     @function
     async def all_deptry(self) -> None:
         """Run all checks for the `deptry` module in parallel."""
+        tests = [
+            self.deptry_discovers_projects,
+            self.deptry_clean_flat_layout,
+            self.deptry_clean_src_layout,
+            self.deptry_detects_issue,
+            self.deptry_subset,
+            self.deptry_projects_exclude,
+            self.deptry_config_opts_in_nonstandard_layout,
+            self.deptry_skips_project_without_layout_or_config,
+            self.deptry_version_from_lock,
+        ]
+
+        async def run(test) -> None:
+            # Most fixtures are a single project at `.`: the test's name says which one a span belongs to.
+            with get_tracer().start_as_current_span(f"Test deptry: {test.__name__.removeprefix('deptry_')}"):
+                await test()
+
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.deptry_discovers_projects)
-            tg.start_soon(self.deptry_clean_flat_layout)
-            tg.start_soon(self.deptry_clean_src_layout)
-            tg.start_soon(self.deptry_detects_issue)
-            tg.start_soon(self.deptry_subset)
-            tg.start_soon(self.deptry_projects_exclude)
-            tg.start_soon(self.deptry_config_opts_in_nonstandard_layout)
-            tg.start_soon(self.deptry_skips_project_without_layout_or_config)
-            tg.start_soon(self.deptry_version_from_lock)
+            for test in tests:
+                tg.start_soon(run, test)
 
     @function
     async def deptry_version_from_lock(self) -> None:
         """Each project runs the deptry its uv workspace's uv.lock locks in the `group` setting's group, `dev`
-        by default, and a project without one fails its check."""
+        by default, and a project without one fails."""
         pyproject = '[project]\nname = "{name}"\nversion = "0"\ndependencies = []\n'
         src = (
             core()
@@ -1522,7 +1532,8 @@ print("LAYER_CACHE_OK")
         try:
             await deptry(src.as_workspace()).projects().get("unlocked").version()
         except QueryError as exc:
-            if "no unlocked/uv.lock" not in str(exc):
+            # The module's error is in the stderr of the failed call, not its message.
+            if "no unlocked/uv.lock" not in getattr(exc, "stderr", str(exc)):
                 raise
         else:
             raise AssertionError("expected a project without a uv.lock to fail")

@@ -9,7 +9,8 @@ from typing import Annotated
 
 import dagger
 from dagger import Doc, check, collection, field, function, get, keys, object_type
-from dagger_clients.core import Container, Directory, Workspace, core
+from dagger.telemetry import get_tracer
+from dagger_clients.core import Container, Directory, File, Workspace, core
 from dagger_clients.pyproject import pyproject
 
 from deptry.args import Exclude
@@ -153,10 +154,8 @@ class DeptryProject:
     ] = field()
 
     workspace: Annotated[
-        str,
-        Doc(
-            "Root of the project's uv workspace, whose uv.lock pins its deptry (the project's own path when standalone)."
-        ),
+        str | None,
+        Doc("Root of the uv workspace the project belongs to, whose uv.lock pins its deptry. None outside any."),
     ] = field()
 
     group: Annotated[
@@ -167,19 +166,23 @@ class DeptryProject:
     # Not `field()`s: internal state.
     module: str | None
     files: Directory
-    locks: Directory
+    lock: File | None
     base: Container
     args: list[str]
 
     @function
     async def version(self) -> str:
-        """The deptry version the check runs: the one the uv workspace's uv.lock resolves for `group`."""
-        lock = posixpath.normpath(posixpath.join(self.workspace, _LOCK))
-        if not await self.locks.glob(lock):
-            msg = f"{self.path}: no {lock} to pin deptry in; deptry runs the version a uv.lock locks"
+        """The deptry version the check runs: the one the uv workspace's uv.lock resolves for `group`.
+
+        Fails for a project outside any uv workspace, or whose workspace has no uv.lock.
+        """
+        if self.lock is None:
+            lock = posixpath.normpath(posixpath.join(self.workspace or self.path, _LOCK))
+            msg = f"{self.path}: no {lock} to lock deptry in; deptry runs the version its uv workspace's uv.lock locks"
             raise ValueError(msg)
-        version = _locked_version(await self.locks.file(lock).contents(), self.group)
+        version = _locked_version(await self.lock.contents(), self.group)
         if version is None:
+            lock = posixpath.normpath(posixpath.join(self.workspace or ".", _LOCK))
             msg = (
                 f"{self.path}: {lock} locks no deptry in the {self.group!r} group of its root project; "
                 f"add it there (`uv add --group {self.group} deptry`) and lock"
@@ -195,6 +198,10 @@ class DeptryProject:
         Only the files this project owns are loaded: its directory less the
         projects nested in it, such as generated Dagger code or test fixtures.
         """
+        with get_tracer().start_as_current_span(f"Run deptry: {self.path}"):
+            await self._check()
+
+    async def _check(self) -> None:
         known = ["--known-first-party", self.module] if self.module else []
         ctr = self.base.with_exec(["uv", "tool", "install", f"deptry=={await self.version()}"])
         project_dir = self.files if self.path == "." else self.files.directory(self.path)
@@ -297,9 +304,17 @@ class Deptry:
         # A workspace made from a directory and passed to a module is keyed by its
         # contents, so discovery stays cached until one of the files it reads changes.
         discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
-        found = await pyproject(discovery_ws, exclude=exclude).project_list()
-        locks = discovery_ws.directory("/")
+        discovery = pyproject(discovery_ws, exclude=exclude)
+        found = await discovery.project_list()
         base = _base(base_container)
+        locks: dict[str, asyncio.Task[File | None]] = {}
+
+        async def _lock(root: str) -> File | None:
+            """The `uv.lock` of the uv workspace at `root`, if it has one."""
+            workspace = discovery.workspaces().get(root)
+            if _LOCK not in await workspace.lockfiles():
+                return None
+            return workspace.manifests().file(posixpath.normpath(posixpath.join(root, _LOCK)))
 
         async def _project(project) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.
@@ -311,14 +326,15 @@ class Deptry:
             checkable, module, configured = _project_info(await project.pyproject().contents())
             if checkable and (configured or await _has_package_layout(ws, path, module)):
                 files = ws.directory("/", include=files_include, exclude=files_exclude, gitignore=True)
+                if workspace is not None and workspace not in locks:
+                    locks[workspace] = asyncio.ensure_future(_lock(workspace))
                 return DeptryProject(
                     path=path,
-                    # A workspace member's deptry comes from its workspace's lock, a standalone project's from its own.
-                    workspace=workspace or path,
+                    workspace=workspace,
                     group=group,
                     module=module,
                     files=files,
-                    locks=locks,
+                    lock=await locks[workspace] if workspace is not None else None,
                     base=base,
                     args=args or [],
                 )

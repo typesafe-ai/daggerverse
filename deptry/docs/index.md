@@ -55,7 +55,7 @@ exclude = ["**/tests/_packages/**"]
 By default, the module picks up `deptry` version per `uv` workspace, as pinned in `uv.lock`.
 It reads it from the `dev` group of the workspace's root project (`uv add --dev deptry`),
 or from the group the `group` setting names. A project whose lock has no deptry in that
-group fails its check.
+group fails its check, as does a project without a `uv.lock`.
 
 ### Configuring deptry
 
