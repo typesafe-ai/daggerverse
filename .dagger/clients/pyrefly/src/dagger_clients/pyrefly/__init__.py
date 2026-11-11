@@ -263,6 +263,12 @@ def pyrefly(ws: Workspace, *, exclude: list[str] | None = None, groups: list[str
     """
     Discovers the uv workspaces that lock `pyrefly`.
 
+    A workspace overrides the settings below, other than `exclude`,
+    `baseContainer` and `uvCache`, in the
+    `[tool.typesafe_daggerverse.pyrefly]`
+    table of its `pyproject.toml`, with kebab-case keys such as `all-
+    extras`.
+
     Parameters
     ----------
     ws:

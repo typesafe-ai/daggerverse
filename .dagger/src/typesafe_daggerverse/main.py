@@ -1637,6 +1637,8 @@ print("LAYER_CACHE_OK")
             tg.start_soon(self.pyrefly_fails_on_type_error)
             tg.start_soon(self.pyrefly_suppresses_errors)
             tg.start_soon(self.pyrefly_baseline)
+            tg.start_soon(self.pyrefly_workspace_settings)
+            tg.start_soon(self.pyrefly_go_test)
 
     def _pyrefly_clean_source(self) -> Directory:
         return _src(self._PYREFLY_FIXTURE).with_new_file(
@@ -1718,3 +1720,29 @@ print("LAYER_CACHE_OK")
         pruned = workspace(baselined.without_file("src/typed/broken.py")).check()
         if await pruned.modified_paths() != ["pyrefly-baseline.json"]:
             raise AssertionError(f"expected the stale baseline entry to be pruned, got {await pruned.modified_paths()}")
+
+    @function
+    async def pyrefly_workspace_settings(self) -> None:
+        """A workspace's `[tool.typesafe_daggerverse.pyrefly]` table overrides the module's settings."""
+        fixture = _src(self._PYREFLY_FIXTURE)
+        pyproject = await fixture.file("pyproject.toml").contents()
+
+        def workspace(table: str) -> PyreflyWorkspace:
+            source = fixture.with_new_file(
+                "pyproject.toml", f"{pyproject}\n[tool.typesafe_daggerverse.pyrefly]\n{table}"
+            )
+            return pyrefly(source.as_workspace()).workspaces().get(".")
+
+        # The fixture has an unused ignore, which the module's default removes.
+        if not await workspace("remove-unused-ignores = false\n").check().is_empty():
+            raise AssertionError("expected the workspace's setting to keep the unused ignore")
+        try:
+            await workspace("removeUnusedIgnores = false\n").check().sync()
+        except QueryError:
+            return
+        raise AssertionError("expected a key that is no setting to fail")
+
+    @function
+    async def pyrefly_go_test(self) -> None:
+        """Run the pyrefly module's Go unit tests (the settings overrides, engine-free)."""
+        await _go_test("pyrefly").sync()

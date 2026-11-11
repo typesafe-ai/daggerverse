@@ -28,53 +28,53 @@ type Entrypoint implements ModuleEntrypoint {
 
   pub types: [TypeDef!]! {
     [
-      typeDef.withObject("Pyrefly", description: "Type check Python with [Pyrefly](https://pyrefly.org).\n\nEvery uv workspace (`uv.lock`) that locks `pyrefly` is type checked in its\nown environment, built by the `uv` module, with the pyrefly version the\nworkspace locks. Each workspace is its own generator: it applies the fixes\npyrefly can make and fails on the type errors that remain.", sourceMap: sourceMap("main.go", 236, 6))
+      typeDef.withObject("Pyrefly", description: "Type check Python with [Pyrefly](https://pyrefly.org).\n\nEvery uv workspace (`uv.lock`) that locks `pyrefly` is type checked in its\nown environment, built by the `uv` module, with the pyrefly version the\nworkspace locks. Each workspace is its own generator: it applies the fixes\npyrefly can make and fails on the type errors that remain.", sourceMap: sourceMap("main.go", 237, 6))
         .withFunction(
           function("Workspaces", typeDef.withObject("PyreflyWorkspaces"))
             .withDescription("The uv workspaces pyrefly checks: those that lock `pyrefly`, less those matching `exclude`.")
-            .withSourceMap(sourceMap("main.go", 318, 1))
+            .withSourceMap(sourceMap("main.go", 341, 1))
         )
         .withConstructor(
           function("", typeDef.withObject("Pyrefly"))
-            .withDescription("Discovers the uv workspaces that lock `pyrefly`.")
-            .withSourceMap(sourceMap("main.go", 242, 1))
-            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or constructed from a Directory.", sourceMap: sourceMap("main.go", 245, 2))
-            .withArg("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of workspace paths to leave out of workspaces, e.g. `**/tests/_packages/**`.", sourceMap: sourceMap("main.go", 248, 2))
-            .withArg("groups", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "uv dependency groups to install on top of the default ones (`dev`, unless `[tool.uv] default-groups` is set). The environment must provide `pyrefly`.", sourceMap: sourceMap("main.go", 251, 2))
-            .withArg("extras", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Extras to install when `allExtras` is off.", sourceMap: sourceMap("main.go", 254, 2))
-            .withArg("allExtras", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every extra.", defaultValue: ("true" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 257, 2))
-            .withArg("noInstallPackages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Packages to leave out of the environment, e.g. ones with no wheel for the platform or too heavy to install just to type check. Their imports don't resolve.", sourceMap: sourceMap("main.go", 260, 2))
-            .withArg("removeUnusedIgnores", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).", defaultValue: ("true" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 263, 2))
-            .withArg("suppressErrors", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Add ignore comments for the type errors found (`pyrefly check --suppress-errors`) instead of failing on them.", defaultValue: ("false" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 266, 2))
-            .withArg("pruneBaseline", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Drop the baseline entries that match no error anymore (`pyrefly check --prune-baseline`), in workspaces whose pyrefly configuration sets a `baseline`.", defaultValue: ("true" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 269, 2))
-            .withArg("args", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to `pyrefly check`.", sourceMap: sourceMap("main.go", 272, 2))
-            .withArg("baseContainer", typeDef.withObject("Container").withOptional(true), description: "Container the uv workspace's environment is built on, e.g. one carrying private index credentials. Defaults to the uv module's Debian uv image.", sourceMap: sourceMap("main.go", 275, 2))
-            .withArg("uvCache", typeDef.withObject("CacheVolume").withOptional(true), description: "Cache volume for uv's cache, e.g. one shared with another module. Defaults to the uv module's `uv-cache`.", sourceMap: sourceMap("main.go", 278, 2))
+            .withDescription("Discovers the uv workspaces that lock `pyrefly`.\n\nA workspace overrides the settings below, other than `exclude`,\n`baseContainer` and `uvCache`, in the `[tool.typesafe_daggerverse.pyrefly]`\ntable of its `pyproject.toml`, with kebab-case keys such as `all-extras`.")
+            .withSourceMap(sourceMap("main.go", 247, 1))
+            .withArg("ws", typeDef.withObject("Workspace"), description: "A Dagger workspace detected from the current working directory or constructed from a Directory.", sourceMap: sourceMap("main.go", 250, 2))
+            .withArg("exclude", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Glob patterns of workspace paths to leave out of workspaces, e.g. `**/tests/_packages/**`.", sourceMap: sourceMap("main.go", 253, 2))
+            .withArg("groups", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "uv dependency groups to install on top of the default ones (`dev`, unless `[tool.uv] default-groups` is set). The environment must provide `pyrefly`.", sourceMap: sourceMap("main.go", 256, 2))
+            .withArg("extras", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Extras to install when `allExtras` is off.", sourceMap: sourceMap("main.go", 259, 2))
+            .withArg("allExtras", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install every extra.", defaultValue: ("true" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 262, 2))
+            .withArg("noInstallPackages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Packages to leave out of the environment, e.g. ones with no wheel for the platform or too heavy to install just to type check. Their imports don't resolve.", sourceMap: sourceMap("main.go", 265, 2))
+            .withArg("removeUnusedIgnores", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Remove the ignore comments that suppress nothing (`pyrefly check --remove-unused-ignores`).", defaultValue: ("true" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 268, 2))
+            .withArg("suppressErrors", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Add ignore comments for the type errors found (`pyrefly check --suppress-errors`) instead of failing on them.", defaultValue: ("false" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 271, 2))
+            .withArg("pruneBaseline", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Drop the baseline entries that match no error anymore (`pyrefly check --prune-baseline`), in workspaces whose pyrefly configuration sets a `baseline`.", defaultValue: ("true" :: Dagger.JSON!), sourceMap: sourceMap("main.go", 274, 2))
+            .withArg("args", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Additional arguments to pass to `pyrefly check`.", sourceMap: sourceMap("main.go", 277, 2))
+            .withArg("baseContainer", typeDef.withObject("Container").withOptional(true), description: "Container the uv workspace's environment is built on, e.g. one carrying private index credentials. Defaults to the uv module's Debian uv image.", sourceMap: sourceMap("main.go", 280, 2))
+            .withArg("uvCache", typeDef.withObject("CacheVolume").withOptional(true), description: "Cache volume for uv's cache, e.g. one shared with another module. Defaults to the uv module's `uv-cache`.", sourceMap: sourceMap("main.go", 283, 2))
         ),
-      typeDef.withObject("PyreflyWorkspaces", description: "The uv workspaces pyrefly checks, keyed by root.\n\n`check` runs once per selected workspace, so each workspace is its own\ngenerator that can be selected or skipped on its own.", sourceMap: sourceMap("main.go", 207, 6))
+      typeDef.withObject("PyreflyWorkspaces", description: "The uv workspaces pyrefly checks, keyed by root.\n\n`check` runs once per selected workspace, so each workspace is its own\ngenerator that can be selected or skipped on its own.", sourceMap: sourceMap("main.go", 208, 6))
         .withCollection
         .withFunction(
           function("Workspace", typeDef.withObject("PyreflyWorkspace"))
             .withDescription("The workspace rooted at `path`.")
-            .withSourceMap(sourceMap("main.go", 218, 1))
-            .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root (holding uv.lock), relative to the Dagger workspace root. `.` for the root.", sourceMap: sourceMap("main.go", 220, 2))
+            .withSourceMap(sourceMap("main.go", 219, 1))
+            .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root (holding uv.lock), relative to the Dagger workspace root. `.` for the root.", sourceMap: sourceMap("main.go", 221, 2))
         )
         .withCollectionGet("Workspace")
-        .withField("Paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Workspace roots (holding uv.lock), relative to the Dagger workspace root. `.` for the root.", sourceMap: sourceMap("main.go", 210, 2))
+        .withField("Paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Workspace roots (holding uv.lock), relative to the Dagger workspace root. `.` for the root.", sourceMap: sourceMap("main.go", 211, 2))
         .withCollectionKeys("Paths"),
-      typeDef.withObject("PyreflyWorkspace", description: "One uv workspace that pyrefly type checks.", sourceMap: sourceMap("main.go", 22, 6))
+      typeDef.withObject("PyreflyWorkspace", description: "One uv workspace that pyrefly type checks.", sourceMap: sourceMap("main.go", 23, 6))
         .withFunction(
           function("Check", typeDef.withObject("Changeset"))
             .withDescription("Type check this workspace with `pyrefly check`, fixing what pyrefly can.\n\nThe fixes are the module's `removeUnusedIgnores`, `suppressErrors` and\n`pruneBaseline` settings: `dagger generate` applies them, and `dagger check --generated`\nfails while they would change a file. Fails when type errors remain.")
-            .withSourceMap(sourceMap("main.go", 113, 1))
+            .withSourceMap(sourceMap("main.go", 114, 1))
             .withGenerator
         )
         .withFunction(
           function("UpdateBaseline", typeDef.withObject("Changeset"))
             .withDescription("Record every type error pyrefly finds in the workspace's baseline file (`pyrefly check --update-baseline`).\n\n`check` then fails only on the errors that aren't in the baseline, which\nlets a codebase adopt pyrefly before its existing errors are fixed. The\nerrors are those of the environment `check` runs in. Needs the `baseline`\noption set in the workspace's pyrefly configuration.")
-            .withSourceMap(sourceMap("main.go", 155, 1))
+            .withSourceMap(sourceMap("main.go", 156, 1))
         )
-        .withField("Path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root (holding uv.lock), relative to the Dagger workspace root. `.` for the root.", sourceMap: sourceMap("main.go", 24, 2))
+        .withField("Path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace root (holding uv.lock), relative to the Dagger workspace root. `.` for the root.", sourceMap: sourceMap("main.go", 25, 2))
     ]
   }
 

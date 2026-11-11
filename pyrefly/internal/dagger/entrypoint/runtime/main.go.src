@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	posixpath "path"
 	"regexp"
 	"slices"
 	"strings"
@@ -241,6 +242,10 @@ type Pyrefly struct {
 }
 
 // Discovers the uv workspaces that lock `pyrefly`.
+//
+// A workspace overrides the settings below, other than `exclude`,
+// `baseContainer` and `uvCache`, in the `[tool.typesafe_daggerverse.pyrefly]`
+// table of its `pyproject.toml`, with kebab-case keys such as `all-extras`.
 func New(
 	ctx context.Context,
 	// A Dagger workspace detected from the current working directory or constructed from a Directory.
@@ -284,6 +289,16 @@ func New(
 	if err != nil {
 		return nil, err
 	}
+	module := settings{
+		Groups:              groups,
+		Extras:              extras,
+		AllExtras:           allExtras,
+		NoInstallPackages:   noInstallPackages,
+		RemoveUnusedIgnores: removeUnusedIgnores,
+		SuppressErrors:      suppressErrors,
+		PruneBaseline:       pruneBaseline,
+		Args:                args,
+	}
 	items := make([]*PyreflyWorkspace, len(paths))
 	group, ctx := errgroup.WithContext(ctx)
 	for i, path := range paths {
@@ -293,18 +308,26 @@ func New(
 			if err != nil || !slices.Contains(locked, lockedPackage) {
 				return err
 			}
+			pyproject, err := ws.File(posixpath.Join(path, "pyproject.toml")).Contents(ctx)
+			if err != nil {
+				return err
+			}
+			own, err := module.override(pyproject)
+			if err != nil {
+				return fmt.Errorf("%s: %w", posixpath.Join(path, "pyproject.toml"), err)
+			}
 			items[i] = &PyreflyWorkspace{
 				Path:                path,
 				Inputs:              workspace.Inputs(),
 				UvCache:             uvCache,
-				Groups:              groups,
-				Extras:              extras,
-				AllExtras:           allExtras,
-				NoInstallPackages:   noInstallPackages,
-				RemoveUnusedIgnores: removeUnusedIgnores,
-				SuppressErrors:      suppressErrors,
-				PruneBaseline:       pruneBaseline,
-				Args:                args,
+				Groups:              own.Groups,
+				Extras:              own.Extras,
+				AllExtras:           own.AllExtras,
+				NoInstallPackages:   own.NoInstallPackages,
+				RemoveUnusedIgnores: own.RemoveUnusedIgnores,
+				SuppressErrors:      own.SuppressErrors,
+				PruneBaseline:       own.PruneBaseline,
+				Args:                own.Args,
 				BaseContainer:       baseContainer,
 			}
 			return nil

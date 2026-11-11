@@ -94,6 +94,22 @@ args = ["--min-severity", "warn"]
 The `baseContainer` setting is the container the environment is built on, for
 example one that carries private index credentials.
 
+### Per-workspace settings
+
+A workspace overrides the module's settings in its own `pyproject.toml`, with
+kebab-case keys. A key it leaves out keeps the module's setting:
+
+```toml title="pyproject.toml"
+[tool.typesafe_daggerverse.pyrefly]
+# This workspace's `cpu` and `gpu` extras conflict, so it can't install every extra.
+all-extras = false
+extras = ["cpu"]
+no-install-packages = ["my-gpu-kernels"]
+```
+
+Every setting can be overridden this way except `exclude`, `baseContainer` and
+`uvCache`, which apply to the whole repository.
+
 ## Caching
 
 Pyrefly keeps no cache on disk: every run checks the workspace from scratch.

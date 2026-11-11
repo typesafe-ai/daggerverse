@@ -1299,6 +1299,7 @@ type UvLocalPackage struct { // uv (../../:0:0)
 	name              *string
 	path              *string
 	pyprojectContents *string
+	root              *string
 }
 
 func (r *UvLocalPackage) WithGraphQLQuery(q *querybuilder.Selection) *UvLocalPackage {
@@ -1453,6 +1454,19 @@ func (r *UvLocalPackage) PyprojectContents(ctx context.Context) (string, error) 
 		return *r.pyprojectContents, nil
 	}
 	q := r.query.Select("pyprojectContents")
+
+	var response string
+
+	q = q.Bind(&response)
+	return response, q.Execute(ctx)
+}
+
+// Path relative to the Dagger workspace root
+func (r *UvLocalPackage) Root(ctx context.Context) (string, error) { // uv (../../:0:0)
+	if r.root != nil {
+		return *r.root, nil
+	}
+	q := r.query.Select("root")
 
 	var response string
 
