@@ -103,8 +103,15 @@ class UvWorkspaceSource:
         Doc("Only what resolving the workspace reads: uv.lock, uv.toml and the members' pyproject.toml files."),
     ] = field()
 
-    # Not a `field()`: every file the builds read, which `inputs` returns.
-    inputs_dir: Directory
+    # A field, not a function: reading it makes no call into the module.
+    inputs_dir: Annotated[
+        Directory,
+        Doc(
+            "Every file a `builder` reads, at workspace-root-relative paths. `Uv.workspace` loads the "
+            "workspace's directories from just these files. A module that reads more of the workspace can "
+            "merge its own files into them and hand the result on with `as_workspace()`."
+        ),
+    ] = field(name="inputs")
 
     path: Annotated[
         str,
@@ -580,16 +587,6 @@ class UvWorkspaceSource:
             src_paths=self.src_paths,
             handlers=self.build_backend_handlers,
         )
-
-    @function
-    def inputs(self) -> Directory:
-        """Every file a `builder` reads, at workspace-root-relative paths.
-
-        `Uv.workspace` loads the workspace's directories from just these files.
-        A module that reads more of the workspace can merge its own files into
-        them and hand the result on with `as_workspace()`.
-        """
-        return self.inputs_dir
 
     @function
     async def builder(

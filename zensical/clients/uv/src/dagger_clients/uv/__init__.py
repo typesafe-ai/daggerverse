@@ -3877,13 +3877,10 @@ class UvWorkspaceSource(_Type):
         return await _ctx.execute_object_list(UvIndex)
 
     def inputs(self) -> Directory:
-        """
-        Every file a `builder` reads, at workspace-root-relative paths.
-
+        """Every file a `builder` reads, at workspace-root-relative paths.
         `Uv.workspace` loads the workspace's directories from just these
-        files.
-        A module that reads more of the workspace can merge its own files into
-        them and hand the result on with `as_workspace()`.
+        files. A module that reads more of the workspace can merge its own
+        files into them and hand the result on with `as_workspace()`.
         """
         _args: list[_Arg] = []
         _ctx = self._select("inputs", _args)
