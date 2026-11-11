@@ -31,7 +31,8 @@ everything in an order that caches well, so you don't assemble the build context
 
     - **`Uv`** holds the source tree it reads from the Dagger workspace (`ws`). Ask it
       for one workspace by path (`workspace`) or for the collection of every workspace
-      it finds (`workspaces`).
+      it finds (`workspaces`). `workspaces().filter(has_packages=["pyrefly"])` narrows the
+      collection to the workspaces whose `uv.lock` locks those packages, without loading any of them.
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, list its `locked_packages`, `audit` it (a generator), or get a `builder` for its packages.
     - **`UvWorkspaceBuilder`** builds the workspace's packages: a container with its Python

@@ -545,6 +545,11 @@ type ModuleTypes {
         .withCollection
         .withField("paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root.")
         .withCollectionKeys("paths")
+        .withFunction(
+          function("filter", typeDef.withObject("UvWorkspaces"))
+            .withDescription("The workspaces matching every given criterion, read from their uv.lock files alone.")
+            .withArg("has_packages", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Keep the workspaces whose uv.lock locks every one of these packages, e.g. a tool to run in them.", defaultValue: ("null" :: Dagger.JSON!))
+        )
         .withCollectionGet("workspace")
         .withFunction(
           function("workspace", typeDef.withObject("UvWorkspaceSource"))

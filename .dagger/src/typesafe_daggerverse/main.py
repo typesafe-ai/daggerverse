@@ -235,6 +235,7 @@ class TypesafeDaggerverse:
         async with anyio.create_task_group() as tg:
             tg.start_soon(_run, "detect_version_uv_toml_precedence", self.uv_detect_version_uv_toml_precedence)
             tg.start_soon(_run, "discovers_workspaces", self.uv_discovers_workspaces)
+            tg.start_soon(_run, "filters_workspaces", self.uv_filters_workspaces)
             tg.start_soon(_run, "audit_detects_vulnerability", self.uv_audit_detects_vulnerability)
             tg.start_soon(_run, "audit_subset", self.uv_audit_subset)
             tg.start_soon(_run, "audit_exclude", self.uv_audit_exclude)
@@ -300,6 +301,39 @@ class TypesafeDaggerverse:
         paths = await uv(src.as_workspace()).workspaces().keys()
         if paths != ["a", "b/c"]:
             raise AssertionError(f"expected ['a', 'b/c'], got {paths}")
+
+    @function
+    async def uv_filters_workspaces(self) -> None:
+        """`workspaces().filter` keeps the workspaces whose uv.lock locks every package in `has_packages`."""
+        pyproject = '[project]\nname = "x"\nversion = "0"\n'
+
+        def lock(*names: str) -> str:
+            return "".join(f'[[package]]\nname = "{name}"\nversion = "0"\n\n' for name in names)
+
+        src = (
+            core()
+            .directory()
+            .with_new_file("a/uv.lock", lock("x", "pyrefly", "ruff"))
+            .with_new_file("a/pyproject.toml", pyproject)
+            .with_new_file("b/uv.lock", lock("x", "typing-extensions"))
+            .with_new_file("b/pyproject.toml", pyproject)
+        )
+        workspaces = uv(src.as_workspace()).workspaces()
+        for has_packages, expected in (
+            (["pyrefly"], ["a"]),
+            (["pyrefly", "ruff"], ["a"]),
+            (["pyrefly", "typing-extensions"], []),
+            # Names match as uv.lock spells them.
+            (["Typing_Extensions"], ["b"]),
+            ([], ["a", "b"]),
+        ):
+            paths = await workspaces.filter(has_packages=has_packages).keys()
+            if paths != expected:
+                raise AssertionError(f"has_packages={has_packages}: expected {expected}, got {paths}")
+        # A kept workspace still loads.
+        path = await workspaces.filter(has_packages=["pyrefly"]).get("a").path()
+        if path != "a":
+            raise AssertionError(f"expected the workspace at 'a', got {path!r}")
 
     @function
     async def uv_audit_detects_vulnerability(self) -> None:
