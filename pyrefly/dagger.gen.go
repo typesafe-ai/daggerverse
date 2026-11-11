@@ -3,8 +3,6 @@
 package pyrefly
 
 import (
-	uv "dagger/pyrefly/internal/dagger/clients/uv"
-
 	core "dagger.io/dagger/core"
 
 	"context"
@@ -93,7 +91,8 @@ func (r *PyreflyWorkspaces) UnmarshalJSON(bs []byte) error {
 func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 	var concrete struct {
 		Path                string
-		Workspace           *uv.UvWorkspaceSource
+		Inputs              *dagger.Directory
+		UvCache             *dagger.CacheVolume
 		Groups              []string
 		Extras              []string
 		AllExtras           bool
@@ -103,7 +102,8 @@ func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 		BaseContainer       *dagger.Container
 	}
 	concrete.Path = r.Path
-	concrete.Workspace = r.Workspace
+	concrete.Inputs = r.Inputs
+	concrete.UvCache = r.UvCache
 	concrete.Groups = r.Groups
 	concrete.Extras = r.Extras
 	concrete.AllExtras = r.AllExtras
@@ -117,7 +117,8 @@ func (r PyreflyWorkspace) MarshalJSON() ([]byte, error) {
 func (r *PyreflyWorkspace) UnmarshalJSON(bs []byte) error {
 	var concrete struct {
 		Path                string
-		Workspace           *uv.UvWorkspaceSource
+		Inputs              *dagger.Directory
+		UvCache             *dagger.CacheVolume
 		Groups              []string
 		Extras              []string
 		AllExtras           bool
@@ -131,7 +132,8 @@ func (r *PyreflyWorkspace) UnmarshalJSON(bs []byte) error {
 		return err
 	}
 	r.Path = concrete.Path
-	r.Workspace = concrete.Workspace
+	r.Inputs = concrete.Inputs
+	r.UvCache = concrete.UvCache
 	r.Groups = concrete.Groups
 	r.Extras = concrete.Extras
 	r.AllExtras = concrete.AllExtras

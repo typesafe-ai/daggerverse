@@ -22,8 +22,12 @@ type PyreflyWorkspace struct {
 	// Workspace root (holding uv.lock), relative to the Dagger workspace root. `.` for the root.
 	Path string
 
+	// Every file the uv module reads to build the workspace. The uv module's own
+	// objects can't be kept in a field, so the workspace is loaded again from these.
 	// +private
-	Workspace *uv.UvWorkspaceSource
+	Inputs *dagger.Directory
+	// +private
+	UvCache *dagger.CacheVolume
 	// +private
 	Groups []string
 	// +private
@@ -46,7 +50,8 @@ type PyreflyWorkspace struct {
 // pyrefly keeps no cache on disk; the uv cache the environment installs from
 // is the uv module's cache volume.
 func (m *PyreflyWorkspace) container(ctx context.Context) (*dagger.Container, string, error) {
-	builder := m.Workspace.Builder(uv.UvWorkspaceSourceBuilderOpts{BaseContainer: m.BaseContainer}).WithAllPackages()
+	workspace := uv.New(m.Inputs.AsWorkspace(), uv.UvOpts{UvCache: m.UvCache}).Workspace(m.Path)
+	builder := workspace.Builder(uv.UvWorkspaceSourceBuilderOpts{BaseContainer: m.BaseContainer}).WithAllPackages()
 	if len(m.Groups) > 0 {
 		builder = builder.WithGroups(m.Groups)
 	}
@@ -66,7 +71,7 @@ func (m *PyreflyWorkspace) container(ctx context.Context) (*dagger.Container, st
 	if m.Path != "." {
 		root = strings.TrimSuffix(workdir, "/"+m.Path)
 	}
-	return ctr.WithDirectory(root, m.Workspace.Source()), workdir, nil
+	return ctr.WithDirectory(root, workspace.Source()), workdir, nil
 }
 
 // failure folds pyrefly's report into the error of a failed exec, which otherwise reads just "exit code N".
@@ -209,7 +214,8 @@ func New(
 			}
 			items[i] = &PyreflyWorkspace{
 				Path:                path,
-				Workspace:           workspace,
+				Inputs:              workspace.Inputs(),
+				UvCache:             uvCache,
 				Groups:              groups,
 				Extras:              extras,
 				AllExtras:           allExtras,
