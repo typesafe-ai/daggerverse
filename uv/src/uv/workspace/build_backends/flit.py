@@ -4,7 +4,7 @@ See https://flit.pypa.io/en/stable/pyproject_toml.html.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from dagger import object_type
 
@@ -31,7 +31,7 @@ class FlitSettings:
     external_data: str | None = None
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str) -> Self:
         flit = metadata.get("tool", {}).get("flit", {})
         dynamic = set(metadata.get("project", {}).get("dynamic", []))
         return cls(

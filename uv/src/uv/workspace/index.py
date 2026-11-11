@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from dagger import Doc, field, object_type
 from dagger_clients.core import Directory
@@ -34,16 +34,16 @@ class UvIndex:
     ] = field(default=None)
 
 
-def dicts_to_indices(entries: list[dict]) -> list[UvIndex]:
+def dicts_to_indices(entries: list[dict[str, Any]]) -> list[UvIndex]:
     return [UvIndex(**e) for e in entries]
 
 
 def merge_indices(
-    base: list[dict],
-    override: list[dict],
+    base: list[dict[str, Any]],
+    override: list[dict[str, Any]],
 ) -> list[UvIndex]:
     """Merge two index lists, deduplicating by name (override wins)."""
-    by_name: dict[str, dict] = {}
+    by_name: dict[str, dict[str, Any]] = {}
     for entry in base:
         by_name[entry["name"]] = entry
     for entry in override:
@@ -52,7 +52,7 @@ def merge_indices(
     return dicts_to_indices(merged)
 
 
-async def read_workspace_indices(ws_dir: Directory) -> list[dict]:
+async def read_workspace_indices(ws_dir: Directory) -> list[dict[str, Any]]:
     """Read raw index dicts from workspace-level config (uv.toml or pyproject.toml)."""
     if "uv.toml" in await ws_dir.entries():
         return parse_indices(await ws_dir.file("uv.toml").contents(), uv_toml=True)

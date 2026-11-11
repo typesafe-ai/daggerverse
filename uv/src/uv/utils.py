@@ -5,6 +5,7 @@ import tomllib
 from collections import OrderedDict, deque
 from collections.abc import Collection
 from pathlib import Path
+from typing import Any
 
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
@@ -79,7 +80,7 @@ def parse_pyvenv_cfg(content: str) -> dict[str, str]:
     return result
 
 
-def extract_indices(data: dict, *, uv_toml: bool = False) -> list[dict]:
+def extract_indices(data: dict[str, Any], *, uv_toml: bool = False) -> list[dict[str, Any]]:
     """Extract index entries from parsed TOML data.
 
     Reads `[[index]]` (uv.toml) or `[[tool.uv.index]]` (pyproject.toml).
@@ -87,7 +88,7 @@ def extract_indices(data: dict, *, uv_toml: bool = False) -> list[dict]:
     declares at least a `name` and `url`.
     """
     raw = data.get("index", []) if uv_toml else data.get("tool", {}).get("uv", {}).get("index", [])
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for idx in raw:
         name = idx.get("name")
         url = idx.get("url")
@@ -107,7 +108,7 @@ def extract_indices(data: dict, *, uv_toml: bool = False) -> list[dict]:
     return results
 
 
-def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict]:
+def parse_indices(content: str, *, uv_toml: bool = False) -> list[dict[str, Any]]:
     return extract_indices(tomllib.loads(content), uv_toml=uv_toml)
 
 
@@ -130,10 +131,10 @@ def selected_groups(content: str, groups: list[str], all_groups: bool, no_defaul
     """
     if all_groups:
         return None
-    default = tomllib.loads(content).get("tool", {}).get("uv", {}).get("default-groups", ["dev"])
     if no_default_groups:
-        default = []
-    elif default == "all":
+        return set(groups)
+    default = tomllib.loads(content).get("tool", {}).get("uv", {}).get("default-groups", ["dev"])
+    if default == "all":
         return None
     return set(groups) | set(default)
 
@@ -262,7 +263,7 @@ def require_package_selection(packages: list[str], all_packages: bool, default_p
     raise ValueError(msg)
 
 
-def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
+def parse_local_packages(lock_data: dict[str, Any]) -> OrderedDict[str, str]:
     """Return {package_name: local_path} for editable, directory, and virtual packages.
 
     Virtual members still need their metadata staged for workspace resolution.
@@ -281,7 +282,7 @@ def parse_local_packages(lock_data: dict) -> OrderedDict[str, str]:
 
 
 def find_transitive_local_deps(
-    lock_data: dict, project: str, groups: Collection[str] | None = None
+    lock_data: dict[str, Any], project: str, groups: Collection[str] | None = None
 ) -> OrderedDict[str, str]:
     """Find all local packages that `project` transitively depends on (including itself).
 

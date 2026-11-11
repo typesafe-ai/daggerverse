@@ -50,7 +50,8 @@ class Ruff:
         source = ws.directory("/", exclude=exclude, gitignore=True).as_workspace().directory("/")
         return cls(ctr=ctr, source=source)
 
-    @function(cache="1h")
+    # The SDK's `function` overloads leave out `cache`.
+    @function(cache="1h")  # pyrefly: ignore[no-matching-overload]
     async def version(self) -> str:
         """The resolved ruff version."""
         return (await self.ctr.with_exec(["/ruff", "version"]).stdout()).strip()

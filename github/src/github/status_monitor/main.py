@@ -40,7 +40,8 @@ class GithubStatusMonitor:
         Doc("Base URL of the GitHub REST API."),
     ] = field(default="https://api.github.com")
 
-    @function(cache="never")
+    # The SDK's `function` overloads leave out `cache`.
+    @function(cache="never")  # pyrefly: ignore[no-matching-overload]
     async def wait_for_statuses(
         self,
         repo: Repo,
@@ -75,7 +76,8 @@ class GithubStatusMonitor:
             fail_fast=fail_fast,
         )
 
-    @function(cache="never")
+    # The SDK's `function` overloads leave out `cache`.
+    @function(cache="never")  # pyrefly: ignore[no-matching-overload]
     async def wait_for_dagger_checks(
         self,
         repo: Repo,

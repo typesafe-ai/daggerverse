@@ -7,7 +7,7 @@ from typing import Annotated, Self
 
 from dagger import Doc, collection, function, get, keys, object_type
 from dagger_clients.core import CacheVolume, Container, Workspace
-from dagger_clients.pyproject import pyproject
+from dagger_clients.pyproject import PyprojectProject, PyprojectWorkspace, pyproject
 
 from uv.args import WorkspacePath
 from uv.audit import AuditCooldown, AuditUpgradeStrategy, CooldownPolicy, UpgradeStrategy
@@ -153,19 +153,23 @@ class Uv:
 
         # Keep only the patterns `pyproject` computed: `workspace` loads each
         # workspace from them, so no call goes back to the `pyproject` module.
-        async def project_layout(project) -> UvProjectLayout:
+        async def project_layout(project: PyprojectProject) -> UvProjectLayout:
             path, include, exclude = await asyncio.gather(project.path(), project.include(), project.exclude())
             return UvProjectLayout(path=path, include=include, exclude=exclude)
 
-        async def workspace_layout(workspace) -> UvWorkspaceLayout:
-            path, members, dependencies, include, exclude, manifest_include, manifest_exclude = await asyncio.gather(
-                workspace.path(),
-                workspace.members(),
-                workspace.local_dependencies(),
-                workspace.include(),
-                workspace.exclude(),
-                workspace.manifest_include(),
-                workspace.manifest_exclude(),
+        async def workspace_layout(workspace: PyprojectWorkspace) -> UvWorkspaceLayout:
+            # Two groups: `gather` types at most six results.
+            (
+                (path, members, dependencies),
+                (include, exclude, manifest_include, manifest_exclude),
+            ) = await asyncio.gather(
+                asyncio.gather(workspace.path(), workspace.members(), workspace.local_dependencies()),
+                asyncio.gather(
+                    workspace.include(),
+                    workspace.exclude(),
+                    workspace.manifest_include(),
+                    workspace.manifest_exclude(),
+                ),
             )
             roots = [*members, *dependencies]
             return UvWorkspaceLayout(

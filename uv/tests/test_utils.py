@@ -48,7 +48,9 @@ class TestSelectedGroups:
             ('[tool.uv]\ndefault-groups = "all"\n', ["docs"], False, True, {"docs"}),
         ],
     )
-    def test_selection(self, pyproject, groups, all_groups, no_default_groups, expected):
+    def test_selection(
+        self, pyproject: str, groups: list[str], all_groups: bool, no_default_groups: bool, expected: set[str] | None
+    ):
         assert selected_groups(pyproject, groups, all_groups, no_default_groups) == expected
 
 

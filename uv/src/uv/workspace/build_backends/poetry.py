@@ -5,7 +5,7 @@ See https://python-poetry.org/docs/pyproject/.
 
 import posixpath
 from dataclasses import dataclass, field
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from dagger import object_type
 
@@ -15,7 +15,7 @@ from uv.workspace.build_backends.paths import is_file, is_module, tree
 _GLOB_CHARS = "*?["
 
 
-def _in_wheel(entry: str | dict) -> bool:
+def _in_wheel(entry: str | dict[str, Any]) -> bool:
     """Whether a `packages`/`include` entry ships in wheels (no `format` means every format)."""
     formats = entry.get("format") if isinstance(entry, dict) else None
     if formats is None:
@@ -48,7 +48,7 @@ class PoetrySettings:
     build_script: str | None = None
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str) -> Self:
         poetry = metadata.get("tool", {}).get("poetry", {})
         packages = None
         if "packages" in poetry:

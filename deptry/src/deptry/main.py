@@ -11,7 +11,7 @@ import dagger
 from dagger import Doc, check, collection, field, function, get, keys, object_type
 from dagger.telemetry import get_tracer
 from dagger_clients.core import Container, Directory, File, Workspace, core
-from dagger_clients.pyproject import pyproject
+from dagger_clients.pyproject import PyprojectProject, pyproject
 
 from deptry.args import Exclude
 
@@ -340,7 +340,7 @@ class Deptry:
                 return None
             return workspace.manifests().file(posixpath.normpath(posixpath.join(root, _LOCK)))
 
-        async def _project(project) -> DeptryProject | None:
+        async def _project(project: PyprojectProject) -> DeptryProject | None:
             # Dagger's generated sdk/ and clients/ are projects too, but not ours to check.
             if await project.generated():
                 return None

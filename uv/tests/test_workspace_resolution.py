@@ -2,7 +2,7 @@ import posixpath
 import tomllib
 from collections import OrderedDict
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from uv.utils import (
     build_uv_sync_args,
@@ -15,7 +15,7 @@ from uv.workspace.plan import _match_reachable, _module_name
 FIXTURES = Path(__file__).parent / "_packages"
 
 
-def _load_lock(path: Path) -> dict:
+def _load_lock(path: Path) -> dict[str, Any]:
     return tomllib.loads((path / "uv.lock").read_text())
 
 
@@ -278,8 +278,8 @@ class TestWorkspaceFlat:
 
 
 class TestBuildUvSyncArgs:
-    def _args(self, **overrides):
-        defaults = {
+    def _args(self, **overrides: Any) -> list[str]:
+        defaults: dict[str, Any] = {
             "packages": [],
             "extras": [],
             "groups": [],

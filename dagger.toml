@@ -17,6 +17,9 @@ source = "zizmor"
 [modules.zensical]
 source = "zensical"
 
+[modules.pyrefly]
+source = "pyrefly"
+
 # Test fixtures under uv/tests/_packages are deliberately broken or vulnerable;
 # the .dagger checks exercise them directly.
 [modules.deptry.settings]
@@ -26,6 +29,9 @@ source = "zensical"
 exclude = ["**/tests/_packages/**", "uv/tests/setuptools-package-dir", "deptry"]
 
 [modules.uv.settings]
+exclude = ["**/tests/_packages/**"]
+
+[modules.pyrefly.settings]
 exclude = ["**/tests/_packages/**"]
 
 [modules.python-sdk]

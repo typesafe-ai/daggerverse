@@ -6,7 +6,7 @@ https://hatch.pypa.io/latest/plugins/builder/wheel/.
 
 import posixpath
 from dataclasses import dataclass, field
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from dagger import object_type
 
@@ -43,15 +43,15 @@ class HatchlingSettings:
     version_path: str | None = None
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str) -> Self:
         hatch = metadata.get("tool", {}).get("hatch", {})
         build = hatch.get("build", {})
         wheel = build.get("targets", {}).get("wheel", {})
 
-        def option(key: str, default=None):
+        def option(key: str, default: Any = None) -> Any:
             return wheel.get(key, build.get(key, default))
 
-        def paths(values) -> list[str] | None:
+        def paths(values: list[str] | None) -> list[str] | None:
             return None if values is None else [posixpath.normpath(value) for value in values]
 
         hooks = [

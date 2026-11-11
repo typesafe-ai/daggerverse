@@ -6,7 +6,7 @@ https://backend.pdm-project.org/metadata/.
 
 import posixpath
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from dagger import object_type
 
@@ -34,7 +34,7 @@ class PdmSettings:
     version_path: str | None = None
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str) -> Self:
         pdm = metadata.get("tool", {}).get("pdm", {})
         build = pdm.get("build", {})
         version = pdm.get("version", {})

@@ -5,7 +5,7 @@ See https://docs.astral.sh/uv/concepts/build-backend/.
 
 import posixpath
 from dataclasses import dataclass, field
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from dagger import object_type
 
@@ -26,7 +26,7 @@ class UvBuildSettings:
     data_dirs: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_pyproject(cls, metadata: dict, name: str) -> Self:
+    def from_pyproject(cls, metadata: dict[str, Any], name: str) -> Self:
         backend = metadata.get("tool", {}).get("uv", {}).get("build-backend", {})
         names = backend.get("module-name", import_name(name))
         if isinstance(names, str):

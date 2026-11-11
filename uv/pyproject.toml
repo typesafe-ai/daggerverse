@@ -24,6 +24,7 @@ dagger-clients-pyproject = "dagger_clients"
 [dependency-groups]
 dev = [
     "deptry==0.25.1",
+    "pyrefly>=1.4.1",
     "pytest>=9.0.3",
 ]
 docs = [
@@ -36,3 +37,9 @@ testpaths = ["tests"]
 
 [tool.uv.workspace]
 members = ["sdk", "clients/core", "clients/pyproject"]
+
+[tool.pyrefly]
+preset = "strict"
+project-includes = ["src", "tests"]
+# Fixture projects and a nested Dagger module, on top of the defaults.
+project-excludes = ["tests/_packages", "tests/setuptools-package-dir", "**/node_modules", "**/__pycache__", "**/*venv/**", "**/.[!/.]*/**"]

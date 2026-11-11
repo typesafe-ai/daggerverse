@@ -1,5 +1,5 @@
 import asyncio
-from typing import Annotated
+from typing import Annotated, Any
 
 from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
@@ -60,7 +60,7 @@ class UvPackageSource:
         """
         tracer = get_tracer()
 
-        async def _read_pkg() -> list[dict]:
+        async def _read_pkg() -> list[dict[str, Any]]:
             with tracer.start_as_current_span("read package indices") as span:
                 span.set_attribute("package.path", self.package_path)
                 raw = parse_indices(await self._pkg_dir().file("pyproject.toml").contents())
@@ -71,7 +71,7 @@ class UvPackageSource:
         if not include_from_workspace:
             return dicts_to_indices(await _read_pkg())
 
-        async def _read_ws() -> list[dict]:
+        async def _read_ws() -> list[dict[str, Any]]:
             with tracer.start_as_current_span("read workspace indices") as span:
                 span.set_attribute("workspace.path", self.workspace_path)
                 raw = await read_workspace_indices(self._ws_dir())

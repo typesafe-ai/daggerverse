@@ -6,7 +6,7 @@ import posixpath
 import tomllib
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, Any
 
 import dagger
 from dagger import Doc, field, function, generate, object_type
@@ -189,7 +189,7 @@ class UvWorkspaceSource:
         return sorted({package["name"] for package in lock.get("package", [])})
 
     @staticmethod
-    def _member_paths_from(pyproject_data: dict, all_pyprojects: list[str]) -> list[str]:
+    def _member_paths_from(pyproject_data: dict[str, Any], all_pyprojects: list[str]) -> list[str]:
         members_globs = pyproject_data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
         if not members_globs:
             return []
@@ -237,7 +237,7 @@ class UvWorkspaceSource:
 
         member_paths = self._member_paths_from(pyproject_data, await ws.glob("**/pyproject.toml"))
 
-        async def _read_member(member_path: str) -> list[dict]:
+        async def _read_member(member_path: str) -> list[dict[str, Any]]:
             with tracer.start_as_current_span(f"read member indices ({member_path})") as m_span:
                 content = await ws.directory(member_path).file("pyproject.toml").contents()
                 raw = parse_indices(content)

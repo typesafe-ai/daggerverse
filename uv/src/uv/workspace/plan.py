@@ -3,7 +3,7 @@ import dataclasses
 import posixpath
 import tomllib
 from collections import OrderedDict
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from dagger import Doc, field, object_type
 from dagger.telemetry import get_tracer
@@ -57,7 +57,7 @@ def _module_name(pkg_name: str) -> str:
     return _MODULE_NAME_OVERRIDES.get(pkg_name, import_name(pkg_name))
 
 
-def _transitive_union(lock_data: dict, packages: list[str], groups: set[str] | None) -> OrderedDict[str, str]:
+def _transitive_union(lock_data: dict[str, Any], packages: list[str], groups: set[str] | None) -> OrderedDict[str, str]:
     merged: OrderedDict[str, str] = OrderedDict()
     for package in packages:
         merged.update(find_transitive_local_deps(lock_data, package, groups))
@@ -65,7 +65,7 @@ def _transitive_union(lock_data: dict, packages: list[str], groups: set[str] | N
 
 
 async def _discover_local_packages(
-    lock_data: dict,
+    lock_data: dict[str, Any],
     packages: list[str],
     all_packages: bool,
     default_package: str | None,
