@@ -9,6 +9,7 @@ from uv.workspace.build_backends.flit import FlitSettings
 from uv.workspace.build_backends.handler import BuildBackendLayout
 from uv.workspace.build_backends.hatchling import HatchlingSettings
 from uv.workspace.build_backends.maturin import MaturinHandler, MaturinSettings, target_prune_script
+from uv.workspace.build_backends.paths import rooted
 from uv.workspace.build_backends.pdm import PdmSettings
 from uv.workspace.build_backends.poetry import PoetrySettings
 from uv.workspace.build_backends.uv_build import UvBuildSettings
@@ -165,7 +166,7 @@ def test_hatchling_empty_packages_ship_no_modules():
     assert _hatchling({"build": {"packages": []}}).module_paths == []
 
 
-def test_hatchling_force_include_and_shared_sources_inside_the_package():
+def test_hatchling_force_include_and_shared_sources_in_the_workspace():
     system = _hatchling(
         {
             "build": {
@@ -184,6 +185,8 @@ def test_hatchling_force_include_and_shared_sources_inside_the_package():
     assert system.build_inputs == [
         "assets",
         "assets/**",
+        "../outside",
+        "../outside/**",
         "CHANGELOG.md",
         "share/man",
         "share/man/**",
@@ -191,6 +194,27 @@ def test_hatchling_force_include_and_shared_sources_inside_the_package():
         "bin/**",
         "NOTICE.txt",
     ]
+
+
+@pytest.mark.parametrize(
+    ("package_root", "path", "expected"),
+    [
+        ("pkg", "VERSION", "VERSION"),
+        ("pkg", "src/../VERSION", "src/../VERSION"),
+        ("pkg", "/Cargo.lock", "/Cargo.lock"),
+        ("pkg", "../VERSION", "/VERSION"),
+        ("libs/pkg", "../../data/**", "/data/**"),
+        ("libs/pkg", "../shared/VERSION", "/libs/shared/VERSION"),
+        (".", "..data/x", "..data/x"),
+    ],
+)
+def test_rooted_stages_inputs_above_the_package_from_the_workspace_root(package_root, path, expected):
+    assert rooted(package_root, path) == expected
+
+
+def test_rooted_rejects_inputs_outside_the_workspace():
+    with pytest.raises(ValueError, match="outside the workspace"):
+        rooted("pkg", "../../VERSION")
 
 
 def test_hatchling_custom_hook_scripts():

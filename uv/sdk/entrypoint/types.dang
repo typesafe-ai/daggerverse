@@ -330,7 +330,8 @@ type ModuleTypes {
         .withField("pyproject_contents", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Already-read package metadata used when creating a dependency scaffold")
         .withField("source", typeDef.withObject("Directory"), description: "The package's files and those of its local dependencies, at workspace-root-relative paths")
         .withField("layout", typeDef.withOptional(true).withObject("BuildBackendLayout"), description: "Layout resolved from a build backend handler, replacing the built-in backend settings")
-        .withField("handler", typeDef.withOptional(true).withKind(TypeDefKind.INTEGER_KIND), description: "Index of the plan's `handlers` entry for this package's backend; null for built-in support"),
+        .withField("handler", typeDef.withOptional(true).withKind(TypeDefKind.INTEGER_KIND), description: "Index of the plan's `handlers` entry for this package's backend; null for built-in support")
+        .withField("root", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Path relative to the Dagger workspace root"),
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
         .withField("ws_dir", typeDef.withObject("Directory"), description: "The workspace root's manifests: uv.lock, uv.toml and pyproject.toml files")
         .withField("source_dir", typeDef.withObject("Directory"), description: "Every member's files; read only for files outside the needed packages, e.g. symlink targets")
