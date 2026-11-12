@@ -36,8 +36,8 @@ everything in an order that caches well, so you don't assemble the build context
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, list its `locked_packages`, `audit` it (a generator), or get a `builder` for its packages.
     - **`UvWorkspaceBuilder`** builds the workspace's packages: a container with its Python
-      environment ready, the package selection (`with_packages`, `with_extras`,
-      `with_groups`) and the sync plan resolved from it. `with_dependencies` installs
+      environment ready, the package selection (`builder`'s `packages`, `extras`,
+      `groups`, ...) and the sync plan resolved from it. `with_dependencies` installs
       everything; its individual steps let you run your own steps between them. Every
       step returns the build, and `container`, [`venv`](virtual-environments.md) or
       `build` (sdists and wheels) finishes it.
@@ -58,6 +58,18 @@ and `container` returns the result:
     ```python
     ctr = uv(ws).workspace(".").builder().with_dependencies().container()
     ```
+
+Select what to install with `builder`'s arguments, which are the `uv sync` flags of the same name:
+
+```python
+ctr = (
+    uv(ws).workspace(".").builder(packages=["my-app"], extras=["viz"], groups=["docs"]).with_dependencies().container()
+)
+```
+
+With no selection, the builder installs the workspace root's package, as a bare `uv sync` does.
+The [API reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv#UvWorkspaceSource.builder)
+lists every argument.
 
 Under the hood this is equivalent to:
 
@@ -168,7 +180,7 @@ around it, as for an install, e.g. maturin's Cargo target cache. Pass
 extensions:
 
 ```python
-dists = uv(ws).workspace(".").builder().with_packages(["my-app"]).build(python_version=["3.12", "3.13"])
+dists = uv(ws).workspace(".").builder(packages=["my-app"]).build(python_version=["3.12", "3.13"])
 ```
 
 ## Running the pipeline step by step
@@ -177,12 +189,21 @@ dists = uv(ws).workspace(".").builder().with_packages(["my-app"]).build(python_v
 yourself in order:
 
 ```python
-b = uv(ws).workspace(".").builder().with_packages(["my-app"])
+b = uv(ws).workspace(".").builder(packages=["my-app"])
 b = b.with_remote_dependencies()  # uv sync --no-install-local
-# ... run your own step here, e.g. `pulumi install` ...
+# ... run your own step here ...
 b = b.with_workspace_files()  # scaffold local package stubs
 ctr = b.with_local_dependencies().container()  # editable-install from stubs, then copy real source last
 ```
 
 Each step returns a new `UvWorkspaceBuilder`, so the chain reads top to bottom. You can also swap in a different container mid-pipeline
 (for instance after installing OS packages) and keep the same resolved plan.
+
+`with_packages`, `with_extras`, `with_groups` and the other selection functions add to the
+selection of a builder that already exists. Use them to derive several builds from one builder:
+
+```python
+b = uv(ws).workspace(".").builder(packages=["my-app"])
+app = b.with_dependencies().container()
+tests = b.with_groups(["test"]).with_dependencies().container()
+```

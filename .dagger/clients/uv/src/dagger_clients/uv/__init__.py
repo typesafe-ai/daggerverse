@@ -2982,9 +2982,10 @@ class UvVenv(_Type):
 
 class UvWorkspaceBuilder(_Type):
     """ Builds a workspace's packages: a container, the package selection,
-    and its sync plan.  Select the packages with `with_packages` (default:
-    the workspace root's), `with_extras` and `with_groups`. Then drive the
-    install pipeline: `with_remote_dependencies` to install remote deps,
+    and its sync plan.  The selection comes from `builder`'s arguments
+    (default: the workspace root's package); `with_packages`,
+    `with_extras`, `with_groups`, ... add to it. Then drive the install
+    pipeline: `with_remote_dependencies` to install remote deps,
     `with_workspace_files` to scaffold local packages, then
     `with_local_dependencies` to install them, or `with_dependencies` for
     all three. Every step returns the builder; finish with `container`,
@@ -3389,8 +3390,7 @@ class UvWorkspaceBuilder(_Type):
         Install every dependency: `with_remote_dependencies`,
         `with_workspace_files`, then `with_local_dependencies`.
 
-        Run the steps individually to do something between them, e.g. `pulumi
-        install` between the remote dependencies and the local source.
+        Run the steps individually to do something between them.
 
         Parameters
         ----------
@@ -3751,47 +3751,24 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("auditCooldown", _args)
         return await _ctx.execute(UvCooldownPolicy)
 
-    def builder(self, *, base_container: Container | None = None, no_editable: bool = False, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True,) -> UvWorkspaceBuilder:
+    def builder(self, *, base_container: Container | None = None, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True, extras: list[str] | None = None, all_extras: bool = False, groups: list[str] | None = None, no_default_groups: bool = False, all_groups: bool = False, no_editable: bool = False, exact: bool = False, no_install_packages: list[str] | None = None, all_packages: bool = False, packages: list[str] | None = None,) -> UvWorkspaceBuilder:
         """
         A builder for this workspace's packages, with nothing installed yet.
 
-        Mounts the uv cache, prepares the environment uv installs into, and
-        copies the root pyproject.toml and uv.lock into the container.
+        The selection arguments are `uv sync` flags, and the builder's
+        `with_*`
+        functions add to them. The selection defaults to the workspace root's
+        package.
 
-        The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets
-        it.
-        Otherwise the default base, or one without a suitable Python, gets a
-        uv-managed Python that packages install into directly, and a base with
-        a suitable Python gets a `.venv` (activated unless
-        `activate_venv=False`). Set
-        `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
-        redundant `.venv`.
-
-        Select what to build on the returned `UvWorkspaceBuilder`
-        (`with_packages`,
-        `with_extras`, `with_groups`, ...); it defaults to the workspace
-        root's
-        package. Then `with_dependencies()` installs everything, or run its
-        steps
-        individually: `with_remote_dependencies()`, `with_workspace_files()`,
-        then `with_local_dependencies()`. Skip `with_remote_dependencies()`
-        when
-        another tool (e.g. `pulumi install`) handles dependency installation.
-        Finish with `container()`, `venv()` (with `venv_relocatable=True`), or
-        `build()` for the packages' sdists and wheels.
+        Learn more in the
+        [docs](https://daggerverse.docs.typesafe.ai/uv/building/).
 
         Parameters
         ----------
         base_container:
-            Container to build on top of (auth, system packages, etc.).
-            Defaults to a Debian-based uv image at the workspace's uv version
-            (uv provisions Python on demand).
-        no_editable:
-            Install local/workspace packages non-editable (`uv sync --no-
-            editable`), baking their source into site-packages instead of
-            linking it. Makes the resulting venv self-contained, so it can be
-            exported/copied (e.g. via `copy_venv`) without also carrying the
-            workspace source.
+            Container to build on, e.g. one with registry auth or system
+            packages. Defaults to a Debian-based uv image at the workspace's
+            uv version, where uv provisions Python on demand.
         venv_relocatable:
             Create a relocatable `.venv` (`uv venv --relocatable`) before
             installing, even when the base sets `UV_PROJECT_ENVIRONMENT`.
@@ -3801,25 +3778,83 @@ class UvWorkspaceSource(_Type):
             `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain
             `python` runs the installed environment.
         auto_install_uv:
-            Automatically install the uv binary if it is not already on $PATH.
-            Set to False if your base_container already ships uv.
+            Install the uv binary unless it is already on `$PATH`. Set to
+            false to skip the check when `base_container` ships uv.
+        extras:
+            Extras to install; passed to `uv sync` as repeated `--extra`
+        all_extras:
+            Install every extra; maps to `uv sync --all-extras`
+        groups:
+            Dependency groups to install; passed to `uv sync` as repeated
+            `--group`
+        no_default_groups:
+            Skip the default dependency groups (`[tool.uv] default-groups`,
+            `dev` unless set); maps to `uv sync --no-default-groups`. Groups
+            passed with `group` are still installed.
+        all_groups:
+            Install every dependency group; maps to `uv sync --all-groups`
+        no_editable:
+            Install local/workspace packages non-editable (`uv sync --no-
+            editable`), baking their source into site-packages instead of
+            linking it. Makes the resulting venv self-contained, so it can be
+            exported/copied (e.g. via `copy_venv`) without also carrying the
+            workspace source.
+        exact:
+            Remove packages the selection doesn't install, as a bare `uv sync`
+            does. By default the builder passes `--inexact`.
+        no_install_packages:
+            Packages to leave uninstalled; passed to `uv sync` as repeated
+            `--no-install-package`
+        all_packages:
+            Install every workspace member; maps to `uv sync --all-packages`
+        packages:
+            Packages to select; passed to `uv sync` as repeated `--package`.
+            Defaults to the workspace root's package, as a bare `uv sync`
+            does.
         """
         if not (base_container is None or isinstance(base_container, Container)):
             raise _type_error("UvWorkspaceSource.builder", "base_container", base_container, "Container | None")
-        if not (isinstance(no_editable, bool)):
-            raise _type_error("UvWorkspaceSource.builder", "no_editable", no_editable, "bool")
         if not (isinstance(venv_relocatable, bool)):
             raise _type_error("UvWorkspaceSource.builder", "venv_relocatable", venv_relocatable, "bool")
         if not (isinstance(activate_venv, bool)):
             raise _type_error("UvWorkspaceSource.builder", "activate_venv", activate_venv, "bool")
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.builder", "auto_install_uv", auto_install_uv, "bool")
+        if not (extras is None or (isinstance(extras, list) and all(isinstance(_v0, str) for _v0 in extras))):
+            raise _type_error("UvWorkspaceSource.builder", "extras", extras, "list[str] | None")
+        if not (isinstance(all_extras, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "all_extras", all_extras, "bool")
+        if not (groups is None or (isinstance(groups, list) and all(isinstance(_v0, str) for _v0 in groups))):
+            raise _type_error("UvWorkspaceSource.builder", "groups", groups, "list[str] | None")
+        if not (isinstance(no_default_groups, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "no_default_groups", no_default_groups, "bool")
+        if not (isinstance(all_groups, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "all_groups", all_groups, "bool")
+        if not (isinstance(no_editable, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "no_editable", no_editable, "bool")
+        if not (isinstance(exact, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "exact", exact, "bool")
+        if not (no_install_packages is None or (isinstance(no_install_packages, list) and all(isinstance(_v0, str) for _v0 in no_install_packages))):
+            raise _type_error("UvWorkspaceSource.builder", "no_install_packages", no_install_packages, "list[str] | None")
+        if not (isinstance(all_packages, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "all_packages", all_packages, "bool")
+        if not (packages is None or (isinstance(packages, list) and all(isinstance(_v0, str) for _v0 in packages))):
+            raise _type_error("UvWorkspaceSource.builder", "packages", packages, "list[str] | None")
         _args = [
             _Arg("baseContainer", base_container, None),
-            _Arg("noEditable", no_editable, False),
             _Arg("venvRelocatable", venv_relocatable, False),
             _Arg("activateVenv", activate_venv, True),
             _Arg("autoInstallUv", auto_install_uv, True),
+            _Arg("extras", extras, None),
+            _Arg("allExtras", all_extras, False),
+            _Arg("groups", groups, None),
+            _Arg("noDefaultGroups", no_default_groups, False),
+            _Arg("allGroups", all_groups, False),
+            _Arg("noEditable", no_editable, False),
+            _Arg("exact", exact, False),
+            _Arg("noInstallPackages", no_install_packages, None),
+            _Arg("allPackages", all_packages, False),
+            _Arg("packages", packages, None),
         ]
         _ctx = self._select("builder", _args)
         return UvWorkspaceBuilder(_ctx)

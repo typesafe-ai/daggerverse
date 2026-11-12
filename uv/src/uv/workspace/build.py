@@ -59,13 +59,13 @@ def _module_stubs(pkg: LocalPackage) -> list[str]:
 class UvWorkspaceBuilder:
     """Builds a workspace's packages: a container, the package selection, and its sync plan.
 
-    Select the packages with `with_packages` (default: the workspace root's),
-    `with_extras` and `with_groups`. Then drive the install pipeline:
-    `with_remote_dependencies` to install remote deps, `with_workspace_files`
-    to scaffold local packages, then `with_local_dependencies` to install them,
-    or `with_dependencies` for all three. Every step returns the builder;
-    finish with `container`, `venv` to export the environment, or `build` for
-    the packages' sdists and wheels.
+    The selection comes from `builder`'s arguments (default: the workspace
+    root's package); `with_packages`, `with_extras`, `with_groups`, ... add to
+    it. Then drive the install pipeline: `with_remote_dependencies` to install
+    remote deps, `with_workspace_files` to scaffold local packages, then
+    `with_local_dependencies` to install them, or `with_dependencies` for all
+    three. Every step returns the builder; finish with `container`, `venv` to
+    export the environment, or `build` for the packages' sdists and wheels.
     """
 
     container: Annotated[
@@ -644,8 +644,7 @@ class UvWorkspaceBuilder:
     ) -> UvWorkspaceBuilder:
         """Install every dependency: `with_remote_dependencies`, `with_workspace_files`, then `with_local_dependencies`.
 
-        Run the steps individually to do something between them, e.g. `pulumi
-        install` between the remote dependencies and the local source.
+        Run the steps individually to do something between them.
         """
         build = await self.with_remote_dependencies(
             prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout

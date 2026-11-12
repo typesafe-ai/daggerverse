@@ -288,6 +288,10 @@ type ModuleTypes {
             .withDescription("Build a workspace where dependencies use flat layout (no src/ directory).")
         )
         .withFunction(
+          function("uv_workspace_builder_selection", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("`builder` takes the selection as arguments, the same as the `with_*` calls.")
+        )
+        .withFunction(
           function("uv_workspace_full_workspace_all_extras_all_groups", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("Full workspace build with all extras (from my-app) and all groups (from root) installed.")
         )

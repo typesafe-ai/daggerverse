@@ -20,8 +20,7 @@ that survives being moved, pass `venv_relocatable=True` to `builder`:
 b = (
     uv(ws)
     .workspace(".")
-    .builder(no_editable=True, venv_relocatable=True)
-    .with_packages(["my-app"])  # uv venv --relocatable
+    .builder(no_editable=True, venv_relocatable=True, packages=["my-app"])  # uv venv --relocatable
     .with_remote_dependencies()  # sync installs into the relocatable venv
 )
 ```
@@ -39,7 +38,7 @@ paths the venv expects:
 === "CLI"
 
     ```console
-    $ dagger call uv workspace --path . builder --no-editable --venv-relocatable with-packages --packages my-app \
+    $ dagger call uv workspace --path . builder --no-editable --venv-relocatable --packages my-app \
         with-remote-dependencies \
         copy-venv --container alpine --set-env-vars
     ```
@@ -50,8 +49,7 @@ paths the venv expects:
     runner = (
         uv(ws)
         .workspace(".")
-        .builder(no_editable=True, venv_relocatable=True)
-        .with_packages(["my-app"])
+        .builder(no_editable=True, venv_relocatable=True, packages=["my-app"])
         .with_remote_dependencies()
         .copy_venv(core().container().from_("debian:bookworm-slim"), set_env_vars=True)
     )

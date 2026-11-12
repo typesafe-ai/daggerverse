@@ -313,8 +313,8 @@ class UvSyncPlan:
         # uv installs its dependencies but never builds the package itself, so its
         # source must not be scaffolded or copied, only its pyproject.toml (for
         # dependency resolution). This holds whether the package is a build target
-        # or a transitive workspace dependency (e.g. a Pulumi program whose code
-        # lives at the package root, with no src/ or module dir to copy).
+        # or a transitive workspace dependency (e.g. a program whose code lives
+        # at the package root, with no src/ or module dir to copy).
         handlers = handlers or []
         by_backend = handlers_by_backend(list(await asyncio.gather(*(h.build_backend() for h in handlers))))
         with get_tracer().start_as_current_span("resolve local package layouts") as span:
