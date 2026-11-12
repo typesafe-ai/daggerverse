@@ -57,19 +57,17 @@ func (m *PyreflyWorkspace) container(ctx context.Context) (*dagger.Container, st
 		// pyrefly would then check the whole filesystem.
 		base = base.WithWorkdir("/work")
 	}
-	builder := workspace.Builder(uv.UvWorkspaceSourceBuilderOpts{BaseContainer: base}).WithAllPackages()
-	if len(m.Groups) > 0 {
-		builder = builder.WithGroups(m.Groups)
+	opts := uv.UvWorkspaceSourceBuilderOpts{
+		BaseContainer:     base,
+		AllExtras:         m.AllExtras,
+		Groups:            m.Groups,
+		NoInstallPackages: m.NoInstallPackages,
+		AllPackages:       true,
 	}
-	if m.AllExtras {
-		builder = builder.WithAllExtras()
-	} else if len(m.Extras) > 0 {
-		builder = builder.WithExtras(m.Extras)
+	if !m.AllExtras {
+		opts.Extras = m.Extras
 	}
-	if len(m.NoInstallPackages) > 0 {
-		builder = builder.WithNoInstallPackages(m.NoInstallPackages)
-	}
-	ctr := builder.WithDependencies().Container()
+	ctr := workspace.Builder(opts).WithDependencies().Container()
 	workdir, err := ctr.Workdir(ctx)
 	if err != nil {
 		return nil, "", err
