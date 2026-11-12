@@ -4,6 +4,24 @@ icon: lucide/history
 
 # Changelog
 
+## 0.3.2 - 2026-11-12
+
+### Bug fixes
+
+- stage build inputs above the package from the workspace root ([#193](https://github.com/typesafe-ai/daggerverse/pull/193))
+
+### Features
+
+- add `with_no_install_packages` option to allow excluding certain packages from installation ([#187](https://github.com/typesafe-ai/daggerverse/pull/187))
+- list a workspace's locked packages with `locked_packages` ([#190](https://github.com/typesafe-ai/daggerverse/pull/190))
+- use `uv sync --inexact` by default, keeping existing packages on the base container ([#205](https://github.com/typesafe-ai/daggerverse/pull/205))
+- select packages, extras and groups with `builder` arguments ([#210](https://github.com/typesafe-ai/daggerverse/pull/210))
+
+### Performance
+
+- load every uv workspace in one query, resolving their inputs concurrently ([#207](https://github.com/typesafe-ai/daggerverse/pull/207))
+- invalidate `audit` check cache hourly, read layouts and manifests in one call each ([#209](https://github.com/typesafe-ai/daggerverse/pull/209))
+
 ## 0.3.1 - 2026-11-09
 
 ### Bug fixes
