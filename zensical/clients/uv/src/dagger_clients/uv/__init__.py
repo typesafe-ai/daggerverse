@@ -3711,6 +3711,9 @@ class UvWorkspaceSource(_Type):
         workspace's
         audit cached. Relocking mounts `inputs`: uv builds members with
         dynamic metadata.
+        Results are cached for an hour at most, as the vulnerability data and
+        the
+        package indexes change under an unchanged uv.lock.
 
         Parameters
         ----------
