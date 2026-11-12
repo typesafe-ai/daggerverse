@@ -3361,8 +3361,7 @@ type UvWorkspaceBuilderWithDependenciesOpts struct {
 
 // Install every dependency: `with_remote_dependencies`, `with_workspace_files`, then `with_local_dependencies`.
 //
-// Run the steps individually to do something between them, e.g. `pulumi
-// install` between the remote dependencies and the local source.
+// Run the steps individually to do something between them.
 func (r *UvWorkspaceBuilder) WithDependencies(opts ...UvWorkspaceBuilderWithDependenciesOpts) *UvWorkspaceBuilder { // uv (../../:0:0)
 	q := r.query.Select("withDependencies")
 	for i := len(opts) - 1; i >= 0; i-- {
@@ -3697,15 +3696,11 @@ func (r *UvWorkspaceSource) AuditCooldown(ctx context.Context) (UvCooldownPolicy
 // UvWorkspaceSourceBuilderOpts contains options for UvWorkspaceSource.Builder
 type UvWorkspaceSourceBuilderOpts struct {
 	//
-	// Container to build on top of (auth, system packages, etc.). Defaults to a Debian-based uv image at the workspace's uv version (uv provisions Python on demand).
+	// Container to build on, e.g. one with registry auth or system packages. Defaults to a Debian-based uv image at the workspace's uv version, where uv provisions Python on demand.
 	//
 	//
 	// Default: null
 	BaseContainer *Container // uv (../../:0:0)
-	//
-	// Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.
-	//
-	NoEditable bool // uv (../../:0:0)
 	//
 	// Create a relocatable `.venv` (`uv venv --relocatable`) before installing, even when the base sets `UV_PROJECT_ENVIRONMENT`. Needed to copy the environment into another image (see `venv`).
 	//
@@ -3717,43 +3712,74 @@ type UvWorkspaceSourceBuilderOpts struct {
 	// Default: true
 	ActivateVenv bool // uv (../../:0:0)
 	//
-	// Automatically install the uv binary if it is not already on $PATH. Set to False if your base_container already ships uv.
+	// Install the uv binary unless it is already on `$PATH`. Set to false to skip the check when `base_container` ships uv.
 	//
 	//
 	// Default: true
 	AutoInstallUv bool // uv (../../:0:0)
+	//
+	// Extras to install; passed to `uv sync` as repeated `--extra`
+	//
+	//
+	// Default: null
+	Extras []string // uv (../../:0:0)
+	//
+	// Install every extra; maps to `uv sync --all-extras`
+	//
+	AllExtras bool // uv (../../:0:0)
+	//
+	// Dependency groups to install; passed to `uv sync` as repeated `--group`
+	//
+	//
+	// Default: null
+	Groups []string // uv (../../:0:0)
+	//
+	// Skip the default dependency groups (`[tool.uv] default-groups`, `dev` unless set); maps to `uv sync --no-default-groups`. Groups passed with `group` are still installed.
+	//
+	NoDefaultGroups bool // uv (../../:0:0)
+	//
+	// Install every dependency group; maps to `uv sync --all-groups`
+	//
+	AllGroups bool // uv (../../:0:0)
+	//
+	// Install local/workspace packages non-editable (`uv sync --no-editable`), baking their source into site-packages instead of linking it. Makes the resulting venv self-contained, so it can be exported/copied (e.g. via `copy_venv`) without also carrying the workspace source.
+	//
+	NoEditable bool // uv (../../:0:0)
+	//
+	// Remove packages the selection doesn't install, as a bare `uv sync` does. By default the builder passes `--inexact`.
+	//
+	Exact bool // uv (../../:0:0)
+	//
+	// Packages to leave uninstalled; passed to `uv sync` as repeated `--no-install-package`
+	//
+	//
+	// Default: null
+	NoInstallPackages []string // uv (../../:0:0)
+	//
+	// Install every workspace member; maps to `uv sync --all-packages`
+	//
+	AllPackages bool // uv (../../:0:0)
+	//
+	// Packages to select; passed to `uv sync` as repeated `--package`. Defaults to the workspace root's package, as a bare `uv sync` does.
+	//
+	//
+	// Default: null
+	Packages []string // uv (../../:0:0)
 }
 
 // A builder for this workspace's packages, with nothing installed yet.
 //
-// Mounts the uv cache, prepares the environment uv installs into, and
-// copies the root pyproject.toml and uv.lock into the container.
+// The selection arguments are `uv sync` flags, and the builder's `with_*`
+// functions add to them. The selection defaults to the workspace root's
+// package.
 //
-// The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets it.
-// Otherwise the default base, or one without a suitable Python, gets a
-// uv-managed Python that packages install into directly, and a base with
-// a suitable Python gets a `.venv` (activated unless `activate_venv=False`). Set
-// `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
-// redundant `.venv`.
-//
-// Select what to build on the returned `UvWorkspaceBuilder` (`with_packages`,
-// `with_extras`, `with_groups`, ...); it defaults to the workspace root's
-// package. Then `with_dependencies()` installs everything, or run its steps
-// individually: `with_remote_dependencies()`, `with_workspace_files()`,
-// then `with_local_dependencies()`. Skip `with_remote_dependencies()` when
-// another tool (e.g. `pulumi install`) handles dependency installation.
-// Finish with `container()`, `venv()` (with `venv_relocatable=True`), or
-// `build()` for the packages' sdists and wheels.
+// Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/building/).
 func (r *UvWorkspaceSource) Builder(opts ...UvWorkspaceSourceBuilderOpts) *UvWorkspaceBuilder { // uv (../../:0:0)
 	q := r.query.Select("builder")
 	for i := len(opts) - 1; i >= 0; i-- {
 		// `baseContainer` optional argument
 		if !querybuilder.IsZeroValue(opts[i].BaseContainer) {
 			q = q.Arg("baseContainer", opts[i].BaseContainer)
-		}
-		// `noEditable` optional argument
-		if !querybuilder.IsZeroValue(opts[i].NoEditable) {
-			q = q.Arg("noEditable", opts[i].NoEditable)
 		}
 		// `venvRelocatable` optional argument
 		if !querybuilder.IsZeroValue(opts[i].VenvRelocatable) {
@@ -3766,6 +3792,46 @@ func (r *UvWorkspaceSource) Builder(opts ...UvWorkspaceSourceBuilderOpts) *UvWor
 		// `autoInstallUv` optional argument
 		if !querybuilder.IsZeroValue(opts[i].AutoInstallUv) {
 			q = q.Arg("autoInstallUv", opts[i].AutoInstallUv)
+		}
+		// `extras` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Extras) {
+			q = q.Arg("extras", opts[i].Extras)
+		}
+		// `allExtras` optional argument
+		if !querybuilder.IsZeroValue(opts[i].AllExtras) {
+			q = q.Arg("allExtras", opts[i].AllExtras)
+		}
+		// `groups` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Groups) {
+			q = q.Arg("groups", opts[i].Groups)
+		}
+		// `noDefaultGroups` optional argument
+		if !querybuilder.IsZeroValue(opts[i].NoDefaultGroups) {
+			q = q.Arg("noDefaultGroups", opts[i].NoDefaultGroups)
+		}
+		// `allGroups` optional argument
+		if !querybuilder.IsZeroValue(opts[i].AllGroups) {
+			q = q.Arg("allGroups", opts[i].AllGroups)
+		}
+		// `noEditable` optional argument
+		if !querybuilder.IsZeroValue(opts[i].NoEditable) {
+			q = q.Arg("noEditable", opts[i].NoEditable)
+		}
+		// `exact` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Exact) {
+			q = q.Arg("exact", opts[i].Exact)
+		}
+		// `noInstallPackages` optional argument
+		if !querybuilder.IsZeroValue(opts[i].NoInstallPackages) {
+			q = q.Arg("noInstallPackages", opts[i].NoInstallPackages)
+		}
+		// `allPackages` optional argument
+		if !querybuilder.IsZeroValue(opts[i].AllPackages) {
+			q = q.Arg("allPackages", opts[i].AllPackages)
+		}
+		// `packages` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Packages) {
+			q = q.Arg("packages", opts[i].Packages)
 		}
 	}
 

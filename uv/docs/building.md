@@ -59,6 +59,11 @@ and `container` returns the result:
     ctr = uv(ws).workspace(".").builder().with_dependencies().container()
     ```
 
+`builder` also takes the package selection as arguments (`packages`, `extras`, `groups`, ...),
+and the `with_*` functions add to it. The
+[API reference](https://daggerverse.dev/mod/github.com/typesafe-ai/daggerverse/uv#UvWorkspaceSource.builder)
+lists every argument.
+
 Under the hood this is equivalent to:
 
 ```python
@@ -179,7 +184,7 @@ yourself in order:
 ```python
 b = uv(ws).workspace(".").builder().with_packages(["my-app"])
 b = b.with_remote_dependencies()  # uv sync --no-install-local
-# ... run your own step here, e.g. `pulumi install` ...
+# ... run your own step here ...
 b = b.with_workspace_files()  # scaffold local package stubs
 ctr = b.with_local_dependencies().container()  # editable-install from stubs, then copy real source last
 ```

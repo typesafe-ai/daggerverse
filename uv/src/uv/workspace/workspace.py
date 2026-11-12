@@ -15,6 +15,10 @@ from dagger_clients.core import CacheVolume, Changeset, Container, Directory, Fi
 
 from uv.args import (
     ActivateVenv,
+    AllExtras,
+    AllGroups,
+    AllPackages,
+    NoDefaultGroups,
     NoEditable,
     VenvRelocatable,
 )
@@ -603,41 +607,58 @@ class UvWorkspaceSource:
         base_container: Annotated[
             Container | None,
             Doc(
-                "Container to build on top of (auth, system packages, etc.). Defaults to "
-                "a Debian-based uv image at the workspace's uv version (uv provisions Python on demand)."
+                "Container to build on, e.g. one with registry auth or system packages. Defaults to "
+                "a Debian-based uv image at the workspace's uv version, where uv provisions Python on demand."
             ),
         ] = None,
-        no_editable: NoEditable = False,
         venv_relocatable: VenvRelocatable = False,
         activate_venv: ActivateVenv = True,
         auto_install_uv: Annotated[
             bool,
             Doc(
-                "Automatically install the uv binary if it is not already on $PATH. "
-                "Set to False if your base_container already ships uv."
+                "Install the uv binary unless it is already on `$PATH`. "
+                "Set to false to skip the check when `base_container` ships uv."
             ),
         ] = True,
+        extras: Annotated[
+            list[str] | None,
+            Doc("Extras to install; passed to `uv sync` as repeated `--extra`"),
+        ] = None,
+        all_extras: AllExtras = False,
+        groups: Annotated[
+            list[str] | None,
+            Doc("Dependency groups to install; passed to `uv sync` as repeated `--group`"),
+        ] = None,
+        no_default_groups: NoDefaultGroups = False,
+        all_groups: AllGroups = False,
+        no_editable: NoEditable = False,
+        exact: Annotated[
+            bool,
+            Doc(
+                "Remove packages the selection doesn't install, as a bare `uv sync` does. "
+                "By default the builder passes `--inexact`."
+            ),
+        ] = False,
+        no_install_packages: Annotated[
+            list[str] | None,
+            Doc("Packages to leave uninstalled; passed to `uv sync` as repeated `--no-install-package`"),
+        ] = None,
+        all_packages: AllPackages = False,
+        packages: Annotated[
+            list[str] | None,
+            Doc(
+                "Packages to select; passed to `uv sync` as repeated `--package`. "
+                "Defaults to the workspace root's package, as a bare `uv sync` does."
+            ),
+        ] = None,
     ) -> UvWorkspaceBuilder:
         """A builder for this workspace's packages, with nothing installed yet.
 
-        Mounts the uv cache, prepares the environment uv installs into, and
-        copies the root pyproject.toml and uv.lock into the container.
+        The selection arguments are `uv sync` flags, and the builder's `with_*`
+        functions add to them. The selection defaults to the workspace root's
+        package.
 
-        The environment follows `UV_PROJECT_ENVIRONMENT` when the base sets it.
-        Otherwise the default base, or one without a suitable Python, gets a
-        uv-managed Python that packages install into directly, and a base with
-        a suitable Python gets a `.venv` (activated unless `activate_venv=False`). Set
-        `UV_PROJECT_ENVIRONMENT` on the base to its Python's prefix to avoid a
-        redundant `.venv`.
-
-        Select what to build on the returned `UvWorkspaceBuilder` (`with_packages`,
-        `with_extras`, `with_groups`, ...); it defaults to the workspace root's
-        package. Then `with_dependencies()` installs everything, or run its steps
-        individually: `with_remote_dependencies()`, `with_workspace_files()`,
-        then `with_local_dependencies()`. Skip `with_remote_dependencies()` when
-        another tool (e.g. `pulumi install`) handles dependency installation.
-        Finish with `container()`, `venv()` (with `venv_relocatable=True`), or
-        `build()` for the packages' sdists and wheels.
+        Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/building/).
         """
         with get_tracer().start_as_current_span("prepare workspace builder") as span:
             span.set_attribute("workspace.path", self.path)
@@ -667,7 +688,20 @@ class UvWorkspaceSource:
             python_version = await self.python_version()
             if python_version:
                 ctr = ctr.with_new_file(posixpath.join(ws_ctr_path, ".python-version"), python_version)
-            builder = UvWorkspaceBuilder(container=ctr, planner=self._planner(), no_editable=no_editable)
+            builder = UvWorkspaceBuilder(
+                container=ctr,
+                planner=self._planner(),
+                extras=extras,
+                all_extras=all_extras,
+                groups=groups,
+                no_default_groups=no_default_groups,
+                all_groups=all_groups,
+                no_editable=no_editable,
+                exact=exact,
+                no_install_packages=no_install_packages or [],
+                all_packages=all_packages,
+                packages=packages or [],
+            )
             if auto_install_uv and not await self._has_uv(ctr):
                 ctr = (await builder.with_uv(await self.uv_version())).container
 

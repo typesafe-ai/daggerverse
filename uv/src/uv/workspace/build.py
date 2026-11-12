@@ -644,8 +644,7 @@ class UvWorkspaceBuilder:
     ) -> UvWorkspaceBuilder:
         """Install every dependency: `with_remote_dependencies`, `with_workspace_files`, then `with_local_dependencies`.
 
-        Run the steps individually to do something between them, e.g. `pulumi
-        install` between the remote dependencies and the local source.
+        Run the steps individually to do something between them.
         """
         build = await self.with_remote_dependencies(
             prune_cache=prune_cache, max_cache_size=max_cache_size, lock_timeout=lock_timeout
