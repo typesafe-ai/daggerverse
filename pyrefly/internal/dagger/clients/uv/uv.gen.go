@@ -3667,6 +3667,8 @@ type UvWorkspaceSourceAuditOpts struct {
 //
 // The audit mounts only `manifests`, so a source edit leaves a clean workspace's
 // audit cached. Relocking mounts `inputs`: uv builds members with dynamic metadata.
+// Results are cached for an hour at most, as the vulnerability data and the
+// package indexes change under an unchanged uv.lock.
 func (r *UvWorkspaceSource) Audit(opts ...UvWorkspaceSourceAuditOpts) *Changeset { // uv (../../:0:0)
 	q := r.query.Select("audit")
 	for i := len(opts) - 1; i >= 0; i-- {

@@ -1,8 +1,10 @@
 import asyncio
 import dataclasses
 import posixpath
+import tempfile
 import tomllib
 from collections import OrderedDict
+from pathlib import Path
 from typing import Annotated, Any, Self
 
 from dagger import Doc, field, object_type
@@ -64,19 +66,33 @@ def _transitive_union(lock_data: dict[str, Any], packages: list[str], groups: se
     return OrderedDict(sorted(merged.items()))
 
 
-async def _discover_local_packages(
+async def _read_manifests(manifests_dir: Directory) -> dict[str, str]:
+    """The contents of every `uv.lock` and `pyproject.toml` in `manifests_dir`, by path.
+
+    Exported in one call and read locally, instead of one engine call per file.
+    """
+    with tempfile.TemporaryDirectory() as local:
+        await manifests_dir.filter(include=["**/uv.lock", "**/pyproject.toml"]).export(local)
+        return {
+            path.relative_to(local).as_posix(): path.read_text(encoding="utf-8")
+            for path in Path(local).rglob("*")
+            if path.is_file()
+        }
+
+
+def _discover_local_packages(
     lock_data: dict[str, Any],
     packages: list[str],
     all_packages: bool,
     default_package: str | None,
     groups: set[str] | None,
     workspace_path: str,
-    manifests_dir: Directory,
+    pyproject_paths: list[str],
 ) -> tuple[OrderedDict[str, str], OrderedDict[str, str]]:
     """Find the reachable local packages: `(all_local, needed_local)`.
 
-    Reads only the manifests (lockfiles and `pyproject.toml` files), so it never
-    loads package sources.
+    Reads only the manifests (the lockfile and the `pyproject.toml` paths), so it
+    never loads package sources.
 
     `needed_local` mirrors `uv sync`'s selection: every member when
     `all_packages` is set, the union of the explicit `packages`' transitive
@@ -85,9 +101,6 @@ async def _discover_local_packages(
     targets' own selected dependency `groups` are followed.
     """
     with get_tracer().start_as_current_span("discover local packages") as span:
-        # Glob the pyproject.toml paths once and reuse them for both all-local and
-        # needed-local reachability filtering.
-        pyproject_paths = await manifests_dir.glob("**/pyproject.toml")
         all_local = _match_reachable(parse_local_packages(lock_data), workspace_path, pyproject_paths)
         if all_packages:
             needed_local = all_local
@@ -273,19 +286,25 @@ class UvSyncPlan:
         """
         ws_dir = manifests_dir if workspace_path == "." else manifests_dir.directory(workspace_path)
         packages = [normalize_package_name(p) for p in (package or [])]
-        lock_data = tomllib.loads(await ws_dir.file("uv.lock").contents())
+        manifests = await _read_manifests(manifests_dir)
+
+        def manifest(root: str, name: str) -> str:
+            return manifests[posixpath.normpath(posixpath.join(root, name))]
+
+        lock_data = tomllib.loads(manifest(workspace_path, "uv.lock"))
 
         # The workspace root's package name is `uv sync`'s implicit target when no
         # package is requested; resolve it so we mirror that default.
-        root_pyproject = await ws_dir.file("pyproject.toml").contents()
+        root_pyproject = manifest(workspace_path, "pyproject.toml")
         root_name = parse_project_name(root_pyproject)
         default_package = normalize_package_name(root_name) if root_name else None
         # Fail fast on a pure workspace root with no selection (nothing to install).
         require_package_selection(packages, all_packages, default_package)
 
         groups = selected_groups(root_pyproject, group or [], all_groups, no_default_groups)
-        all_local, needed_local = await _discover_local_packages(
-            lock_data, packages, all_packages, default_package, groups, workspace_path, manifests_dir
+        pyproject_paths = [path for path in manifests if posixpath.basename(path) == "pyproject.toml"]
+        all_local, needed_local = _discover_local_packages(
+            lock_data, packages, all_packages, default_package, groups, workspace_path, pyproject_paths
         )
         project_sources = {project.path: project.source for project in projects}
         src_entries = {posixpath.normpath(path) for path in src_paths}
@@ -298,19 +317,17 @@ class UvSyncPlan:
         # lives at the package root, with no src/ or module dir to copy).
         handlers = handlers or []
         by_backend = handlers_by_backend(list(await asyncio.gather(*(h.build_backend() for h in handlers))))
-        flat_packages: list[str] = []
-        local_packages: dict[str, LocalPackage] = {}
         with get_tracer().start_as_current_span("resolve local package layouts") as span:
             span.set_attribute("packages.count", len(all_local))
-            for name, pkg_path in all_local.items():
+
+            async def resolve(name: str, pkg_path: str) -> tuple[LocalPackage, bool]:
+                """The package and whether it is virtual."""
                 resolved = posixpath.normpath(posixpath.join(workspace_path, pkg_path))
-                contents = await manifests_dir.file(posixpath.join(resolved, "pyproject.toml")).contents()
+                contents = manifest(resolved, "pyproject.toml")
                 metadata = tomllib.loads(contents)
                 virtual = (
                     "build-system" not in metadata or metadata.get("tool", {}).get("uv", {}).get("package") is False
                 )
-                if virtual:
-                    flat_packages.append(name)
                 handler = by_backend.get(metadata.get("build-system", {}).get("build-backend"))
                 layout = (
                     await BuildBackendLayout.resolve(handlers[handler], contents, name) if handler is not None else None
@@ -329,7 +346,6 @@ class UvSyncPlan:
                     layout=layout,
                     handler=handler,
                 )
-                local_packages[name] = pkg
                 span.add_event(
                     "package layout",
                     {
@@ -343,6 +359,12 @@ class UvSyncPlan:
                         "package.source_paths": [] if virtual else pkg.source_paths,
                     },
                 )
+                return pkg, virtual
+
+            # Every package at once: one with a handler asks it with calls of its own.
+            resolved_packages = await asyncio.gather(*(resolve(name, path) for name, path in all_local.items()))
+        local_packages = {pkg.name: pkg for pkg, _ in resolved_packages}
+        flat_packages = [pkg.name for pkg, virtual in resolved_packages if virtual]
 
         sync_args = build_uv_sync_args(
             packages=packages,

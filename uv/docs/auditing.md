@@ -32,7 +32,8 @@ $ dagger generate --uv
 ## What `audit` does
 
 For each workspace, `audit` runs [`uv audit --frozen`](https://docs.astral.sh/uv/reference/cli/#uv-audit) against the committed `uv.lock`,
-with vulnerability data from the public OSV service.
+with vulnerability data from the public OSV service. That data changes under an unchanged
+`uv.lock`, so a result is cached for an hour at most.
 
 For every vulnerable package that has a fixed release, `audit` attempts to re-lock it with
 [`uv lock --upgrade-package`](https://docs.astral.sh/uv/concepts/projects/sync/#upgrading-locked-package-versions). This may result in one of the following outcomes:

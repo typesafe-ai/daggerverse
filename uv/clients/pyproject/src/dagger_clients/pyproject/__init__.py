@@ -74,6 +74,38 @@ class Pyproject(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
+    async def layout(self) -> str:
+        """
+        The path and load patterns of every project and workspace, as JSON, in
+        one call.
+
+        Reading them off `projectList` and `workspaceList` takes a call per
+        field of
+        every item. The object holds `projects` (each with `path`, `include`,
+        `exclude`, `filesInclude` and `filesExclude`) and `workspaces` (each
+        with
+        `path`, `members`, `localDependencies`, `include`, `exclude`,
+        `manifestInclude` and `manifestExclude`), named as the fields they
+        copy.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("layout", _args)
+        return await _ctx.execute(str)
+
     async def project_list(self) -> list["PyprojectProject"]:
         """
         The projects `projects` holds, in one call.

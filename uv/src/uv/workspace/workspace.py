@@ -56,6 +56,10 @@ from uv.workspace.plan import ProjectSource, UvSyncPlanner
 logger = logging.getLogger(__name__)
 
 _AUDIT = ["uv", "audit", "--frozen", "--preview-features", "audit,json-output"]
+# Holds the hour `audit` runs in. `uv audit` and `uv lock` read live vulnerability and
+# index data, which Dagger's cache doesn't see: without it an unchanged uv.lock would
+# keep its first result, and never learn of a new advisory or a fix.
+_AUDIT_HOUR = "AUDIT_HOUR"
 
 _VENV_WARNING = (
     "UV_PROJECT_ENVIRONMENT is not set, so uv creates a .venv. Unless you need one, set "
@@ -279,8 +283,9 @@ class UvWorkspaceSource:
             package_path=path,
         )
 
+    # The SDK's `function` overloads leave out `cache`.
     @generate
-    @function
+    @function(cache="1h")  # pyrefly: ignore[no-matching-overload]
     async def audit(
         self,
         uv_version: Annotated[
@@ -306,15 +311,19 @@ class UvWorkspaceSource:
 
         The audit mounts only `manifests`, so a source edit leaves a clean workspace's
         audit cached. Relocking mounts `inputs`: uv builds members with dynamic metadata.
+        Results are cached for an hour at most, as the vulnerability data and the
+        package indexes change under an unchanged uv.lock.
         """
         if any(PurePosixPath(self.path).full_match(pattern) for pattern in self.audit_exclude):
             return self.manifests.changes(self.manifests)
         ws_dir = posixpath.join("/work", self.path)
+        now = datetime.now(UTC)
         base = (
             (
                 self.audit_base_container
                 or core().container().from_(debian_image_ref(uv_version or await self.uv_version()))
             )
+            .with_env_variable(_AUDIT_HOUR, now.strftime("%Y-%m-%dT%H"))
             .with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR)
             .with_mounted_cache(_UV_CACHE_DIR, self._uv_cache())
             .with_workdir(ws_dir)
@@ -334,7 +343,7 @@ class UvWorkspaceSource:
         config_text, lock_text = await asyncio.gather(
             self._ws_dir().file(config).contents(), self._ws_dir().file("uv.lock").contents()
         )
-        pruned = prune_exemptions(config_text, cooldown_cutoff(lock_text, datetime.now(UTC)), uv_toml=uv_toml)
+        pruned = prune_exemptions(config_text, cooldown_cutoff(lock_text, now), uv_toml=uv_toml)
         if pruned != config_text:
             ctr = ctr.with_new_file(config, pruned)
 

@@ -42,6 +42,7 @@ type functionSpec struct {
 
 var functions = []functionSpec{
 	{Name: "pyproject", Receiver: "Pyproject", FnName: "", Args: map[string]argumentSpec{"ws": {Required: false, Default: "", Encoding: "string"}, "exclude": {Required: false, Default: "", Encoding: "json"}, "workspaceMarkers": {Required: false, Default: "[\"uv.lock\",\"pylock.toml\"]", Encoding: "json"}}},
+	{Name: "layout", Receiver: "Pyproject", FnName: "Layout", Args: map[string]argumentSpec{}},
 	{Name: "projectList", Receiver: "Pyproject", FnName: "ProjectList", Args: map[string]argumentSpec{}},
 	{Name: "projects", Receiver: "Pyproject", FnName: "Projects", Args: map[string]argumentSpec{}},
 	{Name: "workspaceList", Receiver: "Pyproject", FnName: "WorkspaceList", Args: map[string]argumentSpec{}},

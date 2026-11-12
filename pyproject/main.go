@@ -2,6 +2,7 @@ package pyproject
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -376,4 +377,63 @@ func (m *Pyproject) ProjectList() []*PyprojectProject {
 // every workspace at once.
 func (m *Pyproject) WorkspaceList() []*PyprojectWorkspace {
 	return m.WorkspaceItems
+}
+
+// projectLayout is a project's entry in `Layout`.
+type projectLayout struct {
+	Path         string   `json:"path"`
+	Include      []string `json:"include"`
+	Exclude      []string `json:"exclude"`
+	FilesInclude []string `json:"filesInclude"`
+	FilesExclude []string `json:"filesExclude"`
+}
+
+// workspaceLayout is a workspace's entry in `Layout`.
+type workspaceLayout struct {
+	Path              string   `json:"path"`
+	Members           []string `json:"members"`
+	LocalDependencies []string `json:"localDependencies"`
+	Include           []string `json:"include"`
+	Exclude           []string `json:"exclude"`
+	ManifestInclude   []string `json:"manifestInclude"`
+	ManifestExclude   []string `json:"manifestExclude"`
+}
+
+// list returns items as a JSON array even when empty, never null.
+func list(items []string) []string {
+	return append([]string{}, items...)
+}
+
+// The path and load patterns of every project and workspace, as JSON, in one call.
+//
+// Reading them off `projectList` and `workspaceList` takes a call per field of
+// every item. The object holds `projects` (each with `path`, `include`,
+// `exclude`, `filesInclude` and `filesExclude`) and `workspaces` (each with
+// `path`, `members`, `localDependencies`, `include`, `exclude`,
+// `manifestInclude` and `manifestExclude`), named as the fields they copy.
+func (m *Pyproject) Layout() (string, error) {
+	projects := make([]projectLayout, len(m.ProjectItems))
+	for i, p := range m.ProjectItems {
+		projects[i] = projectLayout{
+			Path:         p.Path,
+			Include:      list(p.Include),
+			Exclude:      list(p.Exclude),
+			FilesInclude: list(p.FilesInclude),
+			FilesExclude: list(p.FilesExclude),
+		}
+	}
+	workspaces := make([]workspaceLayout, len(m.WorkspaceItems))
+	for i, w := range m.WorkspaceItems {
+		workspaces[i] = workspaceLayout{
+			Path:              w.Path,
+			Members:           list(w.Members),
+			LocalDependencies: list(w.LocalDependencies),
+			Include:           list(w.Include),
+			Exclude:           list(w.Exclude),
+			ManifestInclude:   list(w.ManifestInclude),
+			ManifestExclude:   list(w.ManifestExclude),
+		}
+	}
+	layout, err := json.Marshal(map[string]any{"projects": projects, "workspaces": workspaces})
+	return string(layout), err
 }

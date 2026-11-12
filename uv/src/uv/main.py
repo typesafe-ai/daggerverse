@@ -1,13 +1,14 @@
 import asyncio
 import dataclasses
+import json
 import posixpath
 import re
 import tomllib
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from dagger import Doc, collection, function, get, keys, object_type
 from dagger_clients.core import CacheVolume, Container, Workspace
-from dagger_clients.pyproject import PyprojectProject, PyprojectWorkspace, pyproject
+from dagger_clients.pyproject import pyproject
 
 from uv.args import WorkspacePath
 from uv.audit import AuditCooldown, AuditUpgradeStrategy, CooldownPolicy, UpgradeStrategy
@@ -149,35 +150,29 @@ class Uv:
         # contents, so discovery stays cached until one of the files it reads changes.
         discovery_ws = ws.directory("/", include=_DISCOVERY_INCLUDE, gitignore=True).as_workspace()
         discovered = pyproject(discovery_ws, exclude=exclude, workspace_markers=_WORKSPACE_MARKERS)
-        found, projects = await asyncio.gather(discovered.workspace_list(), discovered.project_list())
-
-        # Keep only the patterns `pyproject` computed: `workspace` loads each
-        # workspace from them, so no call goes back to the `pyproject` module.
-        async def project_layout(project: PyprojectProject) -> UvProjectLayout:
-            path, include, exclude = await asyncio.gather(project.path(), project.include(), project.exclude())
-            return UvProjectLayout(path=path, include=include, exclude=exclude)
-
-        async def workspace_layout(workspace: PyprojectWorkspace) -> UvWorkspaceLayout:
-            # Two groups: `gather` types at most six results.
-            (
-                (path, members, dependencies),
-                (include, exclude, manifest_include, manifest_exclude),
-            ) = await asyncio.gather(
-                asyncio.gather(workspace.path(), workspace.members(), workspace.local_dependencies()),
-                asyncio.gather(
-                    workspace.include(),
-                    workspace.exclude(),
-                    workspace.manifest_include(),
-                    workspace.manifest_exclude(),
-                ),
+        # One call for every pattern `pyproject` computed, as reading them off each project
+        # and workspace takes a call per field. One glob for every workspace too: each
+        # `Workspace.glob` walks the whole tree.
+        layout, globbed = await asyncio.gather(discovered.layout(), ws.glob("**/src/*"))
+        found = json.loads(layout)
+        src_paths = [posixpath.normpath(path) for path in globbed]
+        layouts = {
+            project["path"]: UvProjectLayout(
+                path=project["path"], include=project["include"], exclude=project["exclude"]
             )
-            roots = [*members, *dependencies]
+            for project in found["projects"]
+        }
+
+        # Keep only the patterns: `workspace` loads each workspace from them, so no
+        # call goes back to the `pyproject` module.
+        def workspace_layout(workspace: dict[str, Any]) -> UvWorkspaceLayout:
+            roots = [*workspace["members"], *workspace["localDependencies"]]
             return UvWorkspaceLayout(
-                path=path,
-                include=include,
-                exclude=exclude,
-                manifest_include=manifest_include,
-                manifest_exclude=manifest_exclude,
+                path=workspace["path"],
+                include=workspace["include"],
+                exclude=workspace["exclude"],
+                manifest_include=workspace["manifestInclude"],
+                manifest_exclude=workspace["manifestExclude"],
                 projects=[layouts[root] for root in roots if root in layouts],
                 # `<root>/src/<module>` marks a project's src layout, including namespace and stub packages.
                 src_paths=[path for path in src_paths if _project_of_src_path(path) in roots],
@@ -189,10 +184,7 @@ class Uv:
                 uv_cache=uv_cache,
             )
 
-        # One glob for every workspace: each `Workspace.glob` walks the whole tree.
-        src_paths = [posixpath.normpath(path) for path in await ws.glob("**/src/*")]
-        layouts = {layout.path: layout for layout in await asyncio.gather(*(project_layout(p) for p in projects))}
-        return cls(ws=ws, layouts=list(await asyncio.gather(*(workspace_layout(w) for w in found))))
+        return cls(ws=ws, layouts=[workspace_layout(workspace) for workspace in found["workspaces"]])
 
     @function
     def build_backend_handlers(self) -> BuildBackendHandlers:

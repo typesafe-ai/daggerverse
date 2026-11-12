@@ -86,6 +86,14 @@ lockfile.
   `.python-version`. Build a dependency layer from it (e.g. `uv sync --frozen
   --no-install-local`) and source edits leave that layer cached.
 
+### Layout
+
+`layout()` returns the path and load patterns of every project and workspace as
+one JSON object, in one call. Reading the same fields off `project_list` and
+`workspace_list` takes a call per field of every item, so use it when you keep
+only the patterns. Its `projects` and `workspaces` entries are named as the
+fields they copy, such as `filesInclude` and `manifestInclude`.
+
 ## How sources are scoped
 
 Discovery skips gitignored directories, so a gitignored copy of the repository
