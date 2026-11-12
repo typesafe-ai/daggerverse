@@ -62,7 +62,9 @@ and `container` returns the result:
 Select what to install with `builder`'s arguments, which are the `uv sync` flags of the same name:
 
 ```python
-ctr = uv(ws).workspace(".").builder(packages=["my-app"], extras=["viz"], groups=["docs"]).with_dependencies().container()
+ctr = (
+    uv(ws).workspace(".").builder(packages=["my-app"], extras=["viz"], groups=["docs"]).with_dependencies().container()
+)
 ```
 
 With no selection, the builder installs the workspace root's package, as a bare `uv sync` does.
