@@ -59,7 +59,7 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     Build a minimal container with a package and its local dependencies installed:
 
     ```console
-    $ dagger call uv workspace --path . builder with-packages --packages my-app with-dependencies container
+    $ dagger call uv workspace --path . builder --packages my-app with-dependencies container
     ```
 
     Audit every workspace in the source tree, then upgrade the vulnerable dependencies:
@@ -75,7 +75,7 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     from dagger_clients.uv import uv
 
     # Build a minimal container with a package and its local dependencies installed.
-    ctr = uv(ws).workspace(".").builder().with_packages(["my-app"]).with_dependencies().container()
+    ctr = uv(ws).workspace(".").builder(packages=["my-app"]).with_dependencies().container()
     ```
 
     `ws` is the Dagger workspace the module reads. In your own module, take
@@ -100,8 +100,8 @@ $ dagger module client add github.com/typesafe-ai/daggerverse/uv
     - **`UvWorkspaceSource`** is one `uv` workspace (the files rooted at a `uv.lock`). From it
       you can read the required `uv` version, `audit` it (a generator), or get a `builder` for its packages.
     - **`UvWorkspaceBuilder`** builds the workspace's packages: a container with its Python
-      environment ready, the package selection (`with_packages`, `with_extras`,
-      `with_groups`) and the sync plan resolved from it. `with_dependencies` installs
+      environment ready, the package selection (`builder`'s `packages`, `extras`,
+      `groups`, ...) and the sync plan resolved from it. `with_dependencies` installs
       everything; its individual steps let you run your own steps between them. Every
       step returns the build, and `container`, [`venv`](virtual-environments.md) or
       `build` (sdists and wheels) finishes it.
