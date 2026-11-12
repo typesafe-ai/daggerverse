@@ -1,2 +1,2 @@
 # Pins the image this module uses by default; Dependabot bumps it.
-FROM ghcr.io/astral-sh/uv:0.13.7
+FROM ghcr.io/astral-sh/uv:0.13.8
