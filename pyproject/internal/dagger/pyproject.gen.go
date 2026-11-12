@@ -24,7 +24,8 @@ type Pyproject struct { // pyproject (../../:0:0)
 	// field again.
 	refetchID bool
 
-	id *ID
+	id     *ID
+	layout *string
 }
 
 func (r *Pyproject) WithGraphQLQuery(q *querybuilder.Selection) *Pyproject {
@@ -89,6 +90,25 @@ func (r *Pyproject) UnmarshalJSON(bs []byte) error {
 	}
 	*r = Pyproject{query: selectNode(Connect().QueryBuilder(), id, "Pyproject")}
 	return nil
+}
+
+// The path and load patterns of every project and workspace, as JSON, in one call.
+//
+// Reading them off `projectList` and `workspaceList` takes a call per field of
+// every item. The object holds `projects` (each with `path`, `include`,
+// `exclude`, `filesInclude` and `filesExclude`) and `workspaces` (each with
+// `path`, `members`, `localDependencies`, `include`, `exclude`,
+// `manifestInclude` and `manifestExclude`), named as the fields they copy.
+func (r *Pyproject) Layout(ctx context.Context) (string, error) {
+	if r.layout != nil {
+		return *r.layout, nil
+	}
+	q := r.query.Select("layout")
+
+	var response string
+
+	q = q.Bind(&response)
+	return response, q.Execute(ctx)
 }
 
 // The projects `projects` holds, in one call.
