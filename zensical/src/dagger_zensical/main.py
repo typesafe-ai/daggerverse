@@ -129,16 +129,18 @@ class ZensicalProject:
         if self.workspace is None:
             msg = f"no uv workspace (uv.lock) holds the docs at {self.path!r}"
             raise ValueError(msg)
-        builder = (
-            uv(self.ws, exclude=self.exclude).workspace(self.workspace).builder(base_container=self.base_container)
+        ctr = (
+            uv(self.ws, exclude=self.exclude)
+            .workspace(self.workspace)
+            .builder(
+                base_container=self.base_container,
+                extras=self.extras,
+                groups=self.groups,
+                packages=self.packages,
+            )
+            .with_dependencies()
+            .container()
         )
-        if self.packages:
-            builder = builder.with_packages(self.packages)
-        if self.groups:
-            builder = builder.with_groups(self.groups)
-        if self.extras:
-            builder = builder.with_extras(self.extras)
-        ctr = builder.with_dependencies().container()
 
         config = self.ws.file(_root_path(self.path, _CONFIG_FILE))
         config_content = await config.contents()
