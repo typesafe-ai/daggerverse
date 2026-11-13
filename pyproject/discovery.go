@@ -624,6 +624,11 @@ func (d *discovery) workspace(p string) (*discoveredWorkspace, error) {
 	for _, project := range append(slices.Clone(members), localDependencies...) {
 		manifestInclude = append(manifestInclude, join(project, "pyproject.toml"), join(project, ".python-version"))
 	}
+	for _, project := range d.projectPaths {
+		if project != p && under(p, project) {
+			manifestInclude = append(manifestInclude, join(project, "pyproject.toml"), join(project, ".python-version"))
+		}
+	}
 	// A path source that isn't a project is an archive (or a directory uv
 	// builds with a legacy backend): resolution needs the whole thing.
 	for _, dep := range dependencies {
