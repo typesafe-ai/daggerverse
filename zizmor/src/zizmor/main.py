@@ -50,11 +50,8 @@ class Zizmor:
     ] = field()
 
     source: Annotated[
-        Directory | None,
-        Doc(
-            "The workspace's `.github` directory containing Actions workflows, less `exclude` and gitignored files."
-            " None when the workspace has none."
-        ),
+        Directory,
+        Doc("Source tree: the workspace's `.github` directory, less `exclude` and gitignored files."),
     ] = field()
 
     fix_mode: Annotated[FixMode, Doc("Which fixes `fix` applies.")] = field()
@@ -94,11 +91,7 @@ class Zizmor:
         # loaded from it. Re-loading the source as a workspace of its own keys it
         # by its contents, so zizmor reruns only when a file changes.
         source = (
-            ws.directory("/", include=[".github/**"], exclude=exclude, gitignore=True)
-            .as_workspace()
-            .directory("/.github")
-            if await ws.glob(".github")
-            else None
+            ws.directory("/", include=[".github/**"], exclude=exclude, gitignore=True).as_workspace().directory("/")
         )
         return cls(
             ctr=ctr,
@@ -121,15 +114,16 @@ class Zizmor:
 
     @generate
     @function
-    def fix(self) -> Changeset:
+    async def fix(self) -> Changeset:
         """Fix GitHub Actions security issues with `zizmor --fix`.
 
         Fails when findings zizmor can't fix remain. A workspace without a
         `.github` directory has nothing to fix.
         """
-        if self.source is None:
+        # zizmor fails when it collects no inputs.
+        if not await self.source.entries():
             return core().directory().changes(core().directory())
-        ctr = self.ctr.with_workdir("/work").with_directory("/work/.github", self.source)
+        ctr = self.ctr.with_workdir("/work").with_mounted_directory("/work", self.source)
         if self.github_token is not None:
             ctr = ctr.with_secret_variable("GH_TOKEN", self.github_token)
         else:
@@ -138,8 +132,8 @@ class Zizmor:
             ctr.with_exec(self._args(f"--fix={self.fix_mode.value}", "--no-exit-codes"))
             # Audit the fixed workflows: only the findings left fail.
             .with_exec(self._args())
-            .directory("/work/.github")
+            .directory("/work")
         )
-        before = core().directory().with_directory(".github", self.source)
-        after = core().directory().with_directory(".github", fixed)
+        before = core().directory().with_directory(".", self.source)
+        after = core().directory().with_directory(".", fixed)
         return after.changes(before)
