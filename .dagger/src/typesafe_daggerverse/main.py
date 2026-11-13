@@ -264,6 +264,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "uv_maturin_editable_cached_build", self.uv_maturin_editable_cached_build)
             tg.start_soon(_run, "uv_maturin_target_cache_tracks_source", self.uv_maturin_target_cache_tracks_source)
             tg.start_soon(_run, "uv_maturin_dist", self.uv_maturin_dist)
+            tg.start_soon(_run, "uv_build_unpackaged", self.uv_build_unpackaged)
             tg.start_soon(_run, "uv_workspace_inputs", self.uv_workspace_inputs)
             tg.start_soon(_run, "standalone_selective_extra", self.uv_workspace_standalone_selective_extra)
             tg.start_soon(_run, "standalone_selective_group", self.uv_workspace_standalone_selective_group)
@@ -794,6 +795,49 @@ class TypesafeDaggerverse:
             .with_exec(["/venv/bin/python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"])
             .sync()
         )
+
+    @function
+    async def uv_build_unpackaged(self) -> None:
+        """`build` builds a project that `tool.uv.package = false` keeps out of environments.
+
+        uv refuses it by name (`uv build --package`), so it is built by its directory, with
+        its backend's hooks around the build as for any other package.
+        """
+        fixture = "uv/tests/_packages/maturin-outside-workspace"
+        source = _src(fixture)
+        pyproject = await source.file("py/pyproject.toml").contents()
+        lock = await source.file("py/uv.lock").contents()
+        unpackaged = source.with_new_file(
+            "py/pyproject.toml", pyproject + "\n[tool.uv]\npackage = false\n"
+        ).with_new_file("py/uv.lock", lock.replace('source = { editable = "." }', 'source = { virtual = "." }'))
+        base = core().container().from_("rust:1.90.0-slim-bookworm").with_workdir("/workspace")
+        inputs = ["/crates/core/Cargo.toml", "/crates/core/src/**"]
+        # Selected by name, and as the workspace root's project that a bare `uv build` builds.
+        for packages in (["outside-app"], None):
+            uv_ = uv(unpackaged.as_workspace())
+            maturin = (
+                uv_.build_backend_handlers()
+                .maturin()
+                .with_package_config(name="outside-app", extra_build_inputs=inputs)
+            )
+            dist = (
+                uv_.with_build_backend_handlers([maturin])
+                .workspace("py")
+                .builder(base_container=base, packages=packages)
+                .build(python_version=["3.13"])
+            )
+            entries = await dist.entries()
+            if not any(e.endswith(".whl") for e in entries) or not any(e.endswith(".tar.gz") for e in entries):
+                raise AssertionError(f"packages={packages}: expected an sdist and a wheel, got {entries}")
+            await (
+                core()
+                .container()
+                .from_("ghcr.io/astral-sh/uv:python3.13-bookworm-slim")
+                .with_directory("/dist", dist)
+                .with_exec(["sh", "-c", "uv venv /venv && uv pip install --python /venv /dist/*.whl"])
+                .with_exec(["/venv/bin/python", "-I", "-c", "import outside; assert outside.add(2, 3) == 5"])
+                .sync()
+            )
 
     @function
     async def uv_maturin_editable_cached_build(self) -> None:

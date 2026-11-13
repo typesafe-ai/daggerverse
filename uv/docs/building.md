@@ -183,6 +183,12 @@ extensions:
 dists = uv(ws).workspace(".").builder(packages=["my-app"]).build(python_version=["3.12", "3.13"])
 ```
 
+A project with `tool.uv.package = false` is built as well, as long as it names a build
+backend. uv keeps such a project out of environments, so nothing installs it, but
+`build` can still make its distributions: for example a binary that
+[maturin](build-backends/maturin.md#binaries) packages as a wheel, in a project whose
+own environment holds only dependency groups.
+
 ## Running the pipeline step by step
 
 `with_dependencies` runs three steps. To run something *between* them, call them

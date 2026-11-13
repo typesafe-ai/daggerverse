@@ -376,7 +376,7 @@ type ModuleTypes {
         .withField("plan", typeDef.withOptional(true).withObject("UvSyncPlan"))
         .withFunction(
           function("build", typeDef.withObject("Directory"))
-            .withDescription("The selected packages' sdists and wheels, built with `uv build`.\n\nBuilds from the packages' real source, so call it right after selecting:\nnothing needs installing first. The build backends' hooks run around\nthe builds, as for `with_local_dependencies` (e.g. maturin's Cargo\ntarget cache).")
+            .withDescription("The selected packages' sdists and wheels, built with `uv build`.\n\nBuilds from the packages' real source, so call it right after selecting:\nnothing needs installing first. The build backends' hooks run around\nthe builds, as for `with_local_dependencies` (e.g. maturin's Cargo\ntarget cache).\n\nA selected package with `tool.uv.package = false` is built too, if it names a\nbuild backend: uv keeps it out of environments, not out of `uv build`.")
             .withArg("python_version", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Python versions to build wheels for (e.g. ['3.12', '3.13']), for packages with compiled extensions. Defaults to the build's Python.", defaultValue: ("null" :: Dagger.JSON!))
         )
         .withFunction(
