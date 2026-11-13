@@ -50,8 +50,11 @@ class Zizmor:
     ] = field()
 
     source: Annotated[
-        Directory,
-        Doc("The workspace's `.github` directory containing Actions workflows, less `exclude` and gitignored files."),
+        Directory | None,
+        Doc(
+            "The workspace's `.github` directory containing Actions workflows, less `exclude` and gitignored files."
+            " None when the workspace has none."
+        ),
     ] = field()
 
     fix_mode: Annotated[FixMode, Doc("Which fixes `fix` applies.")] = field()
@@ -94,6 +97,8 @@ class Zizmor:
             ws.directory("/", include=[".github/**"], exclude=exclude, gitignore=True)
             .as_workspace()
             .directory("/.github")
+            if await ws.glob(".github")
+            else None
         )
         return cls(
             ctr=ctr,
@@ -119,8 +124,11 @@ class Zizmor:
     def fix(self) -> Changeset:
         """Fix GitHub Actions security issues with `zizmor --fix`.
 
-        Fails when findings zizmor can't fix remain.
+        Fails when findings zizmor can't fix remain. A workspace without a
+        `.github` directory has nothing to fix.
         """
+        if self.source is None:
+            return core().directory().changes(core().directory())
         ctr = self.ctr.with_workdir("/work").with_directory("/work/.github", self.source)
         if self.github_token is not None:
             ctr = ctr.with_secret_variable("GH_TOKEN", self.github_token)
