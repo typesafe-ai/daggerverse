@@ -68,7 +68,8 @@ class Zizmor(_Type):
         """
         Fix GitHub Actions security issues with `zizmor --fix`.
 
-        Fails when findings zizmor can't fix remain.
+        Fails when findings zizmor can't fix remain. A workspace without a
+        `.github` directory has nothing to fix.
         """
         _args: list[_Arg] = []
         _ctx = self._select("fix", _args)
@@ -193,8 +194,8 @@ class Zizmor(_Type):
         return await _ctx.execute(str)
 
     def source(self) -> Directory:
-        """The workspace's `.github` directory containing Actions workflows, less
-        `exclude` and gitignored files.
+        """Source tree: the workspace's `.github` directory, less `exclude` and
+        gitignored files.
         """
         _args: list[_Arg] = []
         _ctx = self._select("source", _args)
