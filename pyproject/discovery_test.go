@@ -121,6 +121,21 @@ func TestStandaloneProject(t *testing.T) {
 	equal(t, ws.manifestInclude, []string{"app/uv.lock", "app/uv.toml", "app/pyproject.toml", "app/.python-version"})
 }
 
+func TestStandaloneNestedProjectIncludesAncestorManifests(t *testing.T) {
+	found := newDiscovery(map[string]string{
+		"parent":     project("parent", ""),
+		"parent/app": project("app", ""),
+	}, map[string][]string{"parent/app": {"uv.lock"}})
+	equal(t, must(found.workspace("parent/app")).manifestInclude, []string{
+		"parent/app/uv.lock",
+		"parent/app/uv.toml",
+		"parent/app/pyproject.toml",
+		"parent/app/.python-version",
+		"parent/pyproject.toml",
+		"parent/.python-version",
+	})
+}
+
 func TestUvWorkspaceMembers(t *testing.T) {
 	found := newDiscovery(map[string]string{
 		"ws":                   uvWorkspace("root", []string{"packages/*", "tools/cli"}, []string{"packages/skip"}, ""),
