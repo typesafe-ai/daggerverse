@@ -3014,6 +3014,9 @@ type UvWorkspaceBuilderBuildOpts struct {
 // nothing needs installing first. The build backends' hooks run around
 // the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
 // target cache).
+//
+// A selected package with `tool.uv.package = false` is built too, if it names a
+// build backend: uv keeps it out of environments, not out of `uv build`.
 func (r *UvWorkspaceBuilder) Build(opts ...UvWorkspaceBuilderBuildOpts) *Directory { // uv (../../:0:0)
 	q := r.query.Select("build")
 	for i := len(opts) - 1; i >= 0; i-- {
