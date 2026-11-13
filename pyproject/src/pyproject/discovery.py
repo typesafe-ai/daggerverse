@@ -318,10 +318,12 @@ class Discovery:
         dependencies = sorted({d for m in members for d in self.closure(m)} - set(members))
         include, exclude = self._loads(path, [*members, *dependencies])
         projects = [*members, *(d for d in dependencies if d in self._texts)]
+        ancestors = [p for p in self.project_paths if p != path and under(path, p)]
         manifest_include = [
             *(join(path, name) for name in self._lockfiles[path]),
             join(path, "uv.toml"),
             *(join(p, name) for p in projects for name in ("pyproject.toml", ".python-version")),
+            *(join(p, name) for p in ancestors for name in ("pyproject.toml", ".python-version")),
             # A path source that isn't a project is an archive (or a directory uv
             # builds with a legacy backend): resolution needs the whole thing.
             *(pattern for d in dependencies if d not in self._texts for pattern in tree(d)),

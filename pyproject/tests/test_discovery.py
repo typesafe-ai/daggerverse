@@ -101,6 +101,23 @@ class TestDiscovery:
             "app/.python-version",
         )
 
+    def test_standalone_nested_project_includes_ancestor_manifests(self):
+        found = Discovery(
+            {
+                "parent": project("parent"),
+                "parent/app": project("app"),
+            },
+            {"parent/app": ["uv.lock"]},
+        )
+        assert found.workspace("parent/app").manifest_include == (
+            "parent/app/uv.lock",
+            "parent/app/uv.toml",
+            "parent/app/pyproject.toml",
+            "parent/app/.python-version",
+            "parent/pyproject.toml",
+            "parent/.python-version",
+        )
+
     def test_uv_workspace_members(self):
         found = Discovery(
             {
