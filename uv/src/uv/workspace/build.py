@@ -381,15 +381,35 @@ class UvWorkspaceBuilder:
         """Where the workspace root sits in the container, which mirrors it with the uv workspace at `workdir`."""
         return posixpath.normpath(posixpath.join(workdir, posixpath.relpath(".", self._resolved_plan().workspace_path)))
 
-    def _hooks(self) -> dict[str, BackendHooks]:
+    def _unpackaged_targets(self) -> list[LocalPackage]:
+        """The packages `build` is asked for that `tool.uv.package = false` keeps out of environments.
+
+        uv never installs such a project, but builds it when given its directory, as long
+        as it names a build backend: e.g. a binary packaged as a wheel, in a project whose
+        environment holds only its dependency groups.
+        """
+        plan = self._resolved_plan()
+        if plan.all_packages:
+            return []
+        # With no selection `uv build` builds the workspace root's project.
+        selected = [
+            pkg for pkg in plan.all_local if pkg.name in plan.packages or (not plan.packages and pkg.path == ".")
+        ]
+        return [pkg for pkg in selected if pkg.name in plan.flat_packages and pkg.build_backend.name is not None]
+
+    def _hooks(self, building: bool = False) -> dict[str, BackendHooks]:
         """The `setup`/`teardown` around the local packages' build, once each, keyed for the trace.
 
         A package's handler provides them; without one, its built-in backend, if it needs any.
+        An install skips the packages uv doesn't build; `building` distributions includes the
+        ones `build` builds all the same (see `_unpackaged_targets`).
         """
         hooks: dict[str, BackendHooks] = {}
+        unpackaged = [pkg.name for pkg in self._unpackaged_targets()] if building else []
         for pkg in self._resolved_plan().needed_local:
             backend = pkg.build_backend.name
-            if pkg.name in self._resolved_plan().flat_packages or backend is None:
+            skipped = pkg.name in self._resolved_plan().flat_packages and pkg.name not in unpackaged
+            if skipped or backend is None:
                 continue
             if pkg.handler is not None:
                 hooks.setdefault(
@@ -399,9 +419,9 @@ class UvWorkspaceBuilder:
                 hooks.setdefault(backend, builtin())
         return hooks
 
-    def _stamped(self, sources: Directory) -> Directory:
+    def _stamped(self, sources: Directory, building: bool = False) -> Directory:
         """`sources` with every mtime set to 2100, when the build's hooks keep caches (see `_STAMP_SOURCES`)."""
-        if not self._hooks():
+        if not self._hooks(building):
             return sources
         return (
             core()
@@ -568,9 +588,9 @@ class UvWorkspaceBuilder:
             if pkg.name not in self._resolved_plan().flat_packages
         ]
 
-    async def _exec_with_hooks(self, ctr: Container, commands: list[list[str]]) -> Container:
+    async def _exec_with_hooks(self, ctr: Container, commands: list[list[str]], building: bool = False) -> Container:
         """Run the local packages' builds (`commands`), with their backends' hooks around them."""
-        hooks = self._hooks()
+        hooks = self._hooks(building)
         for hook in hooks.values():
             ctr = await hook.setup(ctr)
         # Set SOURCE_DATE_EPOCH for these builds only, keeping a value the base sets.
@@ -612,27 +632,36 @@ class UvWorkspaceBuilder:
         nothing needs installing first. The build backends' hooks run around
         the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
         target cache).
+
+        A selected package with `tool.uv.package = false` is built too, if it names a
+        build backend: uv keeps it out of environments, not out of `uv build`.
         """
         if self.plan is None:
             return await (await self._planned()).build(python_version)
 
         workdir = await self.container.workdir()
         root = self._root_path(workdir)
-        ctr = self.container.with_directory(root, self._stamped(self.plan.source_dir))
+        ctr = self.container.with_directory(root, self._stamped(self.plan.source_dir, building=True))
         if self.plan.root_inputs_dir is not None:
-            ctr = ctr.with_directory(root, self._stamped(self.plan.root_inputs_dir))
+            ctr = ctr.with_directory(root, self._stamped(self.plan.root_inputs_dir, building=True))
+        # `uv build --package` refuses a project with `tool.uv.package = false`, but builds
+        # it when given its directory, which is relative to the uv workspace the build runs in.
+        unpackaged = {pkg.name: pkg.path for pkg in self._unpackaged_targets()}
         if self.plan.all_packages:
             targets = [["--all-packages"]]
         else:
-            targets = [[f"--package={package}"] for package in self.plan.packages] or [[]]
+            targets = [
+                [unpackaged[package]] if package in unpackaged else [f"--package={package}"]
+                for package in self.plan.packages
+            ] or [[]]
         versions = [[f"--python={version}"] for version in python_version or []] or [[]]
         commands = [
             ["uv", "build", "--out-dir", _DIST_DIR, *target, *version] for target in targets for version in versions
         ]
         with get_tracer().start_as_current_span("build distributions") as span:
             span.set_attribute("uv.build_commands", [" ".join(argv) for argv in commands])
-            span.set_attribute("build.backend_hooks", list(self._hooks()))
-            ctr = await self._exec_with_hooks(ctr, commands)
+            span.set_attribute("build.backend_hooks", list(self._hooks(building=True)))
+            ctr = await self._exec_with_hooks(ctr, commands, building=True)
         return ctr.directory(_DIST_DIR)
 
     @function

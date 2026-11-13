@@ -3053,6 +3053,10 @@ class UvWorkspaceBuilder(_Type):
         the builds, as for `with_local_dependencies` (e.g. maturin's Cargo
         target cache).
 
+        A selected package with `tool.uv.package = false` is built too, if it
+        names a
+        build backend: uv keeps it out of environments, not out of `uv build`.
+
         Parameters
         ----------
         python_version:

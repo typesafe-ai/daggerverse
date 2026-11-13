@@ -60,6 +60,19 @@ the extension itself, so it's installed from uv's cache as usual.
 
 The base container needs a Rust toolchain.
 
+## Binaries
+
+A project with `bindings = "bin"` ships a compiled program and no Python module, so
+there is nothing to import and nothing to stage besides the crate. Build its wheel
+with [`build`](../building.md#building-distributions-build):
+
+```python
+wheels = uv_.with_build_backend_handlers([maturin]).workspace(".").builder(packages=["my-cli"]).build()
+```
+
+Such a project often sets `tool.uv.package = false`, so that syncing its environment
+doesn't compile the program. `build` builds it all the same.
+
 ## Cargo workspaces
 
 Crates outside the package, such as a Cargo workspace's `Cargo.toml` and `Cargo.lock`

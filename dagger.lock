@@ -46,6 +46,7 @@
 ["","oci-sha",["ghcr.io/astral-sh/uv:0.13.7"],"sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490"]
 ["","oci-sha",["ghcr.io/astral-sh/uv:0.13.7-debian"],"sha256:b3bb6cbe20e27b91e47d190c1d6ddb912a8c2b0efa20a75496fd8de64ddda977"]
 ["","oci-sha",["ghcr.io/astral-sh/uv:0.13.7-python3.13-trixie-slim"],"sha256:6ff812e34a0e14b4b8bc9ddf25e77b3e16bac6e0c4d9b67641f40366fa382d4c"]
+["","oci-sha",["ghcr.io/astral-sh/uv:0.13.8"],"sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85"]
 ["","oci-sha",["ghcr.io/astral-sh/uv:0.13.8-debian"],"sha256:49f68aaf4290a1eb438d913d51033007eb5fac1e3add6ca8d1d161426ddac798"]
 ["","oci-sha",["ghcr.io/astral-sh/uv:latest"],"sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff"]
 ["","oci-sha",["ghcr.io/astral-sh/uv:python3.13-bookworm-slim"],"sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca"]
