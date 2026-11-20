@@ -3715,6 +3715,10 @@ type UvWorkspaceSourceBuilderOpts struct {
 	// Default: true
 	ActivateVenv bool // uv (../../:0:0)
 	//
+	// Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.
+	//
+	CompileBytecode bool // uv (../../:0:0)
+	//
 	// Install the uv binary unless it is already on `$PATH`. Set to false to skip the check when `base_container` ships uv.
 	//
 	//
@@ -3791,6 +3795,10 @@ func (r *UvWorkspaceSource) Builder(opts ...UvWorkspaceSourceBuilderOpts) *UvWor
 		// `activateVenv` optional argument
 		if !querybuilder.IsZeroValue(opts[i].ActivateVenv) {
 			q = q.Arg("activateVenv", opts[i].ActivateVenv)
+		}
+		// `compileBytecode` optional argument
+		if !querybuilder.IsZeroValue(opts[i].CompileBytecode) {
+			q = q.Arg("compileBytecode", opts[i].CompileBytecode)
 		}
 		// `autoInstallUv` optional argument
 		if !querybuilder.IsZeroValue(opts[i].AutoInstallUv) {

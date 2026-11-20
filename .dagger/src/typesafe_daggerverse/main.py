@@ -252,6 +252,7 @@ class TypesafeDaggerverse:
                 _run, "relocatable_venv_runs_in_fresh_container", self.uv_relocatable_venv_runs_in_fresh_container
             )
             tg.start_soon(_run, "no_editable_bakes_local_source", self.uv_no_editable_bakes_local_source)
+            tg.start_soon(_run, "compile_bytecode_hash_based", self.uv_compile_bytecode_hash_based)
             tg.start_soon(_run, "license_files", self.uv_license_files)
             tg.start_soon(_run, "license_file_patterns", self.uv_license_file_patterns)
             tg.start_soon(_run, "workspace_layer_cache", self.uv_workspace_layer_cache)
@@ -521,6 +522,47 @@ class TypesafeDaggerverse:
         )
         if "FRESH_VENV_OK" not in out:
             raise AssertionError(f"expected the copied venv to run without a base Python, got: {out!r}")
+
+    @function
+    async def uv_compile_bytecode_hash_based(self) -> None:
+        """`compile_bytecode=True` installs `.pyc` files, hash-based so they are reproducible.
+
+        Builds standalone-app's `viz` extra with and without the option and reads the
+        flags of `tabulate`'s `.pyc` header (PEP 552): 3 is an unchecked hash-based
+        `.pyc`, 0 a timestamp-based one, whose bytes change with every install.
+        Without the option, the package has no `.pyc` at all.
+        """
+        src = _src("uv/tests/_packages/standalone-app")
+        pyc_flags = (
+            "import pathlib, sys, tabulate; "
+            "pycs = list(pathlib.Path(tabulate.__file__).parent.rglob('*.pyc')); "
+            "print(len(pycs), sorted({int.from_bytes(p.read_bytes()[4:8], 'little') for p in pycs}))"
+        )
+
+        async def flags(compile_bytecode: bool) -> str:
+            build = (
+                uv(src.as_workspace())
+                .workspace(".")
+                .builder(compile_bytecode=compile_bytecode)
+                .with_extras(["viz"])
+                .with_remote_dependencies()
+            )
+            # Python's own cache would add timestamp `.pyc`s on import: read the installed ones only.
+            return (
+                await build.container()
+                .with_env_variable("PYTHONDONTWRITEBYTECODE", "1")
+                .with_exec(["python", "-c", pyc_flags])
+                .stdout()
+            ).strip()
+
+        compiled, plain = await flags(True), await flags(False)
+        count, header_flags = compiled.split(" ", 1)
+        if int(count) == 0 or header_flags != "[3]":
+            raise AssertionError(
+                f"expected only unchecked hash-based .pyc files with compile_bytecode, got {compiled!r}"
+            )
+        if plain != "0 []":
+            raise AssertionError(f"expected no .pyc files without compile_bytecode, got {plain!r}")
 
     @function
     async def uv_no_editable_bakes_local_source(self) -> None:
