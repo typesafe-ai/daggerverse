@@ -24,3 +24,19 @@ updates:
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
+
+  # The Go Dagger modules (pyproject, pyrefly) pin go.opentelemetry.io/* to the set the
+  # Dagger Go SDK generates against. Dependabot bumps one otel module at a time,
+  # which breaks the build (e.g. `undefined: log.KeyValue` in otel/sdk/log); they move
+  # only with `dagger develop`. `ignore` stops security updates for them; the zero
+  # limit keeps version updates off, as for the uv fixtures above.
+  - package-ecosystem: gomod
+    directories:
+      - "/*"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "go.opentelemetry.io/*"
