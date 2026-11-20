@@ -238,6 +238,65 @@ func (r *Uv) UnmarshalJSON(bs []byte) error {
 	return nil
 }
 
+// UvPipVenvOpts contains options for Uv.PipVenv
+type UvPipVenvOpts struct {
+	//
+	// Container with uv on `$PATH` to build on, e.g. one with registry auth. Defaults to the Debian uv image, where uv provisions Python on demand.
+	//
+	//
+	// Default: null
+	BaseContainer *Container // uv (../../:0:0)
+	//
+	// uv-managed Python to create the venv with (`uv venv --python`), e.g. `3.13`.
+	//
+	//
+	// Default: null
+	Python string // uv (../../:0:0)
+	//
+	// Absolute path to create the venv at.
+	//
+	//
+	// Default: "/venv"
+	Path string // uv (../../:0:0)
+	//
+	// Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.
+	//
+	CompileBytecode bool // uv (../../:0:0)
+}
+
+// An empty relocatable venv to fill with `uv pip install` (`with_pip_install`), outside any uv workspace.
+//
+// Every install uses this module's uv cache, or the `uv_cache` it was created with, mounted
+// at `/mnt/cache/uv` whatever cache the base sets up.
+//
+// Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).
+func (r *Uv) PipVenv(opts ...UvPipVenvOpts) *UvPipVenv { // uv (../../:0:0)
+	q := r.query.Select("pipVenv")
+	for i := len(opts) - 1; i >= 0; i-- {
+		// `baseContainer` optional argument
+		if !querybuilder.IsZeroValue(opts[i].BaseContainer) {
+			q = q.Arg("baseContainer", opts[i].BaseContainer)
+		}
+		// `python` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Python) {
+			q = q.Arg("python", opts[i].Python)
+		}
+		// `path` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Path) {
+			q = q.Arg("path", opts[i].Path)
+		}
+		// `compileBytecode` optional argument
+		if !querybuilder.IsZeroValue(opts[i].CompileBytecode) {
+			q = q.Arg("compileBytecode", opts[i].CompileBytecode)
+		}
+	}
+
+	return &UvPipVenv{
+		query:     q,
+		refetchID: r.refetchID,
+	}
+}
+
 // These workspaces with `handlers` added to their build backend handlers.
 //
 // Every workspace `workspace` and `workspaces` hand out loads the files
@@ -2090,6 +2149,186 @@ func (r *UvPdmBackendHandler) AsNode() Node {
 // This is a local type conversion — no GraphQL call.
 func (r *UvPdmBackendHandler) AsUvBuildBackendHandler() UvBuildBackendHandler {
 	return new(UvBuildBackendHandlerClient).WithGraphQLQuery(r.query)
+}
+
+// A relocatable virtual environment filled with `uv pip install`, from packages or
+// requirements files rather than a uv workspace's lock: for example a released
+// application's pinned closure, as `uv export` writes it.
+//
+// Its `venv` is a `UvVenv`, to copy into another container with `into`.
+//
+// Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).
+type UvPipVenv struct { // uv (../../:0:0)
+	query *querybuilder.Selection
+	// refetchID is set when this object is built through a field marked
+	// @reevaluate: it fetches its ID on every use, so each use evaluates that
+	// field again.
+	refetchID bool
+
+	id   *ID
+	path *string
+}
+type WithUvPipVenvFunc func(r *UvPipVenv) *UvPipVenv
+
+// With calls the provided function with current UvPipVenv.
+//
+// This is useful for reusability and readability by not breaking the calling chain.
+func (r *UvPipVenv) With(f WithUvPipVenvFunc) *UvPipVenv {
+	return f(r)
+}
+
+func (r *UvPipVenv) WithGraphQLQuery(q *querybuilder.Selection) *UvPipVenv {
+	return &UvPipVenv{
+		query: q,
+		// The query's origin is unknown: it may go through a field that
+		// must be reevaluated.
+		refetchID: true,
+	}
+}
+
+// The container holding the venv, with uv and its cache.
+func (r *UvPipVenv) Container() *Container { // uv (../../:0:0)
+	q := r.query.Select("container")
+
+	return new(Container).WithGraphQLQuery(q)
+}
+
+// A unique identifier for this UvPipVenv.
+func (r *UvPipVenv) ID(ctx context.Context) (ID, error) {
+	if r.id != nil {
+		return *r.id, nil
+	}
+	q := r.query.Select("id")
+
+	var response ID
+
+	q = q.Bind(&response)
+	if r.refetchID {
+		return response, q.Execute(ctx)
+	}
+	return memoizedID(ctx, r.query, func() (ID, error) {
+		err := q.Execute(ctx)
+		return response, err
+	})
+}
+
+// XXX_GraphQLType is an internal function. It returns the native GraphQL type name
+func (r *UvPipVenv) XXX_GraphQLType() string {
+	return "UvPipVenv"
+}
+
+// XXX_GraphQLIDType is an internal function. It returns the native GraphQL type name for the ID of this object
+func (r *UvPipVenv) XXX_GraphQLIDType() string {
+	return "ID"
+}
+
+// XXX_GraphQLID is an internal function. It returns the underlying type ID
+func (r *UvPipVenv) XXX_GraphQLID(ctx context.Context) (string, error) {
+	id, err := r.ID(ctx)
+	if err != nil {
+		return "", err
+	}
+	return string(id), nil
+}
+
+func (r *UvPipVenv) MarshalJSON() ([]byte, error) {
+	id, err := r.ID(marshalCtx)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(id)
+}
+func (r *UvPipVenv) UnmarshalJSON(bs []byte) error {
+	var id string
+	err := json.Unmarshal(bs, &id)
+	if err != nil {
+		return err
+	}
+	*r = UvPipVenv{query: selectNode(Connect().QueryBuilder(), id, "UvPipVenv")}
+	return nil
+}
+
+// Absolute path of the venv in `container`.
+func (r *UvPipVenv) Path(ctx context.Context) (string, error) { // uv (../../:0:0)
+	if r.path != nil {
+		return *r.path, nil
+	}
+	q := r.query.Select("path")
+
+	var response string
+
+	q = q.Bind(&response)
+	return response, q.Execute(ctx)
+}
+
+// The venv, with the uv-managed Python it links against, to copy into another container.
+func (r *UvPipVenv) Venv() *UvVenv { // uv (../../:0:0)
+	q := r.query.Select("venv")
+
+	return &UvVenv{
+		query:     q,
+		refetchID: r.refetchID,
+	}
+}
+
+// UvPipVenvWithPipInstallOpts contains options for UvPipVenv.WithPipInstall
+type UvPipVenvWithPipInstallOpts struct {
+	//
+	// Requirement specifiers, e.g. `tabulate==0.9.0`.
+	//
+	//
+	// Default: null
+	Packages []string // uv (../../:0:0)
+	//
+	// Requirements files, passed as repeated `-r`, e.g. `uv export` output.
+	//
+	//
+	// Default: null
+	Requirements []*File // uv (../../:0:0)
+	//
+	// Install exactly what is listed (`--no-deps`), as for a complete pinned closure.
+	//
+	NoDeps bool // uv (../../:0:0)
+	//
+	// More `uv pip install` arguments, e.g. `--index-url`.
+	//
+	//
+	// Default: null
+	Args []string // uv (../../:0:0)
+}
+
+// Install `packages` and `requirements` into the venv, in one `uv pip install`.
+func (r *UvPipVenv) WithPipInstall(opts ...UvPipVenvWithPipInstallOpts) *UvPipVenv { // uv (../../:0:0)
+	q := r.query.Select("withPipInstall")
+	for i := len(opts) - 1; i >= 0; i-- {
+		// `packages` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Packages) {
+			q = q.Arg("packages", opts[i].Packages)
+		}
+		// `requirements` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Requirements) {
+			q = q.Arg("requirements", opts[i].Requirements)
+		}
+		// `noDeps` optional argument
+		if !querybuilder.IsZeroValue(opts[i].NoDeps) {
+			q = q.Arg("noDeps", opts[i].NoDeps)
+		}
+		// `args` optional argument
+		if !querybuilder.IsZeroValue(opts[i].Args) {
+			q = q.Arg("args", opts[i].Args)
+		}
+	}
+
+	return &UvPipVenv{
+		query:     q,
+		refetchID: r.refetchID,
+	}
+}
+
+// AsNode returns this UvPipVenv as a Node.
+// This is a local type conversion — no GraphQL call.
+func (r *UvPipVenv) AsNode() Node {
+	return new(NodeClient).WithGraphQLQuery(r.query)
 }
 
 // Handles packages built with poetry-core.

@@ -70,6 +70,28 @@ If you want the pieces rather than a ready-made container, ask the build for its
 you get a `UvVenv` holding the environment, its interpreter, and the path the
 interpreter must live at. Place them wherever you need.
 
+## From requirements files
+
+Not every environment comes from a uv workspace: a released application may ship its
+pinned dependency closure as a requirements file (`uv export` output) instead. `pip_venv`
+creates an empty relocatable venv to fill with `uv pip install`, and hands it out as the
+same `UvVenv`:
+
+```python
+venv = (
+    uv(ws, uv_cache=core().cache_volume("my-app-uv"))  # optional: a cache of its own
+    .pip_venv(base_container=base_with_registry_auth, compile_bytecode=True)
+    .with_pip_install(requirements=[closure], no_deps=True)  # exactly the pinned set
+    .with_pip_install(packages=["my-plugin==1.2.3"], args=["--index-url", INDEX])
+    .venv()
+)
+runner = await venv.into(core().container().from_("debian:bookworm-slim"), path="/opt/my-app")
+```
+
+Each `with_pip_install` is one `uv pip install`, so list everything that installs together
+in one call. Every install runs with the module's uv cache (or the `uv_cache` the module
+was created with) mounted, and `compile_bytecode` works as it does for `builder`.
+
 ## A note on portability
 
 The bundled interpreter is a [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
