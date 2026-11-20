@@ -32,6 +32,7 @@ from dagger_clients.core import (  # noqa: E402
     Changeset,
     Container,
     Directory,
+    File,
     Workspace,
 )
 
@@ -439,6 +440,54 @@ class Uv(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
+
+    def pip_venv(self, *, base_container: Container | None = None, python: str | None = None, path: str = '/venv', compile_bytecode: bool = False,) -> "UvPipVenv":
+        """
+        An empty relocatable venv to fill with `uv pip install`
+        (`with_pip_install`), outside any uv workspace.
+
+        Every install uses this module's uv cache, or the `uv_cache` it was
+        created with, mounted
+        at `/mnt/cache/uv` whatever cache the base sets up.
+
+        Learn more in the
+        [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).
+
+        Parameters
+        ----------
+        base_container:
+            Container with uv on `$PATH` to build on, e.g. one with registry
+            auth. Defaults to the Debian uv image, where uv provisions Python
+            on demand.
+        python:
+            uv-managed Python to create the venv with (`uv venv --python`),
+            e.g. `3.13`.
+        path:
+            Absolute path to create the venv at.
+        compile_bytecode:
+            Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so
+            the environment imports without compiling at runtime. Sets
+            `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc`
+            files hash-based (unchecked) rather than stamped with install-time
+            mtimes: reproducible, and never revalidated against their source,
+            as suits an immutable image.
+        """
+        if not (base_container is None or isinstance(base_container, Container)):
+            raise _type_error("Uv.pip_venv", "base_container", base_container, "Container | None")
+        if not (python is None or isinstance(python, str)):
+            raise _type_error("Uv.pip_venv", "python", python, "str | None")
+        if not (isinstance(path, str)):
+            raise _type_error("Uv.pip_venv", "path", path, "str")
+        if not (isinstance(compile_bytecode, bool)):
+            raise _type_error("Uv.pip_venv", "compile_bytecode", compile_bytecode, "bool")
+        _args = [
+            _Arg("baseContainer", base_container, None),
+            _Arg("python", python, None),
+            _Arg("path", path, '/venv'),
+            _Arg("compileBytecode", compile_bytecode, False),
+        ]
+        _ctx = self._select("pipVenv", _args)
+        return UvPipVenv(_ctx)
 
     def with_build_backend_handlers(self, handlers: list[UvBuildBackendHandler],) -> _Self:
         """
@@ -2321,6 +2370,123 @@ class UvPdmBackendHandler(_Type):
         ]
         _ctx = self._select("teardown", _args)
         return Container(_ctx)
+
+
+class UvPipVenv(_Type):
+    """ A relocatable virtual environment filled with `uv pip install`,
+    from packages or requirements files rather than a uv workspace's lock:
+    for example a released application's pinned closure, as `uv export`
+    writes it.  Its `venv` is a `UvVenv`, to copy into another container
+    with `into`.  Learn more in the
+    [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).
+    """
+
+    def container(self) -> Container:
+        """The container holding the venv, with uv and its cache."""
+        _args: list[_Arg] = []
+        _ctx = self._select("container", _args)
+        return Container(_ctx)
+
+    async def id(self) -> str:
+        """A unique identifier for this UvPipVenv.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def path(self) -> str:
+        """Absolute path of the venv in `container`.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("path", _args)
+        return await _ctx.execute(str)
+
+    def venv(self) -> "UvVenv":
+        """
+        The venv, with the uv-managed Python it links against, to copy into
+        another container.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("venv", _args)
+        return UvVenv(_ctx)
+
+    def with_pip_install(self, *, packages: list[str] | None = None, requirements: list[File] | None = None, no_deps: bool = False, args: list[str] | None = None,) -> _Self:
+        """
+        Install `packages` and `requirements` into the venv, in one `uv pip
+        install`.
+
+        Parameters
+        ----------
+        packages:
+            Requirement specifiers, e.g. `tabulate==0.9.0`.
+        requirements:
+            Requirements files, passed as repeated `-r`, e.g. `uv export`
+            output.
+        no_deps:
+            Install exactly what is listed (`--no-deps`), as for a complete
+            pinned closure.
+        args:
+            More `uv pip install` arguments, e.g. `--index-url`.
+        """
+        if not (packages is None or (isinstance(packages, list) and all(isinstance(_v0, str) for _v0 in packages))):
+            raise _type_error("UvPipVenv.with_pip_install", "packages", packages, "list[str] | None")
+        if not (requirements is None or (isinstance(requirements, list) and all(isinstance(_v0, File) for _v0 in requirements))):
+            raise _type_error("UvPipVenv.with_pip_install", "requirements", requirements, "list[File] | None")
+        if not (isinstance(no_deps, bool)):
+            raise _type_error("UvPipVenv.with_pip_install", "no_deps", no_deps, "bool")
+        if not (args is None or (isinstance(args, list) and all(isinstance(_v0, str) for _v0 in args))):
+            raise _type_error("UvPipVenv.with_pip_install", "args", args, "list[str] | None")
+        _args = [
+            _Arg("packages", packages, None),
+            _Arg("requirements", requirements, None),
+            _Arg("noDeps", no_deps, False),
+            _Arg("args", args, None),
+        ]
+        _ctx = self._select("withPipInstall", _args)
+        return UvPipVenv(_ctx)
+
+    def with_(self, cb: _Callable[["UvPipVenv"], "UvPipVenv"]) -> "UvPipVenv":
+        """Call the provided callable with current UvPipVenv.
+
+        This is useful for reusability and readability by not breaking the calling chain.
+        """
+        return cb(self)
+
 
 
 class UvPoetryCoreHandler(_Type):
@@ -4293,6 +4459,7 @@ __all__ = [
     "UvMaturinHandler",
     "UvPackageSource",
     "UvPdmBackendHandler",
+    "UvPipVenv",
     "UvPoetryCoreHandler",
     "UvProjectSource",
     "UvSyncPlan",

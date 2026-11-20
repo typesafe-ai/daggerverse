@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    "dagger.gen.go": "caca8b6c0c45c94fd706a693cc08186a4bfcbae8d27bbd27f546a4d63249c36a",
-    "uv.gen.go": "32f9ddb3365e295b727b7ac9298adcade4233a82a1c998768f9546f62e558442"
+    "dagger.gen.go": "430b6ff0d6a4195c6bdee7429eb1bf9d5af1ef79b6c48d0b2223144859743ceb",
+    "uv.gen.go": "14d954f7a1f690a70b39efbbf8150c80867f102530e7e31f2a25b656c51308b9"
   }
 }

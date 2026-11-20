@@ -554,6 +554,21 @@ type ModuleTypes {
           function("uv_version", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("The uv version this workspace requires, as a concrete image tag.\n\nReads `required-version` (a PEP 440 specifier) from `uv.toml` or the\n`[tool.uv]` table of `pyproject.toml`. Exact pins are used as-is; ranges\nresolve to their minimal compatible version (no PyPI lookup). Falls back\nto the module's pinned default when unspecified.")
         ),
+      typeDef.withObject("UvPipVenv", description: "A relocatable virtual environment filled with `uv pip install`, from packages or\nrequirements files rather than a uv workspace's lock: for example a released\napplication's pinned closure, as `uv export` writes it.\n\nIts `venv` is a `UvVenv`, to copy into another container with `into`.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).")
+        .withField("container", typeDef.withObject("Container"), description: "The container holding the venv, with uv and its cache.")
+        .withField("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Absolute path of the venv in `container`.")
+        .withFunction(
+          function("venv", typeDef.withObject("UvVenv"))
+            .withDescription("The venv, with the uv-managed Python it links against, to copy into another container.")
+        )
+        .withFunction(
+          function("with_pip_install", typeDef.withObject("UvPipVenv"))
+            .withDescription("Install `packages` and `requirements` into the venv, in one `uv pip install`.")
+            .withArg("packages", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "Requirement specifiers, e.g. `tabulate==0.9.0`.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("requirements", typeDef.withOptional(true).withListOf(typeDef.withObject("File")).withOptional(true), description: "Requirements files, passed as repeated `-r`, e.g. `uv export` output.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("no_deps", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Install exactly what is listed (`--no-deps`), as for a complete pinned closure.", defaultValue: ("false" :: Dagger.JSON!))
+            .withArg("args", typeDef.withOptional(true).withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)).withOptional(true), description: "More `uv pip install` arguments, e.g. `--index-url`.", defaultValue: ("null" :: Dagger.JSON!))
+        ),
       typeDef.withObject("UvWorkspaces", description: "Every uv workspace in the source tree (one per uv.lock), keyed by its path.\n\n`audit` runs once per selected workspace, so each workspace is its own generator\nthat can be selected or skipped on its own.")
         .withCollection
         .withField("paths", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root.")
@@ -573,6 +588,14 @@ type ModuleTypes {
         .withFunction(
           function("build_backend_handlers", typeDef.withObject("BuildBackendHandlers"))
             .withDescription("Handlers for the module's built-in build backends, to configure them for some packages.\n\nPass them to `with_build_backend_handlers`, e.g. a maturin handler with\nthe crates a package's Cargo workspace keeps above it.")
+        )
+        .withFunction(
+          function("pip_venv", typeDef.withObject("UvPipVenv"))
+            .withDescription("An empty relocatable venv to fill with `uv pip install` (`with_pip_install`), outside any uv workspace.\n\nEvery install uses this module's uv cache, or the `uv_cache` it was created with, mounted\nat `/mnt/cache/uv` whatever cache the base sets up.\n\nLearn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).")
+            .withArg("base_container", typeDef.withOptional(true).withObject("Container").withOptional(true), description: "Container with uv on `$PATH` to build on, e.g. one with registry auth. Defaults to the Debian uv image, where uv provisions Python on demand.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("python", typeDef.withOptional(true).withKind(TypeDefKind.STRING_KIND).withOptional(true), description: "uv-managed Python to create the venv with (`uv venv --python`), e.g. `3.13`.", defaultValue: ("null" :: Dagger.JSON!))
+            .withArg("path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Absolute path to create the venv at.", defaultValue: ("\"/venv\"" :: Dagger.JSON!))
+            .withArg("compile_bytecode", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.", defaultValue: ("false" :: Dagger.JSON!))
         )
         .withFunction(
           function("with_build_backend_handlers", typeDef.withObject("Uv"))

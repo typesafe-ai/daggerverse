@@ -253,6 +253,7 @@ class TypesafeDaggerverse:
             )
             tg.start_soon(_run, "no_editable_bakes_local_source", self.uv_no_editable_bakes_local_source)
             tg.start_soon(_run, "compile_bytecode_hash_based", self.uv_compile_bytecode_hash_based)
+            tg.start_soon(_run, "pip_venv_runs_in_fresh_container", self.uv_pip_venv_runs_in_fresh_container)
             tg.start_soon(_run, "license_files", self.uv_license_files)
             tg.start_soon(_run, "license_file_patterns", self.uv_license_file_patterns)
             tg.start_soon(_run, "workspace_layer_cache", self.uv_workspace_layer_cache)
@@ -563,6 +564,38 @@ class TypesafeDaggerverse:
             )
         if plain != "0 []":
             raise AssertionError(f"expected no .pyc files without compile_bytecode, got {plain!r}")
+
+    @function
+    async def uv_pip_venv_runs_in_fresh_container(self) -> None:
+        """`pip_venv` installs a requirements file into a relocatable venv that runs without uv.
+
+        Installs a pinned requirements file with `--no-deps` and `compile_bytecode`, copies
+        the venv into a plain `debian:bookworm-slim` with `into`, and imports the package
+        there, reading its `.pyc` header flags (3: unchecked hash-based).
+        """
+        requirements = core().directory().with_new_file("requirements.txt", "tabulate==0.9.0\n")
+        base = core().container().from_("debian:bookworm-slim")
+        venv = (
+            uv(_src("uv/tests/_packages/standalone-app").as_workspace())
+            .pip_venv(python="3.13", compile_bytecode=True)
+            .with_pip_install(requirements=[requirements.file("requirements.txt")], no_deps=True)
+            .venv()
+        )
+        check = (
+            "import pathlib, tabulate; "
+            "pycs = list(pathlib.Path(tabulate.__file__).parent.rglob('*.pyc')); "
+            "print(tabulate.__version__, len(pycs) > 0, sorted({int.from_bytes(p.read_bytes()[4:8], 'little') for p in pycs}))"
+        )
+        out = (
+            await venv.into(base, path="/opt/venv", set_env_vars=True)
+            .with_env_variable("PYTHONDONTWRITEBYTECODE", "1")
+            .with_exec(["python", "-c", check])
+            .stdout()
+        ).strip()
+        if out != "0.9.0 True [3]":
+            raise AssertionError(
+                f"expected tabulate 0.9.0 with hash-based .pyc files from the copied venv, got {out!r}"
+            )
 
     @function
     async def uv_no_editable_bakes_local_source(self) -> None:

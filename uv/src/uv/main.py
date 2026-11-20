@@ -7,11 +7,14 @@ import tomllib
 from typing import Annotated, Any, Self
 
 from dagger import Doc, collection, function, get, keys, object_type
-from dagger_clients.core import CacheVolume, Container, Workspace
+from dagger_clients.core import CacheVolume, Container, Workspace, core
 from dagger_clients.pyproject import pyproject
 
-from uv.args import WorkspacePath
+from uv.args import CompileBytecode, WorkspacePath
 from uv.audit import AuditCooldown, AuditUpgradeStrategy, CooldownPolicy, UpgradeStrategy
+from uv.bytecode import with_compiled_bytecode
+from uv.pip import UvPipVenv
+from uv.utils import _DEFAULT_VERSION, _UV_CACHE_DIR, debian_image_ref
 from uv.workspace import UvWorkspaceSource
 from uv.workspace.build_backends import BuildBackendHandlers
 from uv.workspace.build_backends.handler import BuildBackendHandler
@@ -113,6 +116,7 @@ class Uv:
     ws: Workspace | None = None
     layouts: list[UvWorkspaceLayout] = dataclasses.field(default_factory=list)
     handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
+    uv_cache: CacheVolume | None = None
 
     @classmethod
     async def create(
@@ -184,7 +188,40 @@ class Uv:
                 uv_cache=uv_cache,
             )
 
-        return cls(ws=ws, layouts=[workspace_layout(workspace) for workspace in found["workspaces"]])
+        return cls(ws=ws, layouts=[workspace_layout(workspace) for workspace in found["workspaces"]], uv_cache=uv_cache)
+
+    @function
+    async def pip_venv(
+        self,
+        base_container: Annotated[
+            Container | None,
+            Doc(
+                "Container with uv on `$PATH` to build on, e.g. one with registry auth. Defaults to the "
+                "Debian uv image, where uv provisions Python on demand."
+            ),
+        ] = None,
+        python: Annotated[
+            str | None, Doc("uv-managed Python to create the venv with (`uv venv --python`), e.g. `3.13`.")
+        ] = None,
+        path: Annotated[str, Doc("Absolute path to create the venv at.")] = "/venv",
+        compile_bytecode: CompileBytecode = False,
+    ) -> UvPipVenv:
+        """An empty relocatable venv to fill with `uv pip install` (`with_pip_install`), outside any uv workspace.
+
+        Every install uses this module's uv cache, or the `uv_cache` it was created with, mounted
+        at `/mnt/cache/uv` whatever cache the base sets up.
+
+        Learn more in the [docs](https://daggerverse.docs.typesafe.ai/uv/virtual-environments/).
+        """
+        ctr = base_container or core().container().from_(debian_image_ref(_DEFAULT_VERSION))
+        ctr = ctr.with_env_variable("UV_CACHE_DIR", _UV_CACHE_DIR).with_mounted_cache(
+            _UV_CACHE_DIR, self.uv_cache or core().cache_volume("uv-cache")
+        )
+        if compile_bytecode:
+            ctr = await with_compiled_bytecode(ctr)
+        # A uv-managed Python, even where the base has one of its own: `venv` exports the interpreter with the venv.
+        argv = ["uv", "venv", "--relocatable", "--managed-python", *(["--python", python] if python else []), path]
+        return UvPipVenv(container=ctr.with_exec(argv), path=path)
 
     @function
     def build_backend_handlers(self) -> BuildBackendHandlers:

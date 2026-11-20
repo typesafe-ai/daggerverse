@@ -41,6 +41,7 @@ from uv.audit import (
     upgrade_spec,
     upload_cutoff,
 )
+from uv.bytecode import with_compiled_bytecode
 from uv.utils import (
     _DEFAULT_VERSION,
     _UV_CACHE_DIR,
@@ -683,11 +684,7 @@ class UvWorkspaceSource:
                 ctr = ctr.with_env_variable("UV_CACHE_DIR", cache_dir).with_mounted_cache(cache_dir, self._uv_cache())
             if compile_bytecode:
                 span.set_attribute("build.compile_bytecode", True)
-                ctr = ctr.with_env_variable("UV_COMPILE_BYTECODE", "1")
-                if not await ctr.env_variable("SOURCE_DATE_EPOCH"):
-                    # Hash-based .pyc files. 1980-01-01, not 0: the same epoch dates the wheels
-                    # `uv sync` builds, and ZIP can't store anything earlier.
-                    ctr = ctr.with_env_variable("SOURCE_DATE_EPOCH", "315532800")
+                ctr = await with_compiled_bytecode(ctr)
             workdir = await ctr.workdir()
 
             # Place workspace files at their real path within the source tree

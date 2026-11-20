@@ -19,6 +19,7 @@ type CacheVolume = core.CacheVolume
 type Changeset = core.Changeset
 type Container = core.Container
 type Directory = core.Directory
+type File = core.File
 type ID = core.ID
 type Module = core.Module
 type Node = core.Node
