@@ -126,6 +126,21 @@ platform and libc of the resulting environment.
 !!! tip
     If your custom base doesn't ship `uv`, the module installs it from the official image (`auto_install_uv=True` by default). You can also call `with_uv` yourself in the pipeline.
 
+### Bytecode
+
+Pass `compile_bytecode=True` to `builder` to compile installed packages to bytecode
+(`UV_COMPILE_BYTECODE`), so the environment doesn't compile its imports at runtime, in
+every fresh container:
+
+```python
+uv(ws).workspace(".").builder(compile_bytecode=True).with_remote_dependencies()
+```
+
+The builder also sets `SOURCE_DATE_EPOCH` (to 1980-01-01) unless the base already does,
+which makes the `.pyc` files unchecked hash-based ones ([PEP 552](https://peps.python.org/pep-0552/))
+instead of stamped with install-time mtimes: they are reproducible, and Python never
+revalidates them against their source, as suits an immutable image.
+
 ### Caching
 
 By default, the module mounts a Dagger cache volume at `/mnt/cache/uv` and sets

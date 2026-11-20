@@ -81,6 +81,16 @@ NoEditable: TypeAlias = Annotated[
     ),
 ]
 
+CompileBytecode: TypeAlias = Annotated[
+    bool,
+    Doc(
+        "Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without "
+        "compiling at runtime. Sets `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc` files "
+        "hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never "
+        "revalidated against their source, as suits an immutable image."
+    ),
+]
+
 VenvRelocatable: TypeAlias = Annotated[
     bool,
     Doc(

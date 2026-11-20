@@ -3755,7 +3755,7 @@ class UvWorkspaceSource(_Type):
         _ctx = self._select("auditCooldown", _args)
         return await _ctx.execute(UvCooldownPolicy)
 
-    def builder(self, *, base_container: Container | None = None, venv_relocatable: bool = False, activate_venv: bool = True, auto_install_uv: bool = True, extras: list[str] | None = None, all_extras: bool = False, groups: list[str] | None = None, no_default_groups: bool = False, all_groups: bool = False, no_editable: bool = False, exact: bool = False, no_install_packages: list[str] | None = None, all_packages: bool = False, packages: list[str] | None = None,) -> UvWorkspaceBuilder:
+    def builder(self, *, base_container: Container | None = None, venv_relocatable: bool = False, activate_venv: bool = True, compile_bytecode: bool = False, auto_install_uv: bool = True, extras: list[str] | None = None, all_extras: bool = False, groups: list[str] | None = None, no_default_groups: bool = False, all_groups: bool = False, no_editable: bool = False, exact: bool = False, no_install_packages: list[str] | None = None, all_packages: bool = False, packages: list[str] | None = None,) -> UvWorkspaceBuilder:
         """
         A builder for this workspace's packages, with nothing installed yet.
 
@@ -3781,6 +3781,13 @@ class UvWorkspaceSource(_Type):
             When the build uses a `.venv`, activate it in the container: set
             `VIRTUAL_ENV` and put its `bin/` first on `PATH`, so a plain
             `python` runs the installed environment.
+        compile_bytecode:
+            Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so
+            the environment imports without compiling at runtime. Sets
+            `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc`
+            files hash-based (unchecked) rather than stamped with install-time
+            mtimes: reproducible, and never revalidated against their source,
+            as suits an immutable image.
         auto_install_uv:
             Install the uv binary unless it is already on `$PATH`. Set to
             false to skip the check when `base_container` ships uv.
@@ -3822,6 +3829,8 @@ class UvWorkspaceSource(_Type):
             raise _type_error("UvWorkspaceSource.builder", "venv_relocatable", venv_relocatable, "bool")
         if not (isinstance(activate_venv, bool)):
             raise _type_error("UvWorkspaceSource.builder", "activate_venv", activate_venv, "bool")
+        if not (isinstance(compile_bytecode, bool)):
+            raise _type_error("UvWorkspaceSource.builder", "compile_bytecode", compile_bytecode, "bool")
         if not (isinstance(auto_install_uv, bool)):
             raise _type_error("UvWorkspaceSource.builder", "auto_install_uv", auto_install_uv, "bool")
         if not (extras is None or (isinstance(extras, list) and all(isinstance(_v0, str) for _v0 in extras))):
@@ -3848,6 +3857,7 @@ class UvWorkspaceSource(_Type):
             _Arg("baseContainer", base_container, None),
             _Arg("venvRelocatable", venv_relocatable, False),
             _Arg("activateVenv", activate_venv, True),
+            _Arg("compileBytecode", compile_bytecode, False),
             _Arg("autoInstallUv", auto_install_uv, True),
             _Arg("extras", extras, None),
             _Arg("allExtras", all_extras, False),
