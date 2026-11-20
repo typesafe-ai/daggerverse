@@ -1,6 +1,7 @@
 """Command line interface for the dagger extension runtime."""
 
 import contextlib
+import gc
 import importlib
 import importlib.metadata
 import importlib.util
@@ -70,6 +71,7 @@ def load_module() -> Module:
             ep.module,
         )
         raise ModuleLoadError(str(e)) from e
+    _resume_gc()
     try:
         return cls.__dagger_module__
     except AttributeError:
@@ -78,6 +80,17 @@ def load_module() -> Module:
             f"found '{type(cls)}'"
         )
         raise ModuleLoadError(msg) from None
+
+
+def _resume_gc() -> None:
+    """Turn collection back on after dagger/__init__.py paused it.
+
+    Freezing first keeps the objects the imports made, which live for the
+    whole call, out of every collection the user's code triggers.
+    """
+    if os.environ.get("DAGGER_MODULE") and not gc.isenabled():
+        gc.freeze()
+        gc.enable()
 
 
 def get_entry_point() -> importlib.metadata.EntryPoint:

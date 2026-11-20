@@ -18,10 +18,16 @@ type PythonModuleBuild {
 
   pub moduleName: String!
 
-  new(contextDir: Directory! = directory, subPath: String! = ".", moduleName: String! = "") {
+  """
+  How the engine names the module, which says which class is its main object.
+  """
+  pub naming: ModuleNaming
+
+  new(contextDir: Directory! = directory, subPath: String! = ".", moduleName: String! = "", naming: ModuleNaming = null) {
     self.contextDir = contextDir
     self.subPath = subPath
     self.moduleName = moduleName
+    self.naming = naming
     self
   }
 
@@ -36,8 +42,8 @@ type PythonModuleBuild {
   let uvCacheVolume: String! = "modpython-uv"
   let pipCacheVolume: String! = "modpython-pip"
 
-  let defaultBaseImage: String! = "python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170"
-  let defaultUvImage: String! = "ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336"
+  let defaultBaseImage: String! = "python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f"
+  let defaultUvImage: String! = "ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85"
   let workspaceReader: String! { source.file("sdk/entrypoint/workspace_reader.py").contents }
 
   """
@@ -70,18 +76,77 @@ type PythonModuleBuild {
         .withEnvVariable("UV_COMPILE_BYTECODE", "1")
         # Bytecode keyed on its source's hash rather than the time uv copied
         # the source, so the same inputs build the same layer, byte for byte.
-        .withEnvVariable("PYC_INVALIDATION_MODE", "CHECKED_HASH")
+        # Unchecked: the bytecode and its source only change together, in a
+        # new layer, and checking reads and hashes every source on each call.
+        .withEnvVariable("PYC_INVALIDATION_MODE", "UNCHECKED_HASH")
       let built = dependencies(compiled, source, cfg)
         .withWorkdir(join(contextDirPath, subPath))
         .withMountedDirectory(contextDirPath, withoutVenv)
         # Last, so the layers above are shared between modules.
         .withEnvVariable("DAGGER_MODULE", moduleName)
         .withEnvVariable("DAGGER_DEFAULT_PYTHON_PACKAGE", packageName)
-        .withEnvVariable("DAGGER_MAIN_OBJECT", mainObjectName(moduleName))
 
       install(built, source, cfg)
+        .withEnvVariable("DAGGER_MAIN_OBJECT", mainObject)
     }
   }
+
+  """
+  The class name of the module's main object: of the classes its code
+  decorates with @object_type, the one the engine takes.
+  """
+  let mainObject: String! {
+    if (naming == null) {
+      raise "module \"" + moduleName + "\" is built without the engine's naming of it"
+    } else {
+      let candidates = objectTypes
+      let main = naming.mainObject(candidates: candidates)
+      if (main == null) {
+        raise "module \"" + moduleName + "\": the engine takes none of its object types (" +
+          (if (candidates.length == 0) { "there are none" } else { candidates.join(", ") }) +
+          ") for its main object; name a class decorated with @object_type after the module"
+      } else {
+        main
+      }
+    }
+  }
+
+  """
+  The classes the module's own code decorates with @object_type, read from
+  its source with Python's ast rather than by importing it, so that it reads
+  the same whichever SDK version the module installs. A file this Python
+  can't parse is skipped: the module may never import it.
+  """
+  let objectTypes: [String!]! {
+    container
+      .from(defaultBaseImage)
+      .withMountedDirectory("/module", filesOf(
+        source,
+        include: ["src/**/*.py", "*.py"],
+        exclude: ["**/.venv", "**/__pycache__"],
+      ))
+      .withExec(["python", "-c", objectTypesScript, "/module"])
+      .stdout
+      .split("\n")
+      .filter { line => line != "" }
+  }
+
+  let objectTypesScript: String! = [
+    "import ast, pathlib, sys",
+    "def name(d):",
+    "    d = d.func if isinstance(d, ast.Call) else d",
+    "    return getattr(d, 'attr', getattr(d, 'id', ''))",
+    "found = set()",
+    "for path in pathlib.Path(sys.argv[1]).rglob('*.py'):",
+    "    try:",
+    "        tree = ast.parse(path.read_bytes(), str(path))",
+    "    except (SyntaxError, ValueError):",
+    "        continue",
+    "    for node in ast.walk(tree):",
+    "        if isinstance(node, ast.ClassDef) and any(name(d) == 'object_type' for d in node.decorator_list):",
+    "            found.add(node.name)",
+    "print('\\n'.join(sorted(found)))",
+  ].join("\n")
 
   """
   The workspace members of a scope's pyproject.toml, read as the build does.
@@ -90,45 +155,20 @@ type PythonModuleBuild {
     pyConfig(directory.withFile(projectCfg, pyproject), ".").members
   }
 
-  """
-  The class name of a module's main object, converted like the engine's builtin
-  Python runtime (strcase.ToCamel) so a module loads the same on both.
-  """
-  pub mainObjectName(name: String!): String! {
-    name
-      .trimSpace
-      .split("")
-      .reduce(CamelState(out: "", capNext: true, prevIsCap: false)) { state, c =>
-        let isCap = c.containsMatch("^[A-Z]$")
-        let isLow = c.containsMatch("^[a-z]$")
-        let isNum = c.containsMatch("^[0-9]$")
-        if (isCap or isLow) {
-          let v = if (state.capNext and isLow) {
-            c.toUpper
-          } else if (state.capNext == false and state.prevIsCap and isCap) {
-            c.toLower
-          } else {
-            c
-          }
-          CamelState(out: state.out + v, capNext: false, prevIsCap: isCap)
-        } else if (isNum) {
-          CamelState(out: state.out + c, capNext: true, prevIsCap: false)
-        } else {
-          CamelState(
-            out: state.out,
-            capNext: c == "_" or c == " " or c == "-" or c == ".",
-            prevIsCap: false,
-          )
-        }
-      }
-      .out
-  }
-
   let base(baseImage: String!, uvImage: String!, cfg: PyConfig!): Container! {
     let uvBins = container.from(uvImage).rootfs
 
     let ctr = container
       .from(baseImage)
+      # Most base images ship the standard library without its bytecode, and a
+      # call's writes do not last, so each call compiled what it imports.
+      # Best effort, for `python` on PATH only: a custom image without it or
+      # with a read-only standard library must still build.
+      .withExec(["python", "-c",
+        "import compileall, py_compile, re, sysconfig\n" +
+        "compileall.compile_dir(sysconfig.get_path('stdlib'), quiet=2, force=True, rx=re.compile('/site-packages/'),\n" +
+        "    invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)\n",
+      ], expect: ReturnType.ANY)
       # Informational only, in case a module finds them useful.
       .withEnvVariable("DAGGER_BASE_IMAGE", baseImage)
       .withEnvVariable("PYTHONUNBUFFERED", "1")
@@ -525,21 +565,5 @@ type PyConfig {
   """
   pub isScope: Boolean! {
     members.filter { member => member == "sdk" }.length > 0
-  }
-}
-
-"""
-Accumulator for the CamelCase conversion of a module name.
-"""
-type CamelState {
-  pub out: String!
-  pub capNext: Boolean!
-  pub prevIsCap: Boolean!
-
-  new(out: String! = "", capNext: Boolean! = true, prevIsCap: Boolean! = false) {
-    self.out = out
-    self.capNext = capNext
-    self.prevIsCap = prevIsCap
-    self
   }
 }

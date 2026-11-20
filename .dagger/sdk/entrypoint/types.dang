@@ -330,7 +330,7 @@ type ModuleTypes {
         .withFunction(
           function("wait_dagger_checks", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("Block until every Dagger check has landed as a successful GitHub commit\nstatus on `ref`.")
-            .withCachePolicy(FunctionCachePolicy.Never)
+            .withCachePolicy(FunctionCachePolicy.NEVER)
             .withArg("repo", typeDef.withKind(TypeDefKind.STRING_KIND), description: "GitHub repo as 'owner/name'")
             .withArg("ref", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Commit SHA to poll")
             .withArg("token", typeDef.withObject("Secret"), description: "GitHub token with read access")

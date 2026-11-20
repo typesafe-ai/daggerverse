@@ -19,7 +19,6 @@ import anyio.to_thread
 import typing_extensions
 from cattrs.cols import is_sequence
 
-from dagger.client._core import snake_to_camel
 from dagger.client.base import Type
 from dagger.mod._arguments import DefaultAddress, DefaultPath, Deprecated, Ignore, Name
 from dagger.mod._types import ContextPath
@@ -44,16 +43,6 @@ class EnumMemberDoc:
 
 async def await_maybe(value: AwaitableOrValue[T]) -> T:
     return await value if inspect.iscoroutine(value) else cast(T, value)
-
-
-def to_pascal_case(s: str) -> str:
-    """Convert a string to PascalCase."""
-    return snake_to_camel(s.replace("-", "_"))
-
-
-def to_camel_case(s: str) -> str:
-    """Convert a string to camelCase."""
-    return snake_to_camel(s.replace("-", "_"), upper=False)
 
 
 def normalize_name(name: str) -> str:

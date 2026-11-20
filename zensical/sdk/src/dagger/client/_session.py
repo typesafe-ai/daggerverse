@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import atexit
+import functools
 import logging
 import os
 import threading
@@ -7,7 +10,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Self
 
 import anyio
-import httpx
 from opentelemetry import propagate
 
 from dagger import telemetry
@@ -22,6 +24,8 @@ from dagger._managers import ResourceManager
 from dagger.client._config import ConnectConfig
 
 if TYPE_CHECKING:
+    import httpx
+
     from dagger.client._descriptor import Target
 
 logger = logging.getLogger(__name__)
@@ -44,10 +48,12 @@ class ConnectParams:
         if self.port < 1:
             msg = f"Invalid port value: {self.port}"
             raise ValueError(msg)
+        import httpx
+
         self.url = httpx.URL(f"http://127.0.0.1:{self.port}/query")
 
     @classmethod
-    def from_env(cls) -> "ConnectParams | None":
+    def from_env(cls) -> ConnectParams | None:
         if not (port := os.getenv("DAGGER_SESSION_PORT")):
             return None
         if not (token := os.getenv("DAGGER_SESSION_TOKEN")):
@@ -61,10 +67,18 @@ class ConnectParams:
             raise ClientConnectionError(msg) from e
 
 
-class TelemetryTransport(httpx.AsyncHTTPTransport):
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        propagate.inject(request.headers)
-        return await super().handle_async_request(request)
+@functools.cache
+def _telemetry_transport() -> type[httpx.AsyncHTTPTransport]:
+    # Defined on first use: httpx costs about 28 ms to import, and a module
+    # call that makes no API request never needs it.
+    import httpx
+
+    class TelemetryTransport(httpx.AsyncHTTPTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            propagate.inject(request.headers)
+            return await super().handle_async_request(request)
+
+    return TelemetryTransport
 
 
 class ClientSession(ResourceManager):
@@ -85,11 +99,13 @@ class ClientSession(ResourceManager):
         self._client: httpx.AsyncClient | None = None
 
     def _make_client(self) -> httpx.AsyncClient:
+        import httpx
+
         retry = self.cfg.retry
         return httpx.AsyncClient(
             auth=(self.conn.session_token, ""),
             timeout=self.cfg.timeout,
-            transport=TelemetryTransport(
+            transport=_telemetry_transport()(
                 retries=MAX_ATTEMPTS if retry and retry.connect else 0,
                 # Plain HTTP on loopback: the default TLS context costs ~70ms
                 # per process start and is never used.
@@ -115,6 +131,8 @@ class ClientSession(ResourceManager):
 
     async def execute(self, query: str) -> Any:
         """Send a query and return its data."""
+        import httpx
+
         client = await self.start()
         retry = self.cfg.retry
         attempts = MAX_ATTEMPTS if retry and retry.execute else 1
@@ -148,6 +166,8 @@ class ClientSession(ResourceManager):
 
 
 def _transport_message(e: httpx.TransportError) -> str:
+    import httpx
+
     if isinstance(e, httpx.TimeoutException):
         return (
             "Request timed out. Try setting a higher timeout value for this connection."
@@ -173,7 +193,7 @@ def _read_response(response: httpx.Response, query: str) -> Any:
         msg = f"Unexpected error response from engine: {errors!r}"
         raise TransportError(msg)
 
-    if response.status_code != httpx.codes.OK:
+    if response.status_code != 200:  # noqa: PLR2004 - httpx.codes.OK
         raise TransportError(_unexpected(response))
 
     return body.get("data")
@@ -189,7 +209,7 @@ class BaseConnection:
     session: ClientSession
     # Kept on the connection so the session dies with it, and so every
     # execution over one connection shares one load memo and name guard.
-    _as_session: "Session | None" = None
+    _as_session: Session | None = None
 
     async def _ready(self) -> ClientSession:
         """The session, once there is an engine behind it."""
@@ -348,7 +368,7 @@ class SharedConnection(BaseConnection):
 
 @dataclass(slots=True)
 class _Load:
-    target: "Target"
+    target: Target
     lock: anyio.Lock = field(default_factory=anyio.Lock)
     done: bool = False
 
@@ -404,7 +424,7 @@ class Session(BaseConnection):
             )
         raise AttributeError(msg, name=name, obj=self)
 
-    async def load(self, target: "Target") -> None:
+    async def load(self, target: Target) -> None:
         """Serve the module a target names, once per session."""
         entry = self._loads.setdefault(target.name, _Load(target))
         if entry.target != target:

@@ -1,5 +1,5 @@
 name = "setuptools-package-dir"
 
 [entrypoint]
-  kind = "dang"
-  source = "./sdk/entrypoint"
+kind = "dang"
+source = "./sdk/entrypoint"

@@ -1,3 +1,12 @@
+import gc as _gc
+import os as _os
+
+# A module's runtime container runs only the SDK's own short commands, which
+# import about 700 modules: collecting while they import costs about 15 ms per
+# call. dagger.mod.cli.load_module turns collection back on for user code.
+if _os.environ.get("DAGGER_MODULE"):
+    _gc.disable()
+
 import contextlib
 import functools as _functools
 import importlib as _importlib
@@ -9,15 +18,10 @@ import warnings as _warnings
 # Make sure to place exceptions first as they're dependencies of other imports.
 from dagger._exceptions import *
 
-# Engine provisioning (doesn't make sense in modules)
-with contextlib.suppress(ModuleNotFoundError):
-    from dagger.provisioning import *
-
 # Client connection
 from dagger.client import Session as Session
 from dagger.client import _session as _sessions
 from dagger.client._config import Retry as Retry
-from dagger.client._config import Timeout as Timeout
 from dagger.client._connection import connect as connect
 from dagger.client._connection import close as close
 
@@ -68,9 +72,43 @@ with contextlib.suppress(ModuleNotFoundError):
     from dagger.mod import *
 
 
+# Engine provisioning, loaded on first use: a module runtime never provisions,
+# and importing it there costs rich and platformdirs on every call.
+_PROVISIONING = (
+    "Config",
+    "Connection",
+    "DownloadError",
+    "ProvisionError",
+    "SessionError",
+    "connection",
+)
+
+
+def _provisioning(name: str) -> _typing.Any:
+    try:
+        provisioning = _importlib.import_module("dagger.provisioning")
+    except ModuleNotFoundError as e:
+        if not (e.name or "").startswith("dagger.provisioning"):
+            raise
+        return None
+    value = getattr(provisioning, name)
+    with contextlib.suppress(AttributeError):
+        value.__module__ = __name__
+    globals()[name] = value
+    return value
+
+
 def _lazy_names() -> list[str]:
     global_ = _global_client()
-    return ["dag", *(() if global_ is None else global_.__all__)]
+    provisioning = (
+        _PROVISIONING if _importlib_util.find_spec("dagger.provisioning") else ()
+    )
+    return [
+        "dag",
+        "Timeout",
+        *provisioning,
+        *(() if global_ is None else global_.__all__),
+    ]
 
 
 def __dir__() -> list[str]:
@@ -81,6 +119,14 @@ def __getattr__(name: str) -> _typing.Any:
     """Names of the global client, or where a name of the legacy bindings went."""
     if name == "dag":
         return _sessions.default_session()
+    if name in _PROVISIONING and (value := _provisioning(name)) is not None:
+        return value
+    if name == "Timeout":
+        # Through the client config, which defines it on first use.
+        from dagger.client import _config
+
+        globals()[name] = value = _config.Timeout
+        return value
     if name == "__all__":
         # What a star import took when these names were globals.
         public = (n for n in globals() if not n.startswith("_"))
