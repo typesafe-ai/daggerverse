@@ -8,7 +8,7 @@ type ModuleTypes {
         .withFunction(
           function("wait_for_dagger_checks", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("Wait for every Dagger check in the current workspace to succeed.\n\nThe expected status set is the workspace's check paths: Dagger Cloud\npublishes one GitHub status per path (a collection's check is one\npath, not one per item), with the path as the status `context`.")
-            .withCachePolicy(FunctionCachePolicy.Never)
+            .withCachePolicy(FunctionCachePolicy.NEVER)
             .withArg("repo", typeDef.withKind(TypeDefKind.STRING_KIND), description: "GitHub repo as 'owner/name'")
             .withArg("ref", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Commit SHA to poll")
             .withArg("token", typeDef.withObject("Secret"), description: "GitHub token with read access")
@@ -21,7 +21,7 @@ type ModuleTypes {
         .withFunction(
           function("wait_for_statuses", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("Wait until every status context in `checks` and every check-run in\n`check_runs` succeeds on `ref`.")
-            .withCachePolicy(FunctionCachePolicy.Never)
+            .withCachePolicy(FunctionCachePolicy.NEVER)
             .withArg("repo", typeDef.withKind(TypeDefKind.STRING_KIND), description: "GitHub repo as 'owner/name'")
             .withArg("ref", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Commit SHA to poll")
             .withArg("token", typeDef.withObject("Secret"), description: "GitHub token with read access")

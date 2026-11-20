@@ -1,6 +1,9 @@
 import dataclasses
+import functools
+import typing
 
-import httpx
+if typing.TYPE_CHECKING:
+    import httpx
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
@@ -23,25 +26,44 @@ class Retry:
     execute: bool = True
 
 
-class Timeout(httpx.Timeout):
-    """
-    Timeout configuration.
+@functools.cache
+def _timeout_class() -> "type[httpx.Timeout]":
+    # Defined on first use: httpx costs about 28 ms to import, and a module
+    # call that makes no API request never needs it.
+    import httpx
 
-    Examples::
+    class Timeout(httpx.Timeout):
+        """
+        Timeout configuration.
 
-        Timeout(None)  # No timeouts.
-        Timeout(5.0)  # 5s timeout on all operations.
-        Timeout(None, connect=5.0)  # 5s timeout on connect, no other timeouts.
-        Timeout(5.0, connect=10.0)  # 10s timeout on connect. 5s timeout elsewhere.
-        Timeout(5.0, pool=None)  # No timeout on acquiring connection from pool.
-    """
+        Examples::
 
-    @classmethod
-    def default(cls) -> "Timeout":
-        return cls(None, connect=10.0)
+            Timeout(None)  # No timeouts.
+            Timeout(5.0)  # 5s timeout on all operations.
+            Timeout(None, connect=5.0)  # 5s timeout on connect, no other timeouts.
+            Timeout(5.0, connect=10.0)  # 10s timeout on connect. 5s timeout elsewhere.
+            Timeout(5.0, pool=None)  # No timeout on acquiring connection from pool.
+        """
+
+        @classmethod
+        def default(cls) -> "Timeout":
+            return cls(None, connect=10.0)
+
+    Timeout.__module__ = __name__
+    Timeout.__qualname__ = "Timeout"
+    return Timeout
+
+
+def __getattr__(name: str) -> typing.Any:
+    if name == "Timeout":
+        return _timeout_class()
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
 class ConnectConfig:
-    timeout: Timeout | None = dataclasses.field(default_factory=Timeout.default)
+    timeout: "httpx.Timeout | None" = dataclasses.field(
+        default_factory=lambda: _timeout_class().default()
+    )
     retry: Retry | None = dataclasses.field(default_factory=Retry)

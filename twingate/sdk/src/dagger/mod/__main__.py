@@ -1,10 +1,13 @@
 """Commands the generated entrypoint runs in the module's container."""
 
 import argparse
+import atexit
 import json
 import logging
+import os
 import pathlib
 import sys
+import threading
 from typing import Any
 
 import anyio
@@ -114,5 +117,21 @@ async def _dispatch(request: dict[str, Any]) -> Any:
     return await load_module().dispatch(request)
 
 
+def _exit(code: int) -> None:
+    """Exit as a normal exit does, but skip tearing the interpreter down.
+
+    The teardown frees every object the imports made, about 50 ms per call,
+    and nothing reads the process after it: the result is written and closed,
+    and telemetry is flushed.
+    """
+    for thread in threading.enumerate():
+        if thread is not threading.main_thread() and not thread.daemon:
+            thread.join()
+    atexit._run_exitfuncs()  # noqa: SLF001 - os._exit skips atexit handlers
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit(main())

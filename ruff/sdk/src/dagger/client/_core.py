@@ -43,20 +43,7 @@ Obj_T = TypeVar("Obj_T", bound=Type)
 
 INDENT = "  "
 
-_SNAKE_TO_CAMEL_RE = re.compile(r"(_)([a-z\d])")
 _ENUM_NAME_RE = re.compile(r"[_A-Za-z][_0-9A-Za-z]*")
-
-
-def snake_to_camel(s: str, upper: bool = True) -> str:
-    """Convert from snake_case to CamelCase.
-
-    If upper is set, then convert to upper CamelCase, otherwise the first
-    character keeps its case.
-    """
-    s = _SNAKE_TO_CAMEL_RE.sub(lambda m: m.group(2).upper(), s)
-    if upper:
-        s = s[:1].upper() + s[1:]
-    return s
 
 
 class EnumName(str):
@@ -151,14 +138,18 @@ def _enum_literal(value: enum.Enum | EnumName) -> str:
 
 
 def _input_literal(obj: Input) -> str:
-    # The generator records only the GraphQL names snake_to_camel can't derive.
+    # The generator records each field's GraphQL name.
     names = dict(getattr(type(obj), "_graphql_names", ()))
     fields = []
     for f in dataclasses.fields(obj):
         value = getattr(obj, f.name)
         if f.default is not MISSING and value == f.default:
             continue
-        name = names.get(f.name) or snake_to_camel(f.name, upper=False)
+        try:
+            name = names[f.name]
+        except KeyError:
+            msg = f"{type(obj).__name__} records no GraphQL name for {f.name!r}"
+            raise InvalidQueryError(msg) from None
         fields.append(f"{name}: {to_literal(value)}")
     return "{" + ", ".join(fields) + "}"
 

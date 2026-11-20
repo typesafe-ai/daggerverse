@@ -35,7 +35,7 @@ _TARGET = _Target(name=NAME, ref=REF, pin=PIN)
 """The module that this client loads on first use."""
 
 
-class Github(_Type):
+class GitHub(_Type):
 
     async def github_api(self) -> str:
         """Base URL of the GitHub REST API.
@@ -59,7 +59,7 @@ class Github(_Type):
         return await _ctx.execute(str)
 
     async def id(self) -> str:
-        """A unique identifier for this Github.
+        """A unique identifier for this GitHub.
 
         Note
         ----
@@ -86,17 +86,17 @@ class Github(_Type):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def status_monitor(self) -> "GithubStatusMonitor":
+    def status_monitor(self) -> "GitHubStatusMonitor":
         """
         Poll GitHub commit statuses and check runs until a final verdict is
         reached.
         """
         _args: list[_Arg] = []
         _ctx = self._select("statusMonitor", _args)
-        return GithubStatusMonitor(_ctx)
+        return GitHubStatusMonitor(_ctx)
 
 
-class GithubStatusMonitor(_Type):
+class GitHubStatusMonitor(_Type):
 
     async def github_api(self) -> str:
         """Base URL of the GitHub REST API.
@@ -120,7 +120,7 @@ class GithubStatusMonitor(_Type):
         return await _ctx.execute(str)
 
     async def id(self) -> str:
-        """A unique identifier for this GithubStatusMonitor.
+        """A unique identifier for this GitHubStatusMonitor.
 
         Note
         ----
@@ -192,21 +192,21 @@ class GithubStatusMonitor(_Type):
             If the API returns an error.
         """
         if not (isinstance(repo, str)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "repo", repo, "str")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "repo", repo, "str")
         if not (isinstance(ref, str)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "ref", ref, "str")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "ref", ref, "str")
         if not (isinstance(token, Secret)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "token", token, "Secret")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "token", token, "Secret")
         if not (isinstance(poll_interval, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "poll_interval", poll_interval, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "poll_interval", poll_interval, "int")
         if not (isinstance(progress_interval, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "progress_interval", progress_interval, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "progress_interval", progress_interval, "int")
         if not (isinstance(timeout, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "timeout", timeout, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "timeout", timeout, "int")
         if not (isinstance(discovery_timeout, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "discovery_timeout", discovery_timeout, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "discovery_timeout", discovery_timeout, "int")
         if not (isinstance(fail_fast, bool)):
-            raise _type_error("GithubStatusMonitor.wait_for_dagger_checks", "fail_fast", fail_fast, "bool")
+            raise _type_error("GitHubStatusMonitor.wait_for_dagger_checks", "fail_fast", fail_fast, "bool")
         _args = [
             _Arg("repo", repo),
             _Arg("ref", ref),
@@ -266,25 +266,25 @@ class GithubStatusMonitor(_Type):
             If the API returns an error.
         """
         if not (isinstance(repo, str)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "repo", repo, "str")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "repo", repo, "str")
         if not (isinstance(ref, str)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "ref", ref, "str")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "ref", ref, "str")
         if not (isinstance(token, Secret)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "token", token, "Secret")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "token", token, "Secret")
         if not (checks is None or (isinstance(checks, list) and all(isinstance(_v0, str) for _v0 in checks))):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "checks", checks, "list[str] | None")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "checks", checks, "list[str] | None")
         if not (check_runs is None or (isinstance(check_runs, list) and all(isinstance(_v0, str) for _v0 in check_runs))):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "check_runs", check_runs, "list[str] | None")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "check_runs", check_runs, "list[str] | None")
         if not (isinstance(poll_interval, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "poll_interval", poll_interval, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "poll_interval", poll_interval, "int")
         if not (isinstance(progress_interval, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "progress_interval", progress_interval, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "progress_interval", progress_interval, "int")
         if not (isinstance(timeout, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "timeout", timeout, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "timeout", timeout, "int")
         if not (isinstance(discovery_timeout, int)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "discovery_timeout", discovery_timeout, "int")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "discovery_timeout", discovery_timeout, "int")
         if not (isinstance(fail_fast, bool)):
-            raise _type_error("GithubStatusMonitor.wait_for_statuses", "fail_fast", fail_fast, "bool")
+            raise _type_error("GitHubStatusMonitor.wait_for_statuses", "fail_fast", fail_fast, "bool")
         _args = [
             _Arg("repo", repo),
             _Arg("ref", ref),
@@ -301,7 +301,7 @@ class GithubStatusMonitor(_Type):
         return await _ctx.execute(str)
 
 
-def github(*, github_api: str = 'https://api.github.com', session: _Session | None = None,) -> Github:
+def github(*, github_api: str = 'https://api.github.com', session: _Session | None = None,) -> GitHub:
     """Parameters
     ----------
     github_api:
@@ -312,11 +312,11 @@ def github(*, github_api: str = 'https://api.github.com', session: _Session | No
     _args = [
         _Arg("githubApi", github_api, 'https://api.github.com'),
     ]
-    return _client_root(Github, _TARGET, "github", _args, session=session)
+    return _client_root(GitHub, _TARGET, "github", _args, session=session)
 
 
 __all__ = [
-    "Github",
-    "GithubStatusMonitor",
+    "GitHub",
+    "GitHubStatusMonitor",
     "github",
 ]

@@ -1,10 +1,11 @@
+import enum
 import functools
 import logging
 import typing
 
 from cattrs.preconf.json import make_converter as make_json_converter
 
-from dagger.client._core import Arg, Context, configure_converter_enum
+from dagger.client._core import Arg, Context, EnumName, configure_converter_enum
 from dagger.client._guards import is_id_type, is_id_type_subclass
 from dagger.client.base import Interface, Scalar, Type
 from dagger.mod import _api
@@ -16,10 +17,13 @@ from dagger.mod._utils import (
     is_dagger_interface_type,
     is_dagger_object_type,
     list_of,
+    non_null,
     strip_annotations,
     syncify,
-    to_camel_case,
 )
+
+if typing.TYPE_CHECKING:
+    from dagger.mod._module import Module
 
 logger = logging.getLogger(__name__)
 
@@ -81,18 +85,25 @@ def to_interface_impl(proto: type) -> type[Interface]:
         raise TypeError(msg)
 
     methods = {
-        func.original_name: make_method(name, func, proto)
+        func.original_name: make_method(name, func, proto, mod)
         for name, func in typ.functions.items()
     }
 
+    # The class name is the interface's schema name: it's what the client
+    # selects the type by (see `Type._graphql_name`).
     return type(
-        mod.main_cls.__name__ + proto.__name__,
+        mod.names.type_name(proto.__name__),
         (Interface,),
         {"_declaration": proto, **methods},
     )
 
 
-def make_method(name: str, func: Function, proto: type) -> typing.Callable:  # noqa: C901
+def make_method(  # noqa: C901
+    name: str,
+    func: Function,
+    proto: type,
+    mod: "Module",
+) -> typing.Callable:
     """Generate method for interface client binding."""
     ret_type = func.return_type
     _is_self = ret_type is proto
@@ -100,17 +111,49 @@ def make_method(name: str, func: Function, proto: type) -> typing.Callable:  # n
     if not _is_self and is_dagger_interface_type(ret_type):
         ret_type = to_interface_impl(ret_type)
 
-    # Need to convert names to GraphQL convention for query builder
-    gql_name = to_camel_case(name)
+    # The interface's field and argument names, as the engine names them.
+    names = mod.names
+    gql_name = names.field_name(name)
+    # Keyed by Python name, which is what the call binds.
     gql_arg_names = {
-        param.name: to_camel_case(param.name) for param in func.parameters.values()
+        py_name: names.field_name(param.name)
+        for py_name, param in func.parameters.items()
     }
+
+    def wire(value: typing.Any) -> typing.Any:
+        """A value as it goes over the wire, by the engine's names.
+
+        A member of one of the module's own enums is sent by the name the
+        engine gave it (``arm64`` is ``ARM64``); the client sends anything
+        else as it always does, a member by its Python name.
+        """
+        if isinstance(value, list | tuple):
+            return [wire(v) for v in value]
+        if isinstance(value, enum.Enum) and mod.is_own_enum(type(value)):
+            return EnumName(names.enum_member_name(value.name))
+        return value
+
+    def own_enum(t: typing.Any) -> type[enum.Enum] | None:
+        """The module's own enum a result is, or None."""
+        t = non_null(strip_annotations(t))
+        return t if mod.is_own_enum(t) else None
+
+    def read(cls: type[enum.Enum], value: str | None) -> enum.Enum | None:
+        """A member of one of the module's own enums, from its engine name."""
+        if value is None:
+            return None
+        members = {names.enum_member_name(m.name): m for m in cls}
+        try:
+            return members[value]
+        except KeyError:
+            msg = f"Unexpected member {value!r} of enum '{cls.__name__}'"
+            raise TypeError(msg) from None
 
     # Generate query builder selection based on inputs
     def select(obj: Interface, *args, **kwargs):
         bound = func.signature.bind(obj, *args, **kwargs)
         args = [
-            Arg(name=gql_arg_names[arg_name], value=arg_value)
+            Arg(name=gql_arg_names[arg_name], value=wire(arg_value))
             for arg_name, arg_value in bound.arguments.items()
             if arg_name != "self"
         ]
@@ -136,7 +179,13 @@ def make_method(name: str, func: Function, proto: type) -> typing.Callable:  # n
     # Anything else triggers execution (async)
     async def exec_method(self, *args, **kwargs):
         _ctx = select(self, *args, **kwargs)
+        # The module's own enums come back by the names the engine gave them.
+        if enum_cls := own_enum(ret_type):
+            return read(enum_cls, await _ctx.execute(str | None))
         if cls := list_of(ret_type):
+            if enum_cls := own_enum(cls):
+                values = await _ctx.execute(list[str | None])
+                return [read(enum_cls, v) for v in values]
             if cls is proto:
                 cls = type(self)
             elif is_dagger_interface_type(cls):

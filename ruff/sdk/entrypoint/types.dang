@@ -19,7 +19,7 @@ type ModuleTypes {
         .withFunction(
           function("version", typeDef.withKind(TypeDefKind.STRING_KIND))
             .withDescription("The resolved ruff version.")
-            .withCachePolicy(FunctionCachePolicy.Default, timeToLive: "1h")
+            .withCachePolicy(FunctionCachePolicy.DEFAULT, timeToLive: "1h")
         )
         .withConstructor(
           function("", typeDef.withObject("Ruff"))

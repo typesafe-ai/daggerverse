@@ -216,11 +216,11 @@ class FileType(_Enum):
 class FunctionCachePolicy(_Enum):
     """The behavior configured for function result caching."""
 
-    Default = 'Default'
+    DEFAULT = 'DEFAULT'
 
-    Never = 'Never'
+    NEVER = 'NEVER'
 
-    PerSession = 'PerSession'
+    PER_SESSION = 'PER_SESSION'
 
 
 class GitPushDisposition(_Enum):
@@ -255,27 +255,21 @@ class IdentifierWordKind(_Enum):
 class ImageLayerCompression(_Enum):
     """Compression algorithm to use for image layers."""
 
-    EStarGZ = 'EStarGZ'
-    ESTARGZ = 'EStarGZ'
+    ESTARGZ = 'ESTARGZ'
 
-    Gzip = 'Gzip'
-    GZIP = 'Gzip'
+    GZIP = 'GZIP'
 
-    Uncompressed = 'Uncompressed'
-    UNCOMPRESSED = 'Uncompressed'
+    UNCOMPRESSED = 'UNCOMPRESSED'
 
-    Zstd = 'Zstd'
-    ZSTD = 'Zstd'
+    ZSTD = 'ZSTD'
 
 
 class ImageMediaTypes(_Enum):
     """Mediatypes to use in published or exported image metadata."""
 
-    DockerMediaTypes = 'DockerMediaTypes'
-    DOCKER = 'DockerMediaTypes'
+    DOCKER = 'DOCKER'
 
-    OCIMediaTypes = 'OCIMediaTypes'
-    OCI = 'OCIMediaTypes'
+    OCI = 'OCI'
 
 
 class LLMContentBlockKind(_Enum):
@@ -524,6 +518,8 @@ class BuildArg(_Input):
         if not (isinstance(self.value, str)):
             raise _type_error("BuildArg.__init__", "value", self.value, "str")
 
+    _graphql_names = (('name', 'name'), ('value', 'value'))
+
 
 @_dataclass(slots=True)
 class LLMContentBlockInput(_Input):
@@ -586,6 +582,8 @@ class LLMContentBlockInput(_Input):
         if not (self.tool_name is None or isinstance(self.tool_name, str)):
             raise _type_error("LLMContentBlockInput.__init__", "tool_name", self.tool_name, "str | None")
 
+    _graphql_names = (('kind', 'kind'), ('arguments', 'arguments'), ('call_id', 'callId'), ('content', 'content'), ('data', 'data'), ('errored', 'errored'), ('file', 'file'), ('mime_type', 'mimeType'), ('signature', 'signature'), ('text', 'text'), ('tool_name', 'toolName'))
+
 
 @_dataclass(slots=True)
 class LLMMessageOriginInput(_Input):
@@ -614,6 +612,8 @@ class LLMMessageOriginInput(_Input):
         if not (self.reply_to is None or isinstance(self.reply_to, str)):
             raise _type_error("LLMMessageOriginInput.__init__", "reply_to", self.reply_to, "str | None")
 
+    _graphql_names = (('kind', 'kind'), ('agent_name', 'agentName'), ('ref', 'ref'), ('reply_to', 'replyTo'))
+
 
 @_dataclass(slots=True)
 class PipelineLabel(_Input):
@@ -630,6 +630,8 @@ class PipelineLabel(_Input):
             raise _type_error("PipelineLabel.__init__", "name", self.name, "str")
         if not (isinstance(self.value, str)):
             raise _type_error("PipelineLabel.__init__", "value", self.value, "str")
+
+    _graphql_names = (('name', 'name'), ('value', 'value'))
 
 
 @_dataclass(slots=True)
@@ -652,6 +654,8 @@ class PortForward(_Input):
             raise _type_error("PortForward.__init__", "frontend", self.frontend, "int | None")
         if not (self.protocol is None or isinstance(self.protocol, NetworkProtocol)):
             raise _type_error("PortForward.__init__", "protocol", self.protocol, "NetworkProtocol | None")
+
+    _graphql_names = (('backend', 'backend'), ('frontend', 'frontend'), ('protocol', 'protocol'))
 
 
 @_runtime_checkable
@@ -3164,7 +3168,7 @@ class Cloud(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("traceURL", _args)
+        _ctx = self._select("traceUrl", _args)
         return await _ctx.execute(str)
 
 
@@ -3481,7 +3485,7 @@ class Container(_Type):
         _ctx = self._select("asService", _args)
         return Service(_ctx)
 
-    def as_tarball(self, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCIMediaTypes, source_date_epoch: int | None = None,) -> "File":
+    def as_tarball(self, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCI, source_date_epoch: int | None = None,) -> "File":
         """Package the container state as an OCI image, and return it as a tar
         archive
 
@@ -3523,7 +3527,7 @@ class Container(_Type):
         _args = [
             _Arg("platformVariants", [] if platform_variants is None else platform_variants, []),
             _Arg("forcedCompression", forced_compression, None),
-            _Arg("mediaTypes", media_types, ImageMediaTypes.OCIMediaTypes),
+            _Arg("mediaTypes", media_types, ImageMediaTypes.OCI),
             _Arg("sourceDateEpoch", source_date_epoch, None),
         ]
         _ctx = self._select("asTarball", _args)
@@ -3574,7 +3578,7 @@ class Container(_Type):
         _ctx = self._select("defaultArgs", _args)
         return await _ctx.execute(list[str])
 
-    def directory(self, path: str, *, expand: bool | None = False,) -> "Directory":
+    def directory(self, path: str, *, expand: bool | None = False, resolve_broken_symlinks: bool | None = False,) -> "Directory":
         """Retrieve a directory from the container's root filesystem
 
         Mounts are included.
@@ -3587,14 +3591,24 @@ class Container(_Type):
             Replace "${VAR}" or "$VAR" in the value of path according to the
             current environment variables defined in the container (e.g.
             "/$VAR/foo").
+        resolve_broken_symlinks:
+            Repair symlinks that directory selection would break. Resolve
+            targets across the root filesystem and directory or file mounts.
+            Preserve working relative links and links that already have no
+            target. Cache, volume, tmpfs, secret, and socket mounts cause an
+            error if selection, a resolved link, or mount target resolution
+            needs their contents.
         """
         if not (isinstance(path, str)):
             raise _type_error("Container.directory", "path", path, "str")
         if not (expand is None or isinstance(expand, bool)):
             raise _type_error("Container.directory", "expand", expand, "bool | None")
+        if not (resolve_broken_symlinks is None or isinstance(resolve_broken_symlinks, bool)):
+            raise _type_error("Container.directory", "resolve_broken_symlinks", resolve_broken_symlinks, "bool | None")
         _args = [
             _Arg("path", path),
             _Arg("expand", expand, False),
+            _Arg("resolveBrokenSymlinks", resolve_broken_symlinks, False),
         ]
         _ctx = self._select("directory", _args)
         return Directory(_ctx)
@@ -3733,22 +3747,22 @@ class Container(_Type):
         _ctx = self._select("exitCode", _args)
         return await _ctx.execute(int)
 
-    def experimental_with_all_gp_us(self) -> _Self:
+    def experimental_with_all_gpus(self) -> _Self:
         """Configures all available GPUs on the host to be accessible to this
         container.
 
         This currently works for Nvidia devices only.
 
         .. deprecated::
-            Use "withGPU" instead.
+            Use "withGpu" instead.
         """
         _warnings.warn(
-            "Method \"experimental_with_all_gp_us\" is deprecated: Use \"withGPU\" instead.",
+            "Method \"experimental_with_all_gpus\" is deprecated: Use \"withGpu\" instead.",
             DeprecationWarning,
             stacklevel=4,
         )                
         _args: list[_Arg] = []
-        _ctx = self._select("experimentalWithAllGPUs", _args)
+        _ctx = self._select("experimentalWithAllGpus", _args)
         return Container(_ctx)
 
     def experimental_with_gpu(self, devices: list[str]) -> _Self:
@@ -3758,7 +3772,7 @@ class Container(_Type):
         This currently works for Nvidia devices only.
 
         .. deprecated::
-            Use "withGPU" instead, which exposes all GPUs available on the
+            Use "withGpu" instead, which exposes all GPUs available on the
             host.
 
         Parameters
@@ -3767,7 +3781,7 @@ class Container(_Type):
             List of devices to be accessible to this container.
         """
         _warnings.warn(
-            "Method \"experimental_with_gpu\" is deprecated: Use \"withGPU\" instead, which exposes all GPUs available on the host.",
+            "Method \"experimental_with_gpu\" is deprecated: Use \"withGpu\" instead, which exposes all GPUs available on the host.",
             DeprecationWarning,
             stacklevel=4,
         )                
@@ -3776,10 +3790,10 @@ class Container(_Type):
         _args = [
             _Arg("devices", devices),
         ]
-        _ctx = self._select("experimentalWithGPU", _args)
+        _ctx = self._select("experimentalWithGpu", _args)
         return Container(_ctx)
 
-    async def export(self, path: str, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCIMediaTypes, expand: bool | None = False, source_date_epoch: int | None = None,) -> str:
+    async def export(self, path: str, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCI, expand: bool | None = False, source_date_epoch: int | None = None,) -> str:
         """Writes the container as an OCI tarball to the destination file path on
         the host.
 
@@ -3849,14 +3863,14 @@ class Container(_Type):
             _Arg("path", path),
             _Arg("platformVariants", [] if platform_variants is None else platform_variants, []),
             _Arg("forcedCompression", forced_compression, None),
-            _Arg("mediaTypes", media_types, ImageMediaTypes.OCIMediaTypes),
+            _Arg("mediaTypes", media_types, ImageMediaTypes.OCI),
             _Arg("expand", expand, False),
             _Arg("sourceDateEpoch", source_date_epoch, None),
         ]
         _ctx = self._select("export", _args)
         return await _ctx.execute(str)
 
-    async def export_image(self, name: str, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCIMediaTypes, source_date_epoch: int | None = None,) -> Void:
+    async def export_image(self, name: str, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCI, source_date_epoch: int | None = None,) -> Void:
         """Exports the container as an image to the host's container image store.
 
         Parameters
@@ -3915,7 +3929,7 @@ class Container(_Type):
             _Arg("name", name),
             _Arg("platformVariants", [] if platform_variants is None else platform_variants, []),
             _Arg("forcedCompression", forced_compression, None),
-            _Arg("mediaTypes", media_types, ImageMediaTypes.OCIMediaTypes),
+            _Arg("mediaTypes", media_types, ImageMediaTypes.OCI),
             _Arg("sourceDateEpoch", source_date_epoch, None),
         ]
         _ctx = self._select("exportImage", _args)
@@ -4000,7 +4014,7 @@ class Container(_Type):
             _Arg("version", version, ''),
             _Arg("registryService", registry_service, None),
             _Arg("protocol", protocol, None),
-            _Arg("insecureSkipTLSVerify", insecure_skip_tls_verify, False),
+            _Arg("insecureSkipTlsVerify", insecure_skip_tls_verify, False),
             _Arg("noLock", no_lock, False),
         ]
         _ctx = self._select("from", _args)
@@ -4115,7 +4129,7 @@ class Container(_Type):
         _ctx = self._select("labels", _args)
         return await _ctx.execute_object_list(Label)
 
-    def layer(self, id: str, *, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCIMediaTypes,) -> "File":
+    def layer(self, id: str, *, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCI,) -> "File":
         """Returns the image layer or configuration blob with the given digest as
         a File.
 
@@ -4144,12 +4158,12 @@ class Container(_Type):
         _args = [
             _Arg("id", id),
             _Arg("forcedCompression", forced_compression, None),
-            _Arg("mediaTypes", media_types, ImageMediaTypes.OCIMediaTypes),
+            _Arg("mediaTypes", media_types, ImageMediaTypes.OCI),
         ]
         _ctx = self._select("layer", _args)
         return File(_ctx)
 
-    def manifest(self, *, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCIMediaTypes,) -> "File":
+    def manifest(self, *, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCI,) -> "File":
         """Computes and returns the manifest for this container as a File.
 
         Parameters
@@ -4171,7 +4185,7 @@ class Container(_Type):
             raise _type_error("Container.manifest", "media_types", media_types, "ImageMediaTypes | None")
         _args = [
             _Arg("forcedCompression", forced_compression, None),
-            _Arg("mediaTypes", media_types, ImageMediaTypes.OCIMediaTypes),
+            _Arg("mediaTypes", media_types, ImageMediaTypes.OCI),
         ]
         _ctx = self._select("manifest", _args)
         return File(_ctx)
@@ -4218,7 +4232,7 @@ class Container(_Type):
         _ctx = self._select("platform", _args)
         return await _ctx.execute(Platform)
 
-    async def publish(self, address: str, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCIMediaTypes, registry_service: "Service | None" = None, protocol: RegistryProtocol | None = None, insecure_skip_tls_verify: bool | None = False, source_date_epoch: int | None = None,) -> str:
+    async def publish(self, address: str, *, platform_variants: "list[Container] | None" = None, forced_compression: ImageLayerCompression | None = None, media_types: ImageMediaTypes | None = ImageMediaTypes.OCI, registry_service: "Service | None" = None, protocol: RegistryProtocol | None = None, insecure_skip_tls_verify: bool | None = False, source_date_epoch: int | None = None,) -> str:
         """Package the container state as an OCI image, and publish it to a
         registry
 
@@ -4299,10 +4313,10 @@ class Container(_Type):
             _Arg("address", address),
             _Arg("platformVariants", [] if platform_variants is None else platform_variants, []),
             _Arg("forcedCompression", forced_compression, None),
-            _Arg("mediaTypes", media_types, ImageMediaTypes.OCIMediaTypes),
+            _Arg("mediaTypes", media_types, ImageMediaTypes.OCI),
             _Arg("registryService", registry_service, None),
             _Arg("protocol", protocol, None),
-            _Arg("insecureSkipTLSVerify", insecure_skip_tls_verify, False),
+            _Arg("insecureSkipTlsVerify", insecure_skip_tls_verify, False),
             _Arg("sourceDateEpoch", source_date_epoch, None),
         ]
         _ctx = self._select("publish", _args)
@@ -5125,7 +5139,7 @@ class Container(_Type):
         to run with GPU support enabled.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("withGPU", _args)
+        _ctx = self._select("withGpu", _args)
         return Container(_ctx)
 
     def with_label(self, name: str, value: str) -> _Self:
@@ -6199,6 +6213,24 @@ class CurrentModule(_Type):
         _ctx = self._select("name", _args)
         return await _ctx.execute(str)
 
+    def naming(self) -> "ModuleNaming":
+        """The names the engine gives this module's own declarations: the same as
+        its source's ModuleSource.naming, for module runtimes, which have no
+        ModuleSource.
+
+        It answers for the module under its own name
+        (ModuleSource.moduleName), by the naming rules of the version the
+        module is named by. A workspace or toolchain that loads the module
+        under another name namespaces its types under that name instead, which
+        this doesn't reflect.
+
+        .. caution::
+            Experimental: Identifier casing APIs are likely to change.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("naming", _args)
+        return ModuleNaming(_ctx)
+
     def source(self) -> "Directory":
         """The directory containing the module's source code loaded into the
         engine (plus any generated code that may have been created).
@@ -6567,18 +6599,25 @@ class Directory(_Type):
         _ctx = self._select("digest", _args)
         return await _ctx.execute(str)
 
-    def directory(self, path: str) -> _Self:
+    def directory(self, path: str, *, resolve_broken_symlinks: bool | None = False,) -> _Self:
         """Retrieves a directory at the given path.
 
         Parameters
         ----------
         path:
             Location of the directory to retrieve. Example: "/src"
+        resolve_broken_symlinks:
+            Repair symlinks that directory selection would break. Copy targets
+            from this directory into the result. Preserve working relative
+            links and links that already have no target.
         """
         if not (isinstance(path, str)):
             raise _type_error("Directory.directory", "path", path, "str")
+        if not (resolve_broken_symlinks is None or isinstance(resolve_broken_symlinks, bool)):
+            raise _type_error("Directory.directory", "resolve_broken_symlinks", resolve_broken_symlinks, "bool | None")
         _args = [
             _Arg("path", path),
+            _Arg("resolveBrokenSymlinks", resolve_broken_symlinks, False),
         ]
         _ctx = self._select("directory", _args)
         return Directory(_ctx)
@@ -7311,6 +7350,32 @@ class Directory(_Type):
             _Arg("onConflict", on_conflict, PatchConflict.FAIL),
         ]
         _ctx = self._select("withPatchFile", _args)
+        return Directory(_ctx)
+
+    def with_platform(self, platform: Platform) -> _Self:
+        """Retrieves this directory, declared as made for the given platform.
+
+        Declare a result whose contents are the same whichever platform made
+        them, such as a Go package compiled for a platform by any platform's
+        Go toolchain. An engine of another platform that makes the same
+        directory for the same platform then finds this one, and the other way
+        around.
+
+        The contents are not checked: a declared result that depends on the
+        platform it was made on can be found where it doesn't belong.
+
+        Parameters
+        ----------
+        platform:
+            The platform the directory's contents are for (e.g.,
+            "linux/arm64").
+        """
+        if not (isinstance(platform, Platform)):
+            raise _type_error("Directory.with_platform", "platform", platform, "Platform")
+        _args = [
+            _Arg("platform", platform),
+        ]
+        _ctx = self._select("withPlatform", _args)
         return Directory(_ctx)
 
     def with_symlink(self, target: str, link_name: str) -> _Self:
@@ -8879,7 +8944,7 @@ class File(_Type):
     def as_json(self) -> "JSONValue":
         """Parse the file contents as JSON."""
         _args: list[_Arg] = []
-        _ctx = self._select("asJSON", _args)
+        _ctx = self._select("asJson", _args)
         return JSONValue(_ctx)
 
     def chown(self, owner: str) -> _Self:
@@ -9188,8 +9253,15 @@ class File(_Type):
         _ctx = self._select("stat", _args)
         return Stat(_ctx)
 
-    async def sync(self) -> _Self:
+    async def sync(self, *, key_by_content: bool | None = False,) -> _Self:
         """Force evaluation in the engine.
+
+        Parameters
+        ----------
+        key_by_content:
+            Also key the file by its content, so that what consumes it is
+            cached across any two recipes that produce the same file. This
+            hashes the file unless it already has a content key.
 
         Raises
         ------
@@ -9198,7 +9270,11 @@ class File(_Type):
         QueryError
             If the API returns an error.
         """
-        _args: list[_Arg] = []
+        if not (key_by_content is None or isinstance(key_by_content, bool)):
+            raise _type_error("File.sync", "key_by_content", key_by_content, "bool | None")
+        _args = [
+            _Arg("keyByContent", key_by_content, False),
+        ]
         return await self._ctx.execute_sync(self, "sync", _args)
 
     def __await__(self):
@@ -10105,7 +10181,7 @@ class GeneratedCode(_Type):
         _args = [
             _Arg("paths", paths),
         ]
-        _ctx = self._select("withVCSGeneratedPaths", _args)
+        _ctx = self._select("withVcsGeneratedPaths", _args)
         return GeneratedCode(_ctx)
 
     def with_vcs_ignored_paths(self, paths: list[str]) -> _Self:
@@ -10115,7 +10191,7 @@ class GeneratedCode(_Type):
         _args = [
             _Arg("paths", paths),
         ]
-        _ctx = self._select("withVCSIgnoredPaths", _args)
+        _ctx = self._select("withVcsIgnoredPaths", _args)
         return GeneratedCode(_ctx)
 
     def with_(self, cb: _Callable[["GeneratedCode"], "GeneratedCode"]) -> "GeneratedCode":
@@ -10246,7 +10322,7 @@ class GitBundle(_Type):
         _ctx = self._select("objectFormat", _args)
         return await _ctx.execute(str)
 
-    async def prerequisite_sh_as(self) -> list[str]:
+    async def prerequisite_shas(self) -> list[str]:
         """Commits that must already exist wherever this bundle is applied.
 
         Returns
@@ -10264,7 +10340,7 @@ class GitBundle(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("prerequisiteSHAs", _args)
+        _ctx = self._select("prerequisiteShas", _args)
         return await _ctx.execute(list[str])
 
     async def refs(self) -> list["GitBundleRef"]:
@@ -10768,7 +10844,7 @@ class GitCommit(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("treeSHA", _args)
+        _ctx = self._select("treeSha", _args)
         return await _ctx.execute(str)
 
 
@@ -10841,7 +10917,7 @@ class GitPushResult(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("previousSHA", _args)
+        _ctx = self._select("previousSha", _args)
         return await _ctx.execute(str)
 
     async def ref(self) -> str:
@@ -10921,7 +10997,7 @@ class GitRef(_Type):
         """The resolved commit id at this ref.
 
         .. deprecated::
-            Use "commitSHA" instead.
+            Use "commitSha" instead.
 
         Returns
         -------
@@ -10938,7 +11014,7 @@ class GitRef(_Type):
             If the API returns an error.
         """
         _warnings.warn(
-            "Method \"commit\" is deprecated: Use \"commitSHA\" instead.",
+            "Method \"commit\" is deprecated: Use \"commitSha\" instead.",
             DeprecationWarning,
             stacklevel=4,
         )                
@@ -10964,7 +11040,7 @@ class GitRef(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("commitSHA", _args)
+        _ctx = self._select("commitSha", _args)
         return await _ctx.execute(str)
 
     def common_ancestor(self, other: _Self) -> _Self:
@@ -11138,7 +11214,7 @@ class GitRef(_Type):
             _Arg("to", to, None),
             _Arg("remote", remote, ''),
             _Arg("branch", branch, ''),
-            _Arg("expectedRemoteSHA", expected_remote_sha, ''),
+            _Arg("expectedRemoteSha", expected_remote_sha, ''),
         ]
         _ctx = self._select("push", _args)
         return GitPushResult(_ctx)
@@ -13442,7 +13518,7 @@ class LLM(_Type):
             _Arg("name", name),
             _Arg("service", service),
         ]
-        _ctx = self._select("withMCPServer", _args)
+        _ctx = self._select("withMcpServer", _args)
         return LLM(_ctx)
 
     def with_model(self, model: str, *, provider: str | None = None,) -> _Self:
@@ -14702,7 +14778,7 @@ class Module(_Type):
         hidden.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("introspectionSchemaJSON", _args)
+        _ctx = self._select("introspectionSchemaJson", _args)
         return File(_ctx)
 
     async def name(self) -> str:
@@ -14948,6 +15024,272 @@ class ModuleConfigClient(_Type):
         return await _ctx.execute(str)
 
 
+class ModuleNaming(_Type):
+    """The names the engine gives a module's own declarations, by the
+    naming rules of the version the module is named by.  Every list-taking
+    field answers in input order. """
+
+    async def enum_member_names(self, names: list[str]) -> list[str]:
+        """The schema names of enum members this module declares, in input order:
+        SCREAMING_SNAKE_CASE.
+
+        A name already written in GraphQL's enum member convention (HTTP2,
+        P_256) is kept as it is. With the engine's identifier naming rules,
+        Arm64 is ARM64 and GitHub is GITHUB; with the legacy strcase rules,
+        Arm64 is ARM_64.
+
+        Errors on a name the module's naming rules can't parse (non-ASCII, no
+        letters or digits, or over 256 bytes). The legacy rules name anything.
+
+        Parameters
+        ----------
+        names:
+            The enum member names as the module's source declares them.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(names, list) and all(isinstance(_v0, str) for _v0 in names)):
+            raise _type_error("ModuleNaming.enum_member_names", "names", names, "list[str]")
+        _args = [
+            _Arg("names", names),
+        ]
+        _ctx = self._select("enumMemberNames", _args)
+        return await _ctx.execute(list[str])
+
+    async def field_names(self, names: list[str]) -> list[str]:
+        """The schema names of functions, object fields and function arguments
+        this module declares, including interface functions and their
+        arguments, in input order.
+
+        With the engine's identifier naming rules, acronyms are written like
+        words: getURL is getUrl, baseURL is baseUrl, HTTPClient is httpClient.
+        With the legacy strcase rules, HTTPClient is httpclient and e2eTest is
+        e2ETest.
+
+        Errors on a name the module's naming rules can't parse (non-ASCII, no
+        letters or digits, or over 256 bytes). The legacy rules name anything.
+
+        Parameters
+        ----------
+        names:
+            The function, field and argument names as the module's source
+            declares them.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(names, list) and all(isinstance(_v0, str) for _v0 in names)):
+            raise _type_error("ModuleNaming.field_names", "names", names, "list[str]")
+        _args = [
+            _Arg("names", names),
+        ]
+        _ctx = self._select("fieldNames", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this ModuleNaming.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    async def main_object(self, candidates: list[str]) -> str | None:
+        """Which of the candidates, the names of objects this module declares,
+        the engine takes as the module's main object; null if none.
+
+        The engine finds the main object by the module's name, in any casing:
+        the first candidate, in input order, whose name normalizes to the same
+        type name as the module's, or is spelled as that type name already
+        (K8STools for module k8s-tools, by either rules: strcase spells
+        k8s-tools K8STools, though it would normalize K8STools again to
+        K8Stools). Failing that, with the engine's identifier naming rules
+        only, the only candidate spelled the same once lowercased without word
+        boundaries (Sha256Sum for module sha256sum); several such candidates
+        are ambiguous, and give null.
+
+        Errors on a name the module's naming rules can't parse (non-ASCII, no
+        letters or digits, or over 256 bytes). The legacy rules name anything.
+
+        Parameters
+        ----------
+        candidates:
+            The object names as the module's source declares them.
+
+        Returns
+        -------
+        str | None
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(candidates, list) and all(isinstance(_v0, str) for _v0 in candidates)):
+            raise _type_error("ModuleNaming.main_object", "candidates", candidates, "list[str]")
+        _args = [
+            _Arg("candidates", candidates),
+        ]
+        _ctx = self._select("mainObject", _args)
+        return await _ctx.execute(str | None)
+
+    async def name(self) -> str:
+        """The module's name, which namespaces its types.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("name", _args)
+        return await _ctx.execute(str)
+
+    async def original_name(self) -> str:
+        """The module's original name, which its main object and namespaced type
+        names are spelled after. It differs from name when the module is
+        loaded under another name, as a dependency alias.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("originalName", _args)
+        return await _ctx.execute(str)
+
+    async def type_names(self, names: list[str]) -> list[str]:
+        """The schema names of objects, interfaces and enums this module
+        declares, as the engine installs them: namespaced under the module's
+        name, in input order.
+
+        A name is prefixed with the module's name unless it already starts
+        with the module's name on a word boundary. With the engine's
+        identifier naming rules: HttpClient in module my-mod is
+        MyModHTTPClient; Postman in module post is PostPostman, while PostMan
+        stays PostMan; K8STools in module k8s-tools is K8sTools, the module's
+        own name. With the legacy strcase rules, HttpClient in module my-mod
+        is MyModHttpClient.
+
+        Errors on a name the module's naming rules can't parse (non-ASCII, no
+        letters or digits, or over 256 bytes). The legacy rules name anything.
+
+        Parameters
+        ----------
+        names:
+            The type names as the module's source declares them.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(names, list) and all(isinstance(_v0, str) for _v0 in names)):
+            raise _type_error("ModuleNaming.type_names", "names", names, "list[str]")
+        _args = [
+            _Arg("names", names),
+        ]
+        _ctx = self._select("typeNames", _args)
+        return await _ctx.execute(list[str])
+
+    async def version(self) -> str:
+        """The normalized engine version whose naming rules name the module.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("version", _args)
+        return await _ctx.execute(str)
+
+
 class ModuleSource(_Type):
     """The source needed to load and run a module, along with any metadata
     about the source such as versions/urls/etc."""
@@ -14997,19 +15339,35 @@ class ModuleSource(_Type):
         _ctx = self._select("blueprint", _args)
         return ModuleSource(_ctx)
 
-    def client_schema_introspection_json(self) -> File:
+    def client_schema_introspection_json(self, *, client_version: str | None = '') -> File:
         """The client-facing introspection schema JSON file for this module
         source.
 
         This is the schema consumed by client codegen: unlike
-        introspectionSchemaJSON (the module-facing schema), it hides no core
+        introspectionSchemaJson (the module-facing schema), it hides no core
         types and installs this module (reached via dag.<moduleName>) so a
         generated client can bind it. The module's dependencies are excluded:
         a client is generated for a single module plus core, not its
         dependency graph.
+
+        Parameters
+        ----------
+        client_version:
+            The engine version of the client the schema is generated for, e.g.
+            the engineVersion of the module that depends on this one: core is
+            described as that client sees it, capped at this engine's version.
+            This module is still loaded at the engine version it declares, and
+            so named by its own naming rules, as the engine serves it to such
+            a client. Defaults to this module's own engine version.
+            Use this rather than withEngineVersion, which makes this module
+            declare another version and so changes its names.
         """
-        _args: list[_Arg] = []
-        _ctx = self._select("clientSchemaIntrospectionJSON", _args)
+        if not (client_version is None or isinstance(client_version, str)):
+            raise _type_error("ModuleSource.client_schema_introspection_json", "client_version", client_version, "str | None")
+        _args = [
+            _Arg("clientVersion", client_version, ''),
+        ]
+        _ctx = self._select("clientSchemaIntrospectionJson", _args)
         return File(_ctx)
 
     async def clone_ref(self) -> str:
@@ -15211,7 +15569,7 @@ class ModuleSource(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("htmlRepoURL", _args)
+        _ctx = self._select("htmlRepoUrl", _args)
         return await _ctx.execute(str)
 
     async def html_url(self) -> str:
@@ -15233,7 +15591,7 @@ class ModuleSource(_Type):
             If the API returns an error.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("htmlURL", _args)
+        _ctx = self._select("htmlUrl", _args)
         return await _ctx.execute(str)
 
     async def id(self) -> str:
@@ -15274,7 +15632,7 @@ class ModuleSource(_Type):
         hidden.
         """
         _args: list[_Arg] = []
-        _ctx = self._select("introspectionSchemaJSON", _args)
+        _ctx = self._select("introspectionSchemaJson", _args)
         return File(_ctx)
 
     async def kind(self) -> ModuleSourceKind:
@@ -15361,6 +15719,30 @@ class ModuleSource(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("moduleOriginalName", _args)
         return await _ctx.execute(str)
+
+    def naming(self) -> ModuleNaming:
+        """The names the engine gives this module's own declarations, by the
+        naming rules of the version the module is named by: its engine
+        version, capped at the engine's own.
+
+        Modules declaring a version before the identifier casing cut get the
+        legacy strcase names; later ones get the engine's identifier naming
+        rules.
+
+        For SDK codegen, which must reproduce these names before the module is
+        loaded: this reads only the source's name, original name and engine
+        version, so it answers before the module's entrypoint is generated.
+
+        It answers for the module under its own name (moduleName). A workspace
+        or toolchain that loads the module under another name namespaces its
+        types under that name instead, which this doesn't reflect.
+
+        .. caution::
+            Experimental: Identifier casing APIs are likely to change.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("naming", _args)
+        return ModuleNaming(_ctx)
 
     async def original_subpath(self) -> str:
         """The original subpath used when instantiating this module source,
@@ -15692,7 +16074,7 @@ class ModuleSource(_Type):
         _args = [
             _Arg("source", source),
         ]
-        _ctx = self._select("withSDK", _args)
+        _ctx = self._select("withSdk", _args)
         return ModuleSource(_ctx)
 
     def with_source_subpath(self, path: str) -> _Self:
@@ -15907,6 +16289,150 @@ class ModuleSource(_Type):
         """
         return cb(self)
 
+
+
+class Naming(_Type):
+    """The engine's identifier naming rules at an engine version."""
+
+    async def dictionary(self) -> list["NamingTerm"]:
+        """The acronyms and terms used to parse and format identifiers."""
+        _args: list[_Arg] = []
+        _ctx = self._select("dictionary", _args)
+        return await _ctx.execute_object_list(NamingTerm)
+
+    async def format_identifiers(self, names: list[str], casing: Casing, *, acronyms: AcronymStyle | None = AcronymStyle.UPPERCASE,) -> list[str]:
+        """Format many names at once, for codegen. Returns them in input order.
+
+        Parameters
+        ----------
+        names:
+            The names to format, in any casing.
+        casing:
+            The casing to format the names in.
+        acronyms:
+            How to write acronyms and terms where a word starts with a
+            capital.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        if not (isinstance(names, list) and all(isinstance(_v0, str) for _v0 in names)):
+            raise _type_error("Naming.format_identifiers", "names", names, "list[str]")
+        if not (isinstance(casing, Casing)):
+            raise _type_error("Naming.format_identifiers", "casing", casing, "Casing")
+        if not (acronyms is None or isinstance(acronyms, AcronymStyle)):
+            raise _type_error("Naming.format_identifiers", "acronyms", acronyms, "AcronymStyle | None")
+        _args = [
+            _Arg("names", names),
+            _Arg("casing", casing),
+            _Arg("acronyms", acronyms, AcronymStyle.UPPERCASE),
+        ]
+        _ctx = self._select("formatIdentifiers", _args)
+        return await _ctx.execute(list[str])
+
+    async def id(self) -> str:
+        """A unique identifier for this Naming.
+
+        Note
+        ----
+        This is lazily evaluated, no operation is actually run.
+
+        Returns
+        -------
+        str
+            The `ID` scalar type represents a unique identifier, often used to
+            refetch an object or as key for a cache. The ID type appears in a
+            JSON response as a String; however, it is not intended to be
+            human-readable. When expected as an input type, any string (such
+            as `"4"`) or integer (such as `4`) input value will be accepted as
+            an ID.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("id", _args)
+        return await _ctx.execute(str)
+
+    def identifier(self, name: str) -> Identifier:
+        """Parse a name in any casing into words.
+
+        Known acronyms and terms come from the naming dictionary; everything
+        else falls back to the case heuristic. Errors on non-ASCII input,
+        input with no letters or digits, or input over 256 bytes.
+
+        Parameters
+        ----------
+        name:
+            The name to parse.
+        """
+        if not (isinstance(name, str)):
+            raise _type_error("Naming.identifier", "name", name, "str")
+        _args = [
+            _Arg("name", name),
+        ]
+        _ctx = self._select("identifier", _args)
+        return Identifier(_ctx)
+
+    def module(self, name: str, *, original_name: str | None = None,) -> ModuleNaming:
+        """The names the engine gives the declarations of a module named by these
+        rules.
+
+        Parameters
+        ----------
+        name:
+            The module's name, which namespaces its types.
+        original_name:
+            The module's original name, when it's loaded under another (as a
+            dependency alias): its main object and namespaced type names are
+            spelled after it. Defaults to name.
+        """
+        if not (isinstance(name, str)):
+            raise _type_error("Naming.module", "name", name, "str")
+        if not (original_name is None or isinstance(original_name, str)):
+            raise _type_error("Naming.module", "original_name", original_name, "str | None")
+        _args = [
+            _Arg("name", name),
+            _Arg("originalName", original_name, None),
+        ]
+        _ctx = self._select("module", _args)
+        return ModuleNaming(_ctx)
+
+    async def version(self) -> str:
+        """The normalized engine version these rules answer for.
+
+        Returns
+        -------
+        str
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("version", _args)
+        return await _ctx.execute(str)
 
 
 class NamingTerm(_Type):
@@ -16541,57 +17067,6 @@ class Query(_Root):
         _ctx = self._select("file", _args)
         return File(_ctx)
 
-    async def format_identifiers(self, names: list[str], casing: Casing, *, acronyms: AcronymStyle | None = AcronymStyle.UPPERCASE, version: str | None = None,) -> list[str]:
-        """Format many names at once, for codegen. Returns them in input order.
-
-        .. caution::
-            Experimental: Identifier casing APIs are likely to change.
-
-        Parameters
-        ----------
-        names:
-            The names to format, in any casing.
-        casing:
-            The casing to format the names in.
-        acronyms:
-            How to write acronyms and terms where a word starts with a
-            capital.
-        version:
-            The engine version whose naming dictionary to parse the names
-            with, e.g. the __schemaVersion of a schema being generated.
-            Defaults to the caller's engine version.
-
-        Returns
-        -------
-        list[str]
-            The `String` scalar type represents textual data, represented as
-            UTF-8 character sequences. The String type is most often used by
-            GraphQL to represent free-form human-readable text.
-
-        Raises
-        ------
-        ExecuteTimeoutError
-            If the time to execute the query exceeds the configured timeout.
-        QueryError
-            If the API returns an error.
-        """
-        if not (isinstance(names, list) and all(isinstance(_v0, str) for _v0 in names)):
-            raise _type_error("Query.format_identifiers", "names", names, "list[str]")
-        if not (isinstance(casing, Casing)):
-            raise _type_error("Query.format_identifiers", "casing", casing, "Casing")
-        if not (acronyms is None or isinstance(acronyms, AcronymStyle)):
-            raise _type_error("Query.format_identifiers", "acronyms", acronyms, "AcronymStyle | None")
-        if not (version is None or isinstance(version, str)):
-            raise _type_error("Query.format_identifiers", "version", version, "str | None")
-        _args = [
-            _Arg("names", names),
-            _Arg("casing", casing),
-            _Arg("acronyms", acronyms, AcronymStyle.UPPERCASE),
-            _Arg("version", version, None),
-        ]
-        _ctx = self._select("formatIdentifiers", _args)
-        return await _ctx.execute(list[str])
-
     def function(self, name: str, return_type: "TypeDef") -> Function:
         """Creates a function.
 
@@ -16759,29 +17234,6 @@ class Query(_Root):
         _ctx = self._select("id", _args)
         return await _ctx.execute(str)
 
-    def identifier(self, name: str) -> Identifier:
-        """Parse a name in any casing into words.
-
-        Known acronyms and terms come from the naming dictionary; everything
-        else falls back to the case heuristic. Errors on non-ASCII input,
-        input with no letters or digits, or input over 256 bytes.
-
-        .. caution::
-            Experimental: Identifier casing APIs are likely to change.
-
-        Parameters
-        ----------
-        name:
-            The name to parse.
-        """
-        if not (isinstance(name, str)):
-            raise _type_error("Query.identifier", "name", name, "str")
-        _args = [
-            _Arg("name", name),
-        ]
-        _ctx = self._select("identifier", _args)
-        return Identifier(_ctx)
-
     def json(self) -> JSONValue:
         """Initialize a JSON value"""
         _args: list[_Arg] = []
@@ -16884,15 +17336,26 @@ class Query(_Root):
         _ctx = self._select("moduleSource", _args)
         return ModuleSource(_ctx)
 
-    async def naming_dictionary(self) -> list[NamingTerm]:
-        """The acronyms and terms used to parse and format identifiers.
+    def naming(self, *, version: str | None = None) -> Naming:
+        """The engine's identifier naming rules at an engine version.
 
         .. caution::
             Experimental: Identifier casing APIs are likely to change.
+
+        Parameters
+        ----------
+        version:
+            The engine version to answer for, e.g. the engine version a module
+            declares. Defaults to the caller's. Normalized as a module's is: a
+            version past the engine's is capped at the engine's own.
         """
-        _args: list[_Arg] = []
-        _ctx = self._select("namingDictionary", _args)
-        return await _ctx.execute_object_list(NamingTerm)
+        if not (version is None or isinstance(version, str)):
+            raise _type_error("Query.naming", "version", version, "str | None")
+        _args = [
+            _Arg("version", version, None),
+        ]
+        _ctx = self._select("naming", _args)
+        return Naming(_ctx)
 
     def node(self, id: _Type) -> Node:
         """Load any object by its ID."""
@@ -20295,7 +20758,7 @@ class Workspace(_Type):
             _Arg("here", here, False),
             _Arg("asSdkName", as_sdk_name, ''),
         ]
-        _ctx = self._select("withSDK", _args)
+        _ctx = self._select("withSdk", _args)
         return Workspace(_ctx)
 
     def with_updated_clients(self, *, modules: list[str] | None = None, all: bool | None = False, sdk: str | None = '',) -> _Self:
@@ -20631,7 +21094,7 @@ class Workspace(_Type):
             _Arg("name", name),
             _Arg("here", here, False),
         ]
-        _ctx = self._select("withoutSDK", _args)
+        _ctx = self._select("withoutSdk", _args)
         return Workspace(_ctx)
 
     def with_(self, cb: _Callable[["Workspace"], "Workspace"]) -> "Workspace":
@@ -21411,13 +21874,48 @@ class WorkspaceSDK(_Type):
         _ctx = self._select("ref", _args)
         return await _ctx.execute(str)
 
+    def scope_setting(self, path: str, key: str) -> JSONValue:
+        """The value a setting records in this SDK's scope settings, as a native
+        JSON value.
+
+        Reads [sdks.<name>.scopes."<scope>".settings] from the workspace
+        config, in the scope whose key resolves to path. The setting key is
+        matched without regard to case.
+
+        Null when no scope resolves to path, or the scope records no such
+        setting. Fails when the config is invalid, path escapes the workspace
+        root, key matches several recorded settings, or the value cannot be
+        represented as JSON.
+
+        Fails when this SDK is no longer installed in the workspace config,
+        even if Workspace.sdk returned it earlier.
+
+        Parameters
+        ----------
+        path:
+            Scope path, relative to the workspace cwd or absolute from the
+            workspace root.
+        key:
+            Setting name, matched without regard to case.
+        """
+        if not (isinstance(path, str)):
+            raise _type_error("WorkspaceSDK.scope_setting", "path", path, "str")
+        if not (isinstance(key, str)):
+            raise _type_error("WorkspaceSDK.scope_setting", "key", key, "str")
+        _args = [
+            _Arg("path", path),
+            _Arg("key", key),
+        ]
+        _ctx = self._select("scopeSetting", _args)
+        return JSONValue(_ctx)
+
 
 def core(*, session: _Session | None = None) -> Query:
     """The way into the core API."""
     return _client_root(Query, None, None, [], session=session)
 
 
-CORE_DIGEST = "sha256:175e626422bfb81c2d51269ec16740ec9401baebfac4ac02d30aee15ef9efa71"
+CORE_DIGEST = "sha256:30dc0d028d31f7d02bc8e1e62bc31c892d2843519a4bb11f4360ee2d7c844848"
 """Digest of the core schema that this package was generated from."""
 
 
@@ -21513,9 +22011,11 @@ __all__ = [
     "ListTypeDef",
     "Module",
     "ModuleConfigClient",
+    "ModuleNaming",
     "ModuleSource",
     "ModuleSourceExperimentalFeature",
     "ModuleSourceKind",
+    "Naming",
     "NamingTerm",
     "NetworkProtocol",
     "Node",

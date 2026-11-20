@@ -19,7 +19,7 @@ from cattrs.preconf.json import JsonConverter
 from dagger._exceptions import QueryError
 from dagger.client._core import configure_converter_enum
 from dagger.mod import _api
-from dagger.mod._converter import make_converter, typedef_from
+from dagger.mod._converter import make_converter, to_interface_impl, typedef_from
 from dagger.mod._describe import (
     ArgumentDescription,
     EnumDescription,
@@ -35,11 +35,13 @@ from dagger.mod._exceptions import (
     FunctionError,
     InvalidInputError,
     InvalidResultError,
+    ModuleError,
     ObjectNotFoundError,
     RegistrationError,
     log_exception_only,
     transform_error,
 )
+from dagger.mod._naming import ModuleNames, module_names
 from dagger.mod._resolver import (
     Constructor,
     Field,
@@ -92,6 +94,7 @@ class Module:
         self._objects: dict[str, ObjectType] = {}
         self._enums: dict[str, type[enum.Enum]] = {}
         self._main: ObjectType | None = None
+        self._names: ModuleNames | None = None
         # Escape hatch if there's too much noise from showing stack traces
         # from exceptions raised in functions by default. Not documented
         # intentionally for now.
@@ -101,6 +104,38 @@ class Module:
     def main_cls(self) -> type[ObjectType]:
         assert self._main is not None
         return self._main.cls
+
+    @property
+    def names(self) -> ModuleNames:
+        """The engine's names for the module's interfaces and enums.
+
+        Calls through the module's own interfaces select them. Asked for by
+        ``load_names``, before anything is invoked.
+        """
+        if self._names is None:
+            msg = "The module's schema names were not asked for before the call"
+            raise ModuleError(msg)
+        return self._names
+
+    async def load_names(self) -> None:
+        """Ask the engine how it names the module, before anything is invoked.
+
+        A module without interfaces makes no call by the engine's names of its
+        own declarations, so it asks nothing.
+        """
+        if self._names is not None:
+            return
+        interfaces = [obj for obj in self._objects.values() if obj.interface]
+        if not interfaces:
+            self._names = ModuleNames()
+            return
+        self._names = await module_names(interfaces, self._enums.values())
+        # Bindings are built with the names they have when first used.
+        to_interface_impl.cache_clear()
+
+    def is_own_enum(self, cls: Any) -> bool:
+        """Whether a class is one of the enums this module declares."""
+        return isinstance(cls, type) and self._enums.get(cls.__name__) is cls
 
     def is_main(self, other: ObjectType) -> bool:
         """Check if the given object is the main object of the module."""
@@ -234,6 +269,8 @@ class Module:
                 },
             )
 
+        await self.load_names()
+
         result = await self.get_result(
             parent_name,
             parent_state,
@@ -261,6 +298,7 @@ class Module:
         except ValueError as e:
             msg = "Unable to decode the call request"
             raise InvalidInputError(msg, extra={"request": request}) from e
+        await self.load_names()
         return await self.get_result(
             request["receiverType"],
             parent_state or {},

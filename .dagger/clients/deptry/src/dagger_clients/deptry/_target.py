@@ -3,4 +3,4 @@
 NAME = "deptry"
 REF = "/deptry"
 PIN = None
-CORE_DIGEST = "sha256:175e626422bfb81c2d51269ec16740ec9401baebfac4ac02d30aee15ef9efa71"
+CORE_DIGEST = "sha256:30dc0d028d31f7d02bc8e1e62bc31c892d2843519a4bb11f4360ee2d7c844848"
