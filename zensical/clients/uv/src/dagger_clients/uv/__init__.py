@@ -541,7 +541,8 @@ class Uv(_Type):
         Every uv workspace in the source tree (one per uv.lock), less those
         matching `exclude`.
 
-        Each loads only when `workspace` gets it.
+        Each loads only when `workspace` gets it, from the root inputs
+        resolved here for every workspace at once.
         """
         _args: list[_Arg] = []
         _ctx = self._select("workspaces", _args)

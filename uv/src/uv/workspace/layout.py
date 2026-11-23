@@ -39,37 +39,55 @@ class UvWorkspaceLayout:
     audit_exclude: list[str] = dataclasses.field(default_factory=list)
     audit_base_container: Container | None = None
     uv_cache: CacheVolume | None = None
+    # The local packages' `/`-prefixed build inputs, once `with_root_inputs` resolved them.
+    root_inputs: list[str] | None = None
 
     def _projects(self, load: _Loader) -> list[ProjectSource]:
         return [
             ProjectSource(path=project.path, source=load(project.include, project.exclude)) for project in self.projects
         ]
 
-    async def inputs(self, ws: Workspace, handlers: list[BuildBackendHandler]) -> Directory:
-        """Every file the workspace's builds read, loaded lazily from `ws`.
-
-        The manifests, members and their path dependencies, and the handlers'
-        `/`-prefixed build inputs, which may lie outside every member (e.g. a
-        Cargo workspace above them).
-        """
-
+    @staticmethod
+    def _loader(ws: Workspace) -> _Loader:
         def load(include: list[str], exclude: list[str]) -> Directory:
             return ws.directory("/", include=include, exclude=exclude, gitignore=True)
 
-        source = load(self.include, self.exclude)
-        manifests = ws.directory("/", include=self.manifest_include, exclude=self.manifest_exclude)
+        return load
+
+    def _manifests(self, ws: Workspace) -> Directory:
+        return ws.directory("/", include=self.manifest_include, exclude=self.manifest_exclude)
+
+    async def with_root_inputs(self, ws: Workspace, handlers: list[BuildBackendHandler]) -> "UvWorkspaceLayout":
+        """This layout with its root inputs resolved: the handlers' `/`-prefixed build
+        inputs, which may lie outside every member (e.g. a Cargo workspace above them).
+
+        Reads the manifests, so `inputs` itself makes no call.
+        """
+        if self.root_inputs is not None:
+            return self
+        load = self._loader(ws)
         plan = await UvSyncPlan.create(
-            source_dir=source,
-            manifests_dir=manifests,
+            source_dir=load(self.include, self.exclude),
+            manifests_dir=self._manifests(ws),
             projects=self._projects(load),
             src_paths=self.src_paths,
             workspace_path=self.path,
             all_packages=True,
             handlers=handlers,
         )
-        inputs = manifests.with_directory(".", source)
-        if plan.root_inputs:
-            inputs = inputs.with_directory(".", load(plan.root_inputs, []))
+        return dataclasses.replace(self, root_inputs=plan.root_inputs)
+
+    def inputs(self, ws: Workspace) -> Directory:
+        """Every file the workspace's builds read, loaded lazily from `ws`.
+
+        The manifests, members and their path dependencies, and the root inputs
+        `with_root_inputs` resolved.
+        """
+        assert self.root_inputs is not None
+        load = self._loader(ws)
+        inputs = self._manifests(ws).with_directory(".", load(self.include, self.exclude))
+        if self.root_inputs:
+            inputs = inputs.with_directory(".", load(self.root_inputs, []))
         return inputs
 
     def load(self, inputs: Directory, handlers: list[BuildBackendHandler]) -> UvWorkspaceSource:
