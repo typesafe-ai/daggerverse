@@ -609,7 +609,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("workspaces", typeDef.withObject("UvWorkspaces"))
-            .withDescription("Every uv workspace in the source tree (one per uv.lock), less those matching `exclude`.\n\nEach loads only when `workspace` gets it.")
+            .withDescription("Every uv workspace in the source tree (one per uv.lock), less those matching `exclude`.\n\nEach loads only when `workspace` gets it, from the root inputs resolved here for every workspace at once.")
         )
         .withConstructor(
           function("", typeDef.withObject("Uv"))
