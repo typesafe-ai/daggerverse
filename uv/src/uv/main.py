@@ -26,16 +26,19 @@ _WORKSPACE_MARKERS = ["uv.lock"]
 _DISCOVERY_INCLUDE = ["**/pyproject.toml", "**/.gitignore", *(f"**/{marker}" for marker in _WORKSPACE_MARKERS)]
 
 
-async def _load(
-    ws: Workspace | None, layouts: list[UvWorkspaceLayout], handlers: list[BuildBackendHandler], path: str
-) -> UvWorkspaceSource:
-    """The workspace at `path`, its directories filtered from just the files its builds read."""
-    assert ws is not None
+def _layout(layouts: list[UvWorkspaceLayout], path: str) -> UvWorkspaceLayout:
+    """The layout of the workspace at `path`."""
     layout = next((layout for layout in layouts if layout.path == path), None)
     if layout is None:
         msg = f"no uv workspace (uv.lock) at {path!r}"
         raise ValueError(msg)
-    return layout.load(await layout.inputs(ws, handlers), handlers)
+    return layout
+
+
+def _load(ws: Workspace | None, layout: UvWorkspaceLayout, handlers: list[BuildBackendHandler]) -> UvWorkspaceSource:
+    """The workspace `layout` lays out, its directories filtered from just the files its builds read."""
+    assert ws is not None
+    return layout.load(layout.inputs(ws), handlers)
 
 
 def _normalize(name: str) -> str:
@@ -62,16 +65,18 @@ class UvWorkspaces:
         Doc("uv workspace root paths (holding uv.lock), relative to the workspace root. `.` for the root."),
     ] = keys()
 
-    # Not `field()`s: each workspace loads only when `workspace` gets it.
+    # Not `field()`s: each workspace loads only when `workspace` gets it. The layouts
+    # carry their root inputs, so `workspace` makes no call: listing the collection
+    # (e.g. for its checks) calls it once per workspace, one at a time.
     ws: Workspace | None = None
     layouts: list[UvWorkspaceLayout] = dataclasses.field(default_factory=list)
     handlers: list[BuildBackendHandler] = dataclasses.field(default_factory=list)
 
     @function
     @get
-    async def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
+    def workspace(self, path: WorkspacePath) -> UvWorkspaceSource:
         """The uv workspace rooted at `path`."""
-        return await _load(self.ws, self.layouts, self.handlers, path)
+        return _load(self.ws, _layout(self.layouts, path), self.handlers)
 
     @function
     async def filter(
@@ -259,14 +264,17 @@ class Uv:
         The returned `UvWorkspaceSource` can `audit` (and upgrade) its locked dependencies or
         get a `builder` for its packages.
         """
-        return await _load(self.ws, self.layouts, self.handlers, path)
+        assert self.ws is not None
+        layout = await _layout(self.layouts, path).with_root_inputs(self.ws, self.handlers)
+        return _load(self.ws, layout, self.handlers)
 
     @function
-    def workspaces(self) -> UvWorkspaces:
+    async def workspaces(self) -> UvWorkspaces:
         """Every uv workspace in the source tree (one per uv.lock), less those matching `exclude`.
 
-        Each loads only when `workspace` gets it.
+        Each loads only when `workspace` gets it, from the root inputs resolved here for every workspace at once.
         """
-        return UvWorkspaces(
-            paths=[layout.path for layout in self.layouts], ws=self.ws, layouts=self.layouts, handlers=self.handlers
-        )
+        assert self.ws is not None
+        ws = self.ws
+        layouts = list(await asyncio.gather(*(layout.with_root_inputs(ws, self.handlers) for layout in self.layouts)))
+        return UvWorkspaces(paths=[layout.path for layout in layouts], ws=ws, layouts=layouts, handlers=self.handlers)
