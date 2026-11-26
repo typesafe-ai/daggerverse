@@ -7,21 +7,16 @@ from typing import Annotated
 
 from dagger import Doc, field, function, object_type
 from dagger.telemetry import get_tracer
-from dagger_clients.core import Container, Directory, ExistsType, core
+from dagger_clients.core import Container, Directory, core
 
 from uv.args import Extra, Group, LockTimeout, MaxCacheSize, NoInstallPackage, Package, PruneCache
-from uv.utils import _DEFAULT_VERSION, image_ref, pinned_image
+from uv.utils import _DEFAULT_VERSION, image_ref
 from uv.workspace.build_backends import BACKENDS
 from uv.workspace.build_backends.base import BackendHooks
 from uv.workspace.build_backends.handler import HandlerHooks
 from uv.workspace.build_backends.paths import is_file
 from uv.workspace.plan import LocalPackage, UvSyncPlan, UvSyncPlanner
 from uv.workspace.venv import UvVenv
-
-_BUSYBOX = pinned_image("busybox")
-
-# Prints every symlink under the current directory whose target is missing.
-_DANGLING_LINKS = r"find . -type l ! -exec test -e {} \; -print"
 
 # 1980-01-01, the earliest timestamp a wheel (zip) can hold. Dagger git trees
 # normalize mtimes to 1, which backends that stamp files from their mtime (flit)
@@ -32,9 +27,8 @@ _SOURCE_DATE_EPOCH = "315532800"
 # tools rebuild what's older than its sources; a kept cache can hold a build of
 # another revision whose sources had the same mtime, as every revision does in a
 # Dagger git tree. Sources from the future are always newer, so local code always
-# rebuilds. `touch -h` rather than `Directory.with_timestamps`, which follows
-# symlinks and fails on dangling ones.
-_STAMP_SOURCES = ["find", ".", "-exec", "touch", "-h", "-t", "210001010000", "{}", "+"]
+# rebuilds.
+_SOURCES_MTIME = 4102444800
 # Where `dist` has `uv build` write the distributions.
 _DIST_DIR = "/tmp/uv-dist"
 
@@ -420,18 +414,10 @@ class UvWorkspaceBuilder:
         return hooks
 
     def _stamped(self, sources: Directory, building: bool = False) -> Directory:
-        """`sources` with every mtime set to 2100, when the build's hooks keep caches (see `_STAMP_SOURCES`)."""
+        """`sources` with every mtime set to 2100, when the build's hooks keep caches (see `_SOURCES_MTIME`)."""
         if not self._hooks(building):
             return sources
-        return (
-            core()
-            .container()
-            .from_(_BUSYBOX)
-            .with_directory("/sources", sources)
-            .with_workdir("/sources")
-            .with_exec(_STAMP_SOURCES)
-            .directory("/sources")
-        )
+        return sources.with_timestamps(_SOURCES_MTIME)
 
     async def _scaffold(
         self,
@@ -494,7 +480,11 @@ class UvWorkspaceBuilder:
             if is_file(source_path):
                 overlay = overlay.with_file(target, pkg.source.file(source))
             else:
-                overlay = overlay.with_directory(target, pkg.source.directory(source))
+                # From the whole source tree, which holds what the package's symlinks point to
+                # elsewhere (e.g. modules shared from a sibling directory): selecting resolves
+                # each link that would leave the copy into the content it points to.
+                copied = self._resolved_plan().source_dir.directory(source, resolve_broken_symlinks=True)
+                overlay = overlay.with_directory(target, copied)
         return overlay
 
     async def _copy_sources(self, ctr: Container, workdir: str) -> Container:
@@ -518,7 +508,6 @@ class UvWorkspaceBuilder:
             # usual packages add no layer.
             if orphans := await self._orphan_stubs(packages, workdir):
                 ctr = ctr.without_files(orphans)
-            overlay = await self._with_link_targets(overlay, workdir)
             return await ctr.with_directory("/", self._stamped(overlay)).sync()
 
     async def _orphan_stubs(self, packages: list[LocalPackage], workdir: str) -> list[str]:
@@ -534,43 +523,6 @@ class UvWorkspaceBuilder:
         ]
         found = await asyncio.gather(*(source.exists(path) for source, path, _ in candidates))
         return [target for (_, _, target), exists in zip(candidates, found, strict=True) if not exists]
-
-    async def _with_link_targets(self, overlay: Directory, workdir: str) -> Directory:
-        """Replace copied symlinks that point outside the copied sources with their content.
-
-        Packages can link to code elsewhere in the repository (e.g. modules vendored
-        from a sibling directory). A busybox exec lists the dangling links, since the
-        Dagger API has no way to list them; Dagger follows each link in the source
-        tree, and its content replaces the link. Repeats while that content brings
-        new dangling links.
-        """
-        seen: set[str] = set()
-        source = self._resolved_plan().source_dir
-        with get_tracer().start_as_current_span("resolve dangling symlinks") as span:
-            while True:
-                listing = await (
-                    core()
-                    .container()
-                    .from_(_BUSYBOX)
-                    .with_directory("/overlay", overlay)
-                    .with_workdir("/overlay")
-                    .with_exec(["sh", "-c", _DANGLING_LINKS])
-                    .stdout()
-                )
-                links = [link.removeprefix("./") for link in listing.splitlines()]
-                links = [link for link in links if link not in seen]
-                if not links:
-                    span.set_attribute("links.resolved", sorted(seen))
-                    return overlay
-                seen.update(links)
-                for link in links:
-                    # The container mirrors the source tree with the workspace root at `workdir`.
-                    relative = posixpath.relpath(f"/{link}", workdir)
-                    source_path = posixpath.normpath(posixpath.join(self._resolved_plan().workspace_path, relative))
-                    if await source.exists(source_path, expected_type=ExistsType.DIRECTORY_TYPE):
-                        overlay = overlay.without_file(link).with_directory(link, source.directory(source_path))
-                    elif await source.exists(source_path):
-                        overlay = overlay.without_file(link).with_file(link, source.file(source_path))
 
     def _rebuild_args(self) -> list[str]:
         """`--reinstall-package` for every local package, so uv builds it rather than installing a cached build.
