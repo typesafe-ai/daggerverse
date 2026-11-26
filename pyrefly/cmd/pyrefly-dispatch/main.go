@@ -88,7 +88,9 @@ func main() {
 	if err != nil && os.Args[1] == "engine-call" && writeFunctionError(err) {
 		os.Exit(2)
 	}
-
+	if err != nil && os.Args[1] == "engine-call" {
+		errorValues = reportedError(err)
+	}
 	if err != nil {
 		fatalf("%v", err)
 	}
@@ -106,7 +108,9 @@ func fatalf(format string, args ...any) {
 	}
 	encoded, _ := json.Marshal(reported)
 	fmt.Fprintf(os.Stderr, "%s\n%s%s\n", message, "::dagger-function-error::", encoded)
-
+	if errorValues != "" {
+		fmt.Fprintf(os.Stderr, "%s%s\n", "::dagger-function-error-values::", errorValues)
+	}
 	os.Exit(2)
 }
 
@@ -225,6 +229,79 @@ func findSingleGQLError(err error) *gqlerror.Error {
 	default:
 		return nil
 	}
+}
+
+// errorValues is the error the entrypoint raises, as reportedError reports
+// it, or empty outside engine calls.
+var errorValues string
+
+// functionErrorValuesBudget bounds the line errorValues prints. A failed exec
+// gives the entrypoint only its last 100 KiB of stderr, which also holds the
+// message marker line, at most 16 KiB of text escaped as JSON.
+const functionErrorValuesBudget = 64 << 10
+
+// reportedError is the function's error as JSON: the message of the GraphQL
+// error it wraps and each of that error's extensions as a value, such as a
+// failed exec's exit code and output, or its text and no values. The line
+// never exceeds functionErrorValuesBudget: long strings, nested ones too,
+// keep their end, where output usually says what failed, down to 256 bytes,
+// so short values such as an exit code stay whole; then the largest values
+// go, then all of them.
+func reportedError(err error) string {
+	message := err.Error()
+	var extensions map[string]any
+	if gqlErr := findSingleGQLError(err); gqlErr != nil {
+		message = gqlErr.Message
+		extensions = gqlErr.Extensions
+	}
+	names := make([]string, 0, len(extensions))
+	for name := range extensions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	type value struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+	encode := func(message string, values []value) []byte {
+		line, _ := json.Marshal(struct {
+			Message string  `json:"message"`
+			Values  []value `json:"values"`
+		}{message, values})
+		return line
+	}
+	values := make([]value, 0, len(names))
+	for limit := 32 << 10; limit >= 256; limit /= 2 {
+		values = values[:0]
+		for _, name := range names {
+			encoded, err := json.Marshal(shortenedValue(extensions[name], limit))
+			if err != nil {
+				continue
+			}
+			values = append(values, value{Name: name, Value: string(encoded)})
+		}
+		shortMessage := message
+		if len(shortMessage) > max(limit, 1<<10) {
+			shortMessage = strings.ToValidUTF8(shortMessage[:max(limit, 1<<10)], "") + "..."
+		}
+		message = shortMessage
+		if line := encode(message, values); len(line) <= functionErrorValuesBudget {
+			return string(line)
+		}
+	}
+	for len(values) > 0 {
+		largest := 0
+		for i := range values {
+			if len(values[i].Value) > len(values[largest].Value) {
+				largest = i
+			}
+		}
+		values = append(values[:largest], values[largest+1:]...)
+		if line := encode(message, values); len(line) <= functionErrorValuesBudget {
+			return string(line)
+		}
+	}
+	return string(encode(message, []value{}))
 }
 
 func engineCall(ctx context.Context, input io.Reader, output io.Writer) error {

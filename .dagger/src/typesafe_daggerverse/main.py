@@ -54,6 +54,12 @@ async def _run_check(check: Check) -> None:
         raise CheckFailedError(await check.error().message())
 
 
+async def _in_span(check: Callable[[], Awaitable[object]]) -> None:
+    """Run one of an `all_*` check's sub-checks in a span named after it, so a trace shows which one failed."""
+    with get_tracer().start_as_current_span(check.__name__):
+        await check()
+
+
 def _ws() -> Workspace:
     return core().current_workspace()
 
@@ -84,7 +90,7 @@ def _go_test(module: str) -> Container:
     return (
         core()
         .container()
-        .from_("golang:1.26.1-alpine")
+        .from_("golang:1.27-alpine")
         .with_mounted_cache("/go/pkg/mod", core().cache_volume("go-mod"))
         .with_mounted_cache("/root/.cache/go-build", core().cache_volume("go-build"))
         .with_env_variable("CGO_ENABLED", "0")
@@ -1357,11 +1363,11 @@ print("LAYER_CACHE_OK")
     async def all_ruff(self) -> None:
         """Run all checks for the `ruff` module in parallel."""
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.ruff_check_fix)
-            tg.start_soon(self.ruff_format_fix)
-            tg.start_soon(self.ruff_check_clean)
-            tg.start_soon(self.ruff_format_clean)
-            tg.start_soon(self.ruff_check_unfixable)
+            tg.start_soon(_in_span, self.ruff_check_fix)
+            tg.start_soon(_in_span, self.ruff_format_fix)
+            tg.start_soon(_in_span, self.ruff_check_clean)
+            tg.start_soon(_in_span, self.ruff_format_clean)
+            tg.start_soon(_in_span, self.ruff_check_unfixable)
 
     @function
     async def ruff_check_fix(self) -> str:
@@ -1488,13 +1494,13 @@ print("LAYER_CACHE_OK")
     async def all_pyproject(self) -> None:
         """Run all checks for the `pyproject` module in parallel."""
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.pyproject_go_test)
-            tg.start_soon(self.pyproject_discovers_projects_and_workspaces)
-            tg.start_soon(self.pyproject_workspace_markers)
-            tg.start_soon(self.pyproject_respects_gitignore)
-            tg.start_soon(self.pyproject_project_source)
-            tg.start_soon(self.pyproject_project_files)
-            tg.start_soon(self.pyproject_workspace_source_and_manifests)
+            tg.start_soon(_in_span, self.pyproject_go_test)
+            tg.start_soon(_in_span, self.pyproject_discovers_projects_and_workspaces)
+            tg.start_soon(_in_span, self.pyproject_workspace_markers)
+            tg.start_soon(_in_span, self.pyproject_respects_gitignore)
+            tg.start_soon(_in_span, self.pyproject_project_source)
+            tg.start_soon(_in_span, self.pyproject_project_files)
+            tg.start_soon(_in_span, self.pyproject_workspace_source_and_manifests)
 
     @function
     async def pyproject_go_test(self) -> None:
@@ -1639,10 +1645,10 @@ print("LAYER_CACHE_OK")
     async def all_zensical(self) -> None:
         """Run all checks for the `zensical` module in parallel."""
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.zensical_discovers_projects)
-            tg.start_soon(self.zensical_builds_module_docs)
-            tg.start_soon(self.zensical_strict_fails_on_broken_link)
-            tg.start_soon(self.zensical_site_settings)
+            tg.start_soon(_in_span, self.zensical_discovers_projects)
+            tg.start_soon(_in_span, self.zensical_builds_module_docs)
+            tg.start_soon(_in_span, self.zensical_strict_fails_on_broken_link)
+            tg.start_soon(_in_span, self.zensical_site_settings)
 
     @function
     async def zensical_discovers_projects(self) -> None:
@@ -1903,13 +1909,13 @@ print("LAYER_CACHE_OK")
     async def all_pyrefly(self) -> None:
         """Run all checks for the `pyrefly` module in parallel."""
         async with anyio.create_task_group() as tg:
-            tg.start_soon(self.pyrefly_discovers_workspaces)
-            tg.start_soon(self.pyrefly_clean)
-            tg.start_soon(self.pyrefly_base_container_at_root)
-            tg.start_soon(self.pyrefly_fails_on_type_error)
-            tg.start_soon(self.pyrefly_baseline)
-            tg.start_soon(self.pyrefly_workspace_settings)
-            tg.start_soon(self.pyrefly_go_test)
+            tg.start_soon(_in_span, self.pyrefly_discovers_workspaces)
+            tg.start_soon(_in_span, self.pyrefly_clean)
+            tg.start_soon(_in_span, self.pyrefly_base_container_at_root)
+            tg.start_soon(_in_span, self.pyrefly_fails_on_type_error)
+            tg.start_soon(_in_span, self.pyrefly_baseline)
+            tg.start_soon(_in_span, self.pyrefly_workspace_settings)
+            tg.start_soon(_in_span, self.pyrefly_go_test)
 
     def _pyrefly_broken_source(self) -> Directory:
         return _src(self._PYREFLY_FIXTURE).with_new_file("src/typed/broken.py", 'count: int = "one"\n')

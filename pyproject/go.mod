@@ -1,9 +1,9 @@
 module dagger/pyproject
 
-go 1.26.1
+go 1.27
 
 require (
-	dagger.io/dagger v1.0.0-beta.27
+	dagger.io/dagger v1.0.0-beta.30
 	github.com/Khan/genqlient v0.8.1
 	github.com/dagger/otel-go v1.47.1-0.20261124213443-e79f0e10530f
 	github.com/dagger/querybuilder v0.0.0-20260402040506-574a5e81cb59
