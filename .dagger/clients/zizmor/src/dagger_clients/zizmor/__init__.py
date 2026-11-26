@@ -202,7 +202,7 @@ class Zizmor(_Type):
         return Directory(_ctx)
 
 
-def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.32.0', fix_mode: ZizmorFixMode = ZizmorFixMode.SAFE, persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, github_token: Secret | None = None, exclude: list[str] | None = None, session: _Session | None = None,) -> Zizmor:
+def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.33.1', fix_mode: ZizmorFixMode = ZizmorFixMode.SAFE, persona: str = 'regular', min_severity: str | None = None, min_confidence: str | None = None, github_token: Secret | None = None, exclude: list[str] | None = None, session: _Session | None = None,) -> Zizmor:
     """
     Static analysis for GitHub Actions security.
 
@@ -256,7 +256,7 @@ def zizmor(ws: Workspace, *, ctr: Container | None = None, version: str = '1.32.
     _args = [
         _Arg("ws", ws),
         _Arg("ctr", ctr, None),
-        _Arg("version", version, '1.32.0'),
+        _Arg("version", version, '1.33.1'),
         _Arg("fixMode", fix_mode, ZizmorFixMode.SAFE),
         _Arg("persona", persona, 'regular'),
         _Arg("minSeverity", min_severity, None),
