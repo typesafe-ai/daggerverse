@@ -98,7 +98,7 @@ type Entrypoint implements ModuleEntrypoint {
       .withMountedDirectory("/workspace", collectionContext)
       .withWorkdir("/workspace/" + currentModule.sourceSubpath)
       .withEnvVariable("DAGGER_MODULE_CALL_DIGEST", callDigest ?? "")
-      .withEnvVariable("DAGGER_CLIENT_VERSION", "v1.0.0-beta.27")
+      .withEnvVariable("DAGGER_CLIENT_VERSION", "v1.0.0-beta.30")
       .withExec(
         ["/usr/local/bin/dispatch", "engine-call", "/dagger/result.json"],
         stdin: request,
@@ -125,6 +125,16 @@ type Entrypoint implements ModuleEntrypoint {
     }
     let marker = "::dagger-function-error::"
     let stderr = ((JSON.decode(err.extensions) :: {{stderr: String}}).stderr ?? "") rescue ""
+    # The dispatcher's last line holds the function's error, its message and
+    # values, such as a failed exec's output: a Dagger Error rebuilt from them
+    # hands the caller those values. Only the last line counts, so the
+    # function's own output, which shares stderr, can't stand in for it.
+    let valuesMarker = "::dagger-function-error-values::"
+    let last = stderr.trimSpace.split("\n").takeLast(1).join("")
+    if (last.hasPrefix(valuesMarker)) {
+      let reported = JSON.decode(last.trimPrefix(valuesMarker)) :: {{message: String!, values: [{{name: String!, value: String!}}!]!}}
+      raise (reported.values ?? []).reduce(Dagger.error(reported.message ?? "")) { e, v => e.withValue(v.name ?? "", (v.value ?? "null") :: Dagger.JSON!) }
+    }
     let lines = stderr.split("\n").filter { line => line.hasPrefix(marker) }
     if (lines.isEmpty) {
       raise err
