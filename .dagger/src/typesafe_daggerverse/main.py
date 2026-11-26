@@ -529,7 +529,7 @@ class TypesafeDaggerverse:
         """`compile_bytecode=True` installs `.pyc` files, hash-based so they are reproducible.
 
         Builds standalone-app's `viz` extra with and without the option and reads the
-        flags of `tabulate`'s `.pyc` header (PEP 552): 3 is an unchecked hash-based
+        flags of `tabulate`'s `.pyc` header (PEP 552): 1 is an unchecked hash-based
         `.pyc`, 0 a timestamp-based one, whose bytes change with every install.
         Without the option, the package has no `.pyc` at all.
         """
@@ -558,7 +558,7 @@ class TypesafeDaggerverse:
 
         compiled, plain = await flags(True), await flags(False)
         count, header_flags = compiled.split(" ", 1)
-        if int(count) == 0 or header_flags != "[3]":
+        if int(count) == 0 or header_flags != "[1]":
             raise AssertionError(
                 f"expected only unchecked hash-based .pyc files with compile_bytecode, got {compiled!r}"
             )
@@ -571,7 +571,7 @@ class TypesafeDaggerverse:
 
         Installs a pinned requirements file with `--no-deps` and `compile_bytecode`, copies
         the venv into a plain `debian:bookworm-slim` with `into`, and imports the package
-        there, reading its `.pyc` header flags (3: unchecked hash-based).
+        there, reading its `.pyc` header flags (1: unchecked hash-based).
         """
         requirements = core().directory().with_new_file("requirements.txt", "tabulate==0.9.0\n")
         base = core().container().from_("debian:bookworm-slim")
@@ -592,7 +592,7 @@ class TypesafeDaggerverse:
             .with_exec(["python", "-c", check])
             .stdout()
         ).strip()
-        if out != "0.9.0 True [3]":
+        if out != "0.9.0 True [1]":
             raise AssertionError(
                 f"expected tabulate 0.9.0 with hash-based .pyc files from the copied venv, got {out!r}"
             )
