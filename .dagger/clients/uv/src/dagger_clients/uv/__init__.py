@@ -2901,8 +2901,8 @@ class UvSyncPlan(_Type):
         return Directory(_ctx)
 
     def source_dir(self) -> Directory:
-        """Every member's files; read only for files outside the needed packages,
-        e.g. symlink targets
+        """Every member's files; the needed packages' source directories copy
+        from it, with their symlink targets
         """
         _args: list[_Arg] = []
         _ctx = self._select("sourceDir", _args)

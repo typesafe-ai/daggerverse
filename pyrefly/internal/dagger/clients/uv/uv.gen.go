@@ -2841,7 +2841,7 @@ func (r *UvSyncPlan) RootInputsDir(ctx context.Context) (*Directory, error) { //
 	return loaded[*Directory](q, *objectID), nil
 }
 
-// Every member's files; read only for files outside the needed packages, e.g. symlink targets
+// Every member's files; the needed packages' source directories copy from it, with their symlink targets
 func (r *UvSyncPlan) SourceDir() *Directory { // uv (../../:0:0)
 	q := r.query.Select("sourceDir")
 

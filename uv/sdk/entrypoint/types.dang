@@ -334,7 +334,7 @@ type ModuleTypes {
         .withField("root", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Path relative to the Dagger workspace root"),
       typeDef.withObject("UvSyncPlan", description: "Resolved build configuration for a uv workspace sync.")
         .withField("ws_dir", typeDef.withObject("Directory"), description: "The workspace root's manifests: uv.lock, uv.toml and pyproject.toml files")
-        .withField("source_dir", typeDef.withObject("Directory"), description: "Every member's files; read only for files outside the needed packages, e.g. symlink targets")
+        .withField("source_dir", typeDef.withObject("Directory"), description: "Every member's files; the needed packages' source directories copy from it, with their symlink targets")
         .withField("workspace_path", typeDef.withKind(TypeDefKind.STRING_KIND), description: "Workspace path within the source directory")
         .withField("all_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Every local package in the workspace (sorted by name)")
         .withField("needed_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Local packages the target transitively depends on (sorted by name)")
