@@ -684,7 +684,7 @@ class UvWorkspaceSource:
                 ctr = ctr.with_env_variable("UV_CACHE_DIR", cache_dir).with_mounted_cache(cache_dir, self._uv_cache())
             if compile_bytecode:
                 span.set_attribute("build.compile_bytecode", True)
-                ctr = await with_compiled_bytecode(ctr)
+                ctr = with_compiled_bytecode(ctr)
             workdir = await ctr.workdir()
 
             # Place workspace files at their real path within the source tree

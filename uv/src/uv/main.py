@@ -223,7 +223,7 @@ class Uv:
             _UV_CACHE_DIR, self.uv_cache or core().cache_volume("uv-cache")
         )
         if compile_bytecode:
-            ctr = await with_compiled_bytecode(ctr)
+            ctr = with_compiled_bytecode(ctr)
         # A uv-managed Python, even where the base has one of its own: `venv` exports the interpreter with the venv.
         argv = ["uv", "venv", "--relocatable", "--managed-python", *(["--python", python] if python else []), path]
         return UvPipVenv(container=ctr.with_exec(argv), path=path)

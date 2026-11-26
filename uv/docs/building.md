@@ -137,8 +137,7 @@ every fresh container:
 uv(ws).workspace(".").builder(compile_bytecode=True).with_remote_dependencies()
 ```
 
-The builder also sets `SOURCE_DATE_EPOCH` (to 1980-01-01) unless the base already does,
-which makes the `.pyc` files unchecked hash-based ones ([PEP 552](https://peps.python.org/pep-0552/))
+The builder also sets `PYC_INVALIDATION_MODE=UNCHECKED_HASH`, which makes the `.pyc` files unchecked hash-based ones ([PEP 552](https://peps.python.org/pep-0552/))
 instead of stamped with install-time mtimes: they are reproducible, and Python never
 revalidates them against their source, as suits an immutable image.
 

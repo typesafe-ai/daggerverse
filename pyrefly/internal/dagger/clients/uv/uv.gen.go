@@ -259,7 +259,7 @@ type UvPipVenvOpts struct {
 	// Default: "/venv"
 	Path string // uv (../../:0:0)
 	//
-	// Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.
+	// Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `PYC_INVALIDATION_MODE=UNCHECKED_HASH`, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.
 	//
 	CompileBytecode bool // uv (../../:0:0)
 }
@@ -2838,7 +2838,7 @@ func (r *UvSyncPlan) RootInputsDir(ctx context.Context) (*Directory, error) { //
 	if objectID == nil {
 		return nil, nil
 	}
-	return new(Directory).WithGraphQLQuery(selectNode(q.Root(), *objectID, "Directory")), nil
+	return loaded[*Directory](q, *objectID), nil
 }
 
 // Every member's files; read only for files outside the needed packages, e.g. symlink targets
@@ -3954,7 +3954,7 @@ type UvWorkspaceSourceBuilderOpts struct {
 	// Default: true
 	ActivateVenv bool // uv (../../:0:0)
 	//
-	// Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `SOURCE_DATE_EPOCH` unless the base does, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.
+	// Compile installed packages to bytecode (`UV_COMPILE_BYTECODE`), so the environment imports without compiling at runtime. Sets `PYC_INVALIDATION_MODE=UNCHECKED_HASH`, which makes the `.pyc` files hash-based (unchecked) rather than stamped with install-time mtimes: reproducible, and never revalidated against their source, as suits an immutable image.
 	//
 	CompileBytecode bool // uv (../../:0:0)
 	//

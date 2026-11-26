@@ -219,7 +219,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_compile_bytecode_hash_based", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`compile_bytecode=True` installs `.pyc` files, hash-based so they are reproducible.\n\nBuilds standalone-app's `viz` extra with and without the option and reads the\nflags of `tabulate`'s `.pyc` header (PEP 552): 3 is an unchecked hash-based\n`.pyc`, 0 a timestamp-based one, whose bytes change with every install.\nWithout the option, the package has no `.pyc` at all.")
+            .withDescription("`compile_bytecode=True` installs `.pyc` files, hash-based so they are reproducible.\n\nBuilds standalone-app's `viz` extra with and without the option and reads the\nflags of `tabulate`'s `.pyc` header (PEP 552): 1 is an unchecked hash-based\n`.pyc`, 0 a timestamp-based one, whose bytes change with every install.\nWithout the option, the package has no `.pyc` at all.")
         )
         .withFunction(
           function("uv_detect_version_uv_toml_precedence", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
@@ -263,7 +263,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("uv_pip_venv_runs_in_fresh_container", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
-            .withDescription("`pip_venv` installs a requirements file into a relocatable venv that runs without uv.\n\nInstalls a pinned requirements file with `--no-deps` and `compile_bytecode`, copies\nthe venv into a plain `debian:bookworm-slim` with `into`, and imports the package\nthere, reading its `.pyc` header flags (3: unchecked hash-based).")
+            .withDescription("`pip_venv` installs a requirements file into a relocatable venv that runs without uv.\n\nInstalls a pinned requirements file with `--no-deps` and `compile_bytecode`, copies\nthe venv into a plain `debian:bookworm-slim` with `into`, and imports the package\nthere, reading its `.pyc` header flags (1: unchecked hash-based).")
         )
         .withFunction(
           function("uv_project_environment", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))

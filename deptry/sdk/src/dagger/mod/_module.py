@@ -38,7 +38,10 @@ from dagger.mod._exceptions import (
     ModuleError,
     ObjectNotFoundError,
     RegistrationError,
+    errors_to_show,
+    has_error_origin,
     log_exception_only,
+    print_user_traceback,
     transform_error,
 )
 from dagger.mod._naming import ModuleNames, module_names
@@ -99,6 +102,12 @@ class Module:
         # from exceptions raised in functions by default. Not documented
         # intentionally for now.
         self.log_exceptions = True
+        # Whether a function's errors are shown with a short traceback, through
+        # the user's code only. A call that reports its error in the file the
+        # engine gives it turns this on, the file keeping the whole traceback.
+        # An API error is then not shown at all when the engine shows its
+        # origin, the call that failed with its logs.
+        self.short_tracebacks = False
 
     @property
     def main_cls(self) -> type[ObjectType]:
@@ -298,13 +307,31 @@ class Module:
         except ValueError as e:
             msg = "Unable to decode the call request"
             raise InvalidInputError(msg, extra={"request": request}) from e
-        await self.load_names()
-        return await self.get_result(
-            request["receiverType"],
-            parent_state or {},
-            request["fnName"],
-            inputs,
-        )
+        try:
+            await self.load_names()
+            return await self.get_result(
+                request["receiverType"],
+                parent_state or {},
+                request["fnName"],
+                inputs,
+            )
+        except QueryError as e:
+            # The engine shows where an API error comes from, the call that
+            # failed with its logs, unless it names no origin, such as an ID
+            # that fails to load: then show where the function got it,
+            # whether in its own code or loading its arguments or result.
+            if self.short_tracebacks and not has_error_origin(e):
+                print_user_traceback(e)
+            raise
+
+    def _raises_api_error(self, e: Exception) -> bool:
+        """Whether an API error goes on as it is rather than wrapped.
+
+        A call that reports its error in the engine's file fails with the
+        API error itself, which names where it comes from, as `dispatch`
+        shows it, rather than as an invalid input or result.
+        """
+        return self.short_tracebacks and isinstance(e, QueryError)
 
     async def get_result(
         self,
@@ -324,6 +351,9 @@ class Module:
             try:
                 return await self.unstructure(result, fn.return_type)
             except Exception as e:
+                if self._raises_api_error(e):
+                    # Such as the ID of a returned object that fails to load.
+                    raise
                 log_exception_only(e, "Invalid result from function")
                 msg = transform_error(
                     e,
@@ -403,26 +433,42 @@ class Module:
             # Escape hatch to fully control logging from user code.
             raise
         except QueryError as e:
-            tb = e.__traceback__
-            # Exclude the line in "try" above
-            if tb:
-                tb = tb.tb_next
             # Exclude the underlying TransportQueryError to reduce noise
             e.__cause__ = None
-            logger.exception(
-                "API error while executing function",
-                exc_info=(type(e), e, tb),
-            )
+            self._show_api_error(e)
             # Preserve API error so it's properly propagated.
             raise e from None
         except Exception as e:
             # Escape hatch if too noisy.
             if self.log_exceptions:
-                # Logging the exception will show the full stack trace on stderr.
-                logger.exception("Unhandled exception while executing function")
+                self._show_exception(e)
             raise FunctionError(str(e)) from e
 
         return result
+
+    def _show_api_error(self, e: QueryError) -> None:
+        """Show an API error a function raised in the function's logs."""
+        if self.short_tracebacks:
+            # `dispatch` shows it, as any API error the call fails with.
+            return
+        tb = e.__traceback__
+        # Exclude the line in "try" in `call`
+        if tb:
+            tb = tb.tb_next
+        logger.exception(
+            "API error while executing function",
+            exc_info=(type(e), e, tb),
+        )
+
+    def _show_exception(self, e: Exception) -> None:
+        """Show an exception a function raised in the function's logs."""
+        if self.short_tracebacks:
+            # A task group raises API errors in a group.
+            if (shown := errors_to_show(e)) is not None:
+                print_user_traceback(shown)
+            return
+        # Logging the exception will show the full stack trace on stderr.
+        logger.exception("Unhandled exception while executing function")
 
     async def structure(self, obj: Any, cl: type[T]) -> T:
         """Convert a primitive value to the expected type."""
@@ -452,6 +498,8 @@ class Module:
         try:
             return await self.structure(state, obj_type.cls)
         except Exception as e:
+            if self._raises_api_error(e):
+                raise
             log_exception_only(e, "Failed to instantiate parent object")
             msg = transform_error(
                 e,
@@ -496,6 +544,8 @@ class Module:
             try:
                 kwargs[python_name] = await self.structure(value, type_)
             except Exception as e:
+                if self._raises_api_error(e):
+                    raise
                 log_exception_only(
                     e,
                     "Failed to convert from primitive input value for argument '%s'",

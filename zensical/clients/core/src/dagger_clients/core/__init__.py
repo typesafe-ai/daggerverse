@@ -11535,9 +11535,9 @@ class GitRepository(_Type):
             Identifier of the commit (e.g.,
             "b6315d8f2810962c601af73f86831f6866ea798b").
             May be abbreviated to an unambiguous hex prefix (4-40 characters),
-            which is expanded against locally available objects. Remote
-            repositories (resolved via ls-remote) can only expand prefixes of
-            already-fetched commits; use the full SHA otherwise.
+            which is expanded to the full SHA. A remote repository that has
+            not fetched the commit yet fetches the history of the refs it
+            advertises to find it.
         """
         if not (isinstance(id, str)):
             raise _type_error("GitRepository.commit", "id", id, "str")
@@ -11638,10 +11638,10 @@ class GitRepository(_Type):
             or a fully-qualified ref).
             Commit identifiers may be abbreviated: an unambiguous hex prefix
             (4-40 characters) of a commit SHA resolves like git rev-parse,
-            with named refs taking precedence. Abbreviated SHAs resolve
-            against locally available objects, so remote repositories
-            (resolved via ls-remote) can only expand prefixes of already-
-            fetched commits; use the full SHA or a named ref otherwise.
+            with named refs taking precedence, to the full SHA. A remote
+            repository that has not fetched the commit yet fetches the history
+            of the refs it advertises to find it, so only commits reachable
+            from those refs can be abbreviated.
             The name may be followed by git revision suffixes, applied left to
             right: `~N` follows first parents N times and `^N` selects the Nth
             parent (`~` and `^` mean 1, `^0` is the commit itself), e.g.
@@ -20546,13 +20546,13 @@ class Workspace(_Type):
         return Workspace(_ctx)
 
     def with_mounted_directory(self, path: str, source: Directory) -> _Self:
-        """Return this workspace with a directory mounted read-only at the given
-        path, without mutating the source.
+        """Return this workspace with a directory mounted at the given path,
+        without mutating the source.
 
-        Mounted content is readable through the normal workspace file tools
-        but shadows the source at the mount path and stays out of the pending
-        changeset: it never appears in changes, is never exported, and cannot
-        be modified.
+        Mounted content is readable and editable through the normal workspace
+        file tools but shadows the source at the mount path and stays out of
+        the pending changeset: neither it nor edits to it appear in changes or
+        are exported. Use withoutMount to remove the mount.
 
         Parameters
         ----------
@@ -20574,13 +20574,13 @@ class Workspace(_Type):
         return Workspace(_ctx)
 
     def with_mounted_file(self, path: str, source: File) -> _Self:
-        """Return this workspace with a file mounted read-only at the given path,
-        without mutating the source.
+        """Return this workspace with a file mounted at the given path, without
+        mutating the source.
 
-        Mounted content is readable through the normal workspace file tools
-        but shadows the source at the mount path and stays out of the pending
-        changeset: it never appears in changes, is never exported, and cannot
-        be modified.
+        Mounted content is readable and editable through the normal workspace
+        file tools but shadows the source at the mount path and stays out of
+        the pending changeset: neither it nor edits to it appear in changes or
+        are exported. Use withoutMount to remove the mount.
 
         Parameters
         ----------
@@ -20660,8 +20660,9 @@ class Workspace(_Type):
         applied, without mutating the source.
 
         Paths in the patch are relative to the workspace root, whatever its
-        cwd, as `git diff` writes them. Patching a path at or under a mount is
-        an error.
+        cwd, as `git diff` writes them. Sections for paths in a mount apply to
+        the mounted content; a section cannot move a file across a mount
+        boundary or delete a mount point.
 
         .. caution::
             Experimental: This API is highly experimental and may be removed
@@ -21915,7 +21916,7 @@ def core(*, session: _Session | None = None) -> Query:
     return _client_root(Query, None, None, [], session=session)
 
 
-CORE_DIGEST = "sha256:30dc0d028d31f7d02bc8e1e62bc31c892d2843519a4bb11f4360ee2d7c844848"
+CORE_DIGEST = "sha256:27293f298aada6aaa98ad0b3a7fb860dbba2af23ce6fcaf880f56614112b73d3"
 """Digest of the core schema that this package was generated from."""
 
 

@@ -3,4 +3,4 @@
 NAME = "zensical"
 REF = "/zensical"
 PIN = None
-CORE_DIGEST = "sha256:30dc0d028d31f7d02bc8e1e62bc31c892d2843519a4bb11f4360ee2d7c844848"
+CORE_DIGEST = "sha256:27293f298aada6aaa98ad0b3a7fb860dbba2af23ce6fcaf880f56614112b73d3"
