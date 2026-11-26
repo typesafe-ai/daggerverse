@@ -3,7 +3,7 @@
 # Needs Dagger v1.0.0-beta.26 or later; older engines report a missing "naming" field.
 type Entrypoint implements ModuleEntrypoint {
   let moduleName: String! = "deptry"
-  let clientVersion: String! = "v1.0.0-beta.27"
+  let clientVersion: String! = "v1.0.0-beta.30"
 
   pub sources(workspace: Workspace!): Directory! {
     directory
