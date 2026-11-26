@@ -93,6 +93,8 @@ class ArtifactDimensionKind(_Enum):
 
     MODULE = 'MODULE'
 
+    NAME = 'NAME'
+
     TYPE = 'TYPE'
 
 
@@ -1663,11 +1665,20 @@ class Artifact(_Type):
         _ctx = self._select("description", _args)
         return await _ctx.execute(str)
 
-    async def dimension_keys(self) -> list["ArtifactDimensionKey"]:
-        """The module name, collection keys, and full path key in the artifact
-        type dimension.
+    async def dimension_keys(self, *, all: bool | None = False) -> list["ArtifactDimensionKey"]:
+        """The artifact coordinates in its source selection's visible dimensions.
+        Without a source selection, return all coordinates.
+
+        Parameters
+        ----------
+        all:
+            Return all artifact coordinates, including constant dimensions.
         """
-        _args: list[_Arg] = []
+        if not (all is None or isinstance(all, bool)):
+            raise _type_error("Artifact.dimension_keys", "all", all, "bool | None")
+        _args = [
+            _Arg("all", all, False),
+        ]
         _ctx = self._select("dimensionKeys", _args)
         return await _ctx.execute_object_list(ArtifactDimensionKey)
 
@@ -1905,8 +1916,8 @@ class ArtifactDimension(_Type):
         return await _ctx.execute(str)
 
     async def identifier(self) -> str:
-        """Stable identifier: collection schema path, type:TypeName for an
-        artifact type, or module.
+        """Collection schema type name, module, name, or a legacy selector
+        identifier.
 
         Returns
         -------
@@ -2329,9 +2340,8 @@ class Artifacts(_Type):
         return await _ctx.execute_object_list(ArtifactDimension)
 
     async def dimension_items(self, dimension: str) -> list[Artifact]:
-        """List collection items represented in this selection for the given
-        dimension. Preserve parent keys and remove duplicate item addresses.
-        Does not evaluate item values.
+        """List collection items represented in this selection. Retain the source
+        selection's visible dimensions without evaluating item values.
         """
         if not (isinstance(dimension, str)):
             raise _type_error("Artifacts.dimension_items", "dimension", dimension, "str")
@@ -2367,9 +2377,14 @@ class Artifacts(_Type):
         _ctx = self._select("dimensionKeys", _args)
         return await _ctx.execute(list[str])
 
-    async def dimensions(self) -> list[str]:
-        """List dimension identifiers represented in this selection, sorted with
-        no duplicates.
+    async def dimensions(self, *, all: bool | None = False) -> list[str]:
+        """List dimensions whose cells differ across selected rows. Missing cells
+        differ from present keys.
+
+        Parameters
+        ----------
+        all:
+            List all workspace schema dimensions without runtime discovery.
 
         Returns
         -------
@@ -2385,7 +2400,11 @@ class Artifacts(_Type):
         QueryError
             If the API returns an error.
         """
-        _args: list[_Arg] = []
+        if not (all is None or isinstance(all, bool)):
+            raise _type_error("Artifacts.dimensions", "all", all, "bool | None")
+        _args = [
+            _Arg("all", all, False),
+        ]
         _ctx = self._select("dimensions", _args)
         return await _ctx.execute(list[str])
 
@@ -2405,12 +2424,22 @@ class Artifacts(_Type):
         _ctx = self._select("filterDimensionKeys", _args)
         return Artifacts(_ctx)
 
-    def filter_dimensions(self, dimensions: list[str]) -> _Self:
-        """Keep artifacts selected through any listed dimension."""
+    def filter_dimensions(self, dimensions: list[str], *, exclude: bool | None = False,) -> _Self:
+        """Keep artifacts selected through any listed dimension.
+
+        Parameters
+        ----------
+        dimensions:
+        exclude:
+            Remove artifacts with any listed dimension.
+        """
         if not (isinstance(dimensions, list) and all(isinstance(_v0, str) for _v0 in dimensions)):
             raise _type_error("Artifacts.filter_dimensions", "dimensions", dimensions, "list[str]")
+        if not (exclude is None or isinstance(exclude, bool)):
+            raise _type_error("Artifacts.filter_dimensions", "exclude", exclude, "bool | None")
         _args = [
             _Arg("dimensions", dimensions),
+            _Arg("exclude", exclude, False),
         ]
         _ctx = self._select("filterDimensions", _args)
         return Artifacts(_ctx)
@@ -2589,8 +2618,8 @@ class Artifacts(_Type):
         return await _ctx.execute_object_list(Module)
 
     def one(self) -> Artifact:
-        """Require exactly one artifact; fail if there are zero or multiple
-        matches. Several matches are listed, one address per line.
+        """Require exactly one artifact from the selected items snapshot; fail if
+        there are zero or multiple matches.
         """
         _args: list[_Arg] = []
         _ctx = self._select("one", _args)
@@ -5392,7 +5421,7 @@ class Container(_Type):
         _ctx = self._select("withMountedSecret", _args)
         return Container(_ctx)
 
-    def with_mounted_temp(self, path: str, *, size: int | None = None, expand: bool | None = False,) -> _Self:
+    def with_mounted_temp(self, path: str, *, size: int | None = None, expand: bool | None = False, disk: bool | None = False,) -> _Self:
         """Retrieves this container plus a temporary directory mounted at the
         given path. Any writes will be ephemeral to a single withExec call;
         they will not be persisted to subsequent withExecs.
@@ -5407,6 +5436,11 @@ class Container(_Type):
             Replace "${VAR}" or "$VAR" in the value of path according to the
             current environment variables defined in the container (e.g.
             "/$VAR/foo").
+        disk:
+            Keep the temporary directory on the engine's disk instead of in
+            memory, for contents too large for memory. Each process gets an
+            empty directory of its own, removed once the process ends. It
+            can't be combined with size.
         """
         if not (isinstance(path, str)):
             raise _type_error("Container.with_mounted_temp", "path", path, "str")
@@ -5414,10 +5448,13 @@ class Container(_Type):
             raise _type_error("Container.with_mounted_temp", "size", size, "int | None")
         if not (expand is None or isinstance(expand, bool)):
             raise _type_error("Container.with_mounted_temp", "expand", expand, "bool | None")
+        if not (disk is None or isinstance(disk, bool)):
+            raise _type_error("Container.with_mounted_temp", "disk", disk, "bool | None")
         _args = [
             _Arg("path", path),
             _Arg("size", size, None),
             _Arg("expand", expand, False),
+            _Arg("disk", disk, False),
         ]
         _ctx = self._select("withMountedTemp", _args)
         return Container(_ctx)
@@ -6163,6 +6200,33 @@ class CurrentModule(_Type):
         _args: list[_Arg] = []
         _ctx = self._select("generatedContextDirectory", _args)
         return Directory(_ctx)
+
+    def git_ref(self) -> "GitRef":
+        """The Git ref of the module's source: the resolved commit of a Git
+        source, or the HEAD of the repository that contains a local source.
+        Null for a Directory source, or a local source outside a Git
+        repository.
+
+        Its asRepository pins HEAD to that commit. For a local source, the
+        repository holds the whole checkout, including files the module does
+        not load, so asRepository.uncommitted lists the uncommitted changes of
+        the whole checkout.
+
+        For a Git source loaded from a private remote, asRepository and tree
+        are read without the credentials of the client that loaded the module
+        and may fail to authenticate; commitSha needs none.
+
+        A local repository is read when this field is first selected for a
+        module load, not when the module loads: a file changed in between can
+        differ from the module's contextDirectory.
+
+        A function result cached across sessions is not recomputed when the
+        repository changes: use the PER_SESSION or NEVER cache policy for a
+        function that returns what it reads from this field.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("gitRef", _args)
+        return GitRef(_ctx)
 
     async def id(self) -> str:
         """A unique identifier for this CurrentModule.
@@ -21916,7 +21980,7 @@ def core(*, session: _Session | None = None) -> Query:
     return _client_root(Query, None, None, [], session=session)
 
 
-CORE_DIGEST = "sha256:27293f298aada6aaa98ad0b3a7fb860dbba2af23ce6fcaf880f56614112b73d3"
+CORE_DIGEST = "sha256:a6bab7913d4a326f4846ffac8429cf4b6660acff94faa3c2711d1d45a427e85d"
 """Digest of the core schema that this package was generated from."""
 
 
