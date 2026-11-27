@@ -2858,6 +2858,16 @@ func (r *UvSyncPlan) UvSyncArgs(ctx context.Context) ([]string, error) { // uv (
 	return response, q.Execute(ctx)
 }
 
+// Local packages uv installs as built wheels, not path links: `path` sources without `editable = true` (`directory` in uv.lock). Their source must be in place before the sync.
+func (r *UvSyncPlan) WheelPackages(ctx context.Context) ([]string, error) { // uv (../../:0:0)
+	q := r.query.Select("wheelPackages")
+
+	var response []string
+
+	q = q.Bind(&response)
+	return response, q.Execute(ctx)
+}
+
 // Workspace path within the source directory
 func (r *UvSyncPlan) WorkspacePath(ctx context.Context) (string, error) { // uv (../../:0:0)
 	if r.workspacePath != nil {
@@ -3673,6 +3683,10 @@ func (r *UvWorkspaceBuilder) WithGroups(groups []string) *UvWorkspaceBuilder { /
 // from whatever source is present and bakes it into `site-packages`, so the real
 // source must be copied in *before* the sync: there are no path links for a
 // copy-last to make live, and syncing against the stubs would bake empty modules.
+//
+// A `path` dependency without `editable = true` (`directory` in uv.lock) is always
+// installed as a built wheel, even in an editable build, so its real source is
+// copied in before the sync too.
 func (r *UvWorkspaceBuilder) WithLocalDependencies() *UvWorkspaceBuilder { // uv (../../:0:0)
 	q := r.query.Select("withLocalDependencies")
 

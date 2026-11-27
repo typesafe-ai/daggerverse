@@ -1,0 +1,19 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "lib-pkg" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "lib-pkg", directory = "../my-lib" }]
+
+[[package]]
+name = "lib-pkg"
+version = "0.1.0"
+source = { directory = "../my-lib" }
