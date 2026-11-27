@@ -487,8 +487,8 @@ class UvWorkspaceBuilder:
                 overlay = overlay.with_directory(target, copied)
         return overlay
 
-    async def _copy_sources(self, ctr: Container, workdir: str) -> Container:
-        """Copy real source for each needed local package into `ctr`.
+    async def _copy_sources(self, ctr: Container, workdir: str, only: list[str] | None = None) -> Container:
+        """Copy real source for each needed local package into `ctr`, or for the packages named in `only`.
 
         The per-package `with_directory` calls are lazy, so the span forces
         evaluation with `sync()` before closing; otherwise it would capture only
@@ -496,7 +496,9 @@ class UvWorkspaceBuilder:
         """
         overlay = core().directory()
         packages = [
-            pkg for pkg in self._resolved_plan().needed_local if pkg.name not in self._resolved_plan().flat_packages
+            pkg
+            for pkg in self._resolved_plan().needed_local
+            if pkg.name not in self._resolved_plan().flat_packages and (only is None or pkg.name in only)
         ]
         with get_tracer().start_as_current_span("copy local dependency sources") as span:
             span.set_attribute("packages.count", len(self._resolved_plan().needed_local))
@@ -646,6 +648,10 @@ class UvWorkspaceBuilder:
         from whatever source is present and bakes it into `site-packages`, so the real
         source must be copied in *before* the sync: there are no path links for a
         copy-last to make live, and syncing against the stubs would bake empty modules.
+
+        A `path` dependency without `editable = true` (`directory` in uv.lock) is always
+        installed as a built wheel, even in an editable build, so its real source is
+        copied in before the sync too.
         """
         if self.plan is None:
             return await (await self._planned()).with_local_dependencies()
@@ -654,7 +660,10 @@ class UvWorkspaceBuilder:
         if self.plan.no_editable:
             ctr = await self._copy_sources(self.container, workdir)
             return self.with_container(await self._sync_local(ctr))
-        ctr = await self._sync_local(self.container)
+        ctr = self.container
+        if wheels := self.plan.wheel_packages:
+            ctr = await self._copy_sources(ctr, workdir, only=wheels)
+        ctr = await self._sync_local(ctr)
         # Copy real source last: the editable installs above already point at these
         # paths, so the code goes live with no re-sync, keeping the install layer
         # cached across source-only changes.

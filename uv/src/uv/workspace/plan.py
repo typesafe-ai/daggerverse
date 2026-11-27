@@ -224,6 +224,13 @@ class UvSyncPlan:
         list[str],
         Doc("Virtual/deps-only packages: pyproject scaffolded, source skipped"),
     ] = field(default=list)
+    wheel_packages: Annotated[
+        list[str],
+        Doc(
+            "Local packages uv installs as built wheels, not path links: `path` sources without "
+            "`editable = true` (`directory` in uv.lock). Their source must be in place before the sync."
+        ),
+    ] = field(default=list)
 
     uv_sync_args: Annotated[
         list[str],
@@ -292,6 +299,7 @@ class UvSyncPlan:
             return manifests[posixpath.normpath(posixpath.join(root, name))]
 
         lock_data = tomllib.loads(manifest(workspace_path, "uv.lock"))
+        lock_sources = {pkg["name"]: pkg.get("source", {}) for pkg in lock_data.get("package", [])}
 
         # The workspace root's package name is `uv sync`'s implicit target when no
         # package is requested; resolve it so we mirror that default.
@@ -385,6 +393,7 @@ class UvSyncPlan:
             all_local=[local_packages[name] for name in all_local],
             needed_local=[local_packages[name] for name in needed_local],
             flat_packages=flat_packages,
+            wheel_packages=sorted(name for name in needed_local if "directory" in lock_sources.get(name, {})),
             uv_sync_args=sync_args,
             packages=packages,
             all_packages=all_packages,

@@ -285,6 +285,7 @@ class TypesafeDaggerverse:
             tg.start_soon(_run, "pytest_self", self.uv_workspace_pytest_self)
             tg.start_soon(_run, "build_partial_workspace", self.uv_workspace_build_partial_workspace)
             tg.start_soon(_run, "build_nested_standalone", self.uv_workspace_build_nested_standalone)
+            tg.start_soon(_run, "path_dependency_real_source", self.uv_path_dependency_real_source)
             tg.start_soon(_run, "auto_install_uv", self.uv_workspace_auto_install_uv)
 
     @function
@@ -1446,6 +1447,26 @@ print("LAYER_CACHE_OK")
             absent=[],
         )
         await ctr.with_exec(["python", "-c", script]).stdout()
+
+    @function
+    async def uv_path_dependency_real_source(self) -> None:
+        """An editable build installs a non-editable `path` dependency from its real source.
+
+        Regression test: uv installs a `path` source without `editable = true`
+        (`directory` in uv.lock) as a built wheel, even when the build is editable.
+        Built against the scaffold stubs, it baked an empty module into
+        site-packages, which still imports. So assert `hello()`'s return value.
+        """
+        ctr = (
+            await uv(_fixture("uv/tests/_packages/path-dependency"))
+            .workspace("app")
+            .builder(base_container=_base())
+            .with_dependencies()
+            .container()
+        )
+        out = await ctr.with_exec(["python", "-c", "import lib_pkg; print(lib_pkg.hello())"]).stdout()
+        if out.strip() != "Hello from lib-pkg!":
+            raise AssertionError(f"expected lib-pkg's real source, got: {out!r}")
 
     # ---- pyproject module checks ----
 

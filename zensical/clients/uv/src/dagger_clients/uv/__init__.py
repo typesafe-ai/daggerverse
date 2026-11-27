@@ -2929,6 +2929,29 @@ class UvSyncPlan(_Type):
         _ctx = self._select("uvSyncArgs", _args)
         return await _ctx.execute(list[str])
 
+    async def wheel_packages(self) -> list[str]:
+        """Local packages uv installs as built wheels, not path links: `path`
+        sources without `editable = true` (`directory` in uv.lock). Their
+        source must be in place before the sync.
+
+        Returns
+        -------
+        list[str]
+            The `String` scalar type represents textual data, represented as
+            UTF-8 character sequences. The String type is most often used by
+            GraphQL to represent free-form human-readable text.
+
+        Raises
+        ------
+        ExecuteTimeoutError
+            If the time to execute the query exceeds the configured timeout.
+        QueryError
+            If the API returns an error.
+        """
+        _args: list[_Arg] = []
+        _ctx = self._select("wheelPackages", _args)
+        return await _ctx.execute(list[str])
+
     async def workspace_path(self) -> str:
         """Workspace path within the source directory
 
@@ -3659,6 +3682,12 @@ class UvWorkspaceBuilder(_Type):
         for a
         copy-last to make live, and syncing against the stubs would bake empty
         modules.
+
+        A `path` dependency without `editable = true` (`directory` in uv.lock)
+        is always
+        installed as a built wheel, even in an editable build, so its real
+        source is
+        copied in before the sync too.
         """
         _args: list[_Arg] = []
         _ctx = self._select("withLocalDependencies", _args)

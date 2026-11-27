@@ -262,6 +262,10 @@ type ModuleTypes {
             .withDescription("`no_editable=True` bakes real local-package *source* into site-packages.\n\nRegression test for the editable-only copy-last optimization in\n`with_local_dependencies`: under `no_editable`, `uv sync` builds wheels from\nwhatever source is on disk at sync time, so real source must be copied in\n*before* the sync. Otherwise the empty scaffold stubs get baked into\nsite-packages. We export the venv into a fresh Python-less container (so\nleftover workspace source can't mask the install) and assert each local\npackage's `hello()` returns its real string. Asserting the *return value*,\nnot just importability, is the point: an empty stub still imports fine.")
         )
         .withFunction(
+          function("uv_path_dependency_real_source", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
+            .withDescription("An editable build installs a non-editable `path` dependency from its real source.\n\nRegression test: uv installs a `path` source without `editable = true`\n(`directory` in uv.lock) as a built wheel, even when the build is editable.\nBuilt against the scaffold stubs, it baked an empty module into\nsite-packages, which still imports. So assert `hello()`'s return value.")
+        )
+        .withFunction(
           function("uv_pip_venv_runs_in_fresh_container", typeDef.withOptional(true).withKind(TypeDefKind.VOID_KIND))
             .withDescription("`pip_venv` installs a requirements file into a relocatable venv that runs without uv.\n\nInstalls a pinned requirements file with `--no-deps` and `compile_bytecode`, copies\nthe venv into a plain `debian:bookworm-slim` with `into`, and imports the package\nthere, reading its `.pyc` header flags (1: unchecked hash-based).")
         )

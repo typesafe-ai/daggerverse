@@ -339,6 +339,7 @@ type ModuleTypes {
         .withField("all_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Every local package in the workspace (sorted by name)")
         .withField("needed_local", typeDef.withListOf(typeDef.withObject("LocalPackage")), description: "Local packages the target transitively depends on (sorted by name)")
         .withField("flat_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Virtual/deps-only packages: pyproject scaffolded, source skipped")
+        .withField("wheel_packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Local packages uv installs as built wheels, not path links: `path` sources without `editable = true` (`directory` in uv.lock). Their source must be in place before the sync.")
         .withField("uv_sync_args", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "Precomputed uv sync argv")
         .withField("packages", typeDef.withListOf(typeDef.withKind(TypeDefKind.STRING_KIND)), description: "The packages requested, normalized; empty for the workspace root's")
         .withField("all_packages", typeDef.withKind(TypeDefKind.BOOLEAN_KIND), description: "Every workspace member was requested")
@@ -440,7 +441,7 @@ type ModuleTypes {
         )
         .withFunction(
           function("with_local_dependencies", typeDef.withObject("UvWorkspaceBuilder"))
-            .withDescription("Install the scaffolded local packages, copying their real source at the right time.\n\nFor **editable** installs (the default), run `uv sync` against the package\nstubs from `with_workspace_files`, then copy real source over the stubs last.\nEditable installs are path links, so the source goes live without a re-sync\nand source-only changes don't invalidate the cached install layer.\n\nFor **non-editable** installs (`no_editable=True`), `uv sync` builds a wheel\nfrom whatever source is present and bakes it into `site-packages`, so the real\nsource must be copied in *before* the sync: there are no path links for a\ncopy-last to make live, and syncing against the stubs would bake empty modules.")
+            .withDescription("Install the scaffolded local packages, copying their real source at the right time.\n\nFor **editable** installs (the default), run `uv sync` against the package\nstubs from `with_workspace_files`, then copy real source over the stubs last.\nEditable installs are path links, so the source goes live without a re-sync\nand source-only changes don't invalidate the cached install layer.\n\nFor **non-editable** installs (`no_editable=True`), `uv sync` builds a wheel\nfrom whatever source is present and bakes it into `site-packages`, so the real\nsource must be copied in *before* the sync: there are no path links for a\ncopy-last to make live, and syncing against the stubs would bake empty modules.\n\nA `path` dependency without `editable = true` (`directory` in uv.lock) is always\ninstalled as a built wheel, even in an editable build, so its real source is\ncopied in before the sync too.")
         )
         .withFunction(
           function("with_no_install_packages", typeDef.withObject("UvWorkspaceBuilder"))
